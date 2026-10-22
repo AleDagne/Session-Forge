@@ -164,7 +164,8 @@
     return b ? B().resolve(b, biomeIndex(w.st)) : null;
   }
   const activeParty = (ex) => ex.parties.find((p) => p.id === ex.activeParty) || ex.parties[0];
-  const rngOf = (w) => w.rng || B().seededRng(w.ex.seed ^ Math.round(w.ex.time.total * 100));
+  // Con w.registro (dadi animati) i dadi tirati si registrano, senza cambiare la sequenza del seme.
+  const rngOf = (w) => { const base = w.rng || B().seededRng(w.ex.seed ^ Math.round(w.ex.time.total * 100)); return w.registro ? w.registro.wrap(base) : base; };
   const memberState = (ex, id, player) => {
     if (!ex.members[id]) ex.members[id] = normalizeMember({ hp: player ? player.maxHp : 10, maxHp: player ? player.maxHp : 10 });
     return ex.members[id];

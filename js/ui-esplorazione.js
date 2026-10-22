@@ -53,17 +53,28 @@
   // fn(w) modifica il mondo; con undoable si può annullare con Ctrl+Z / ↶.
   function mutate(fn, undoable) {
     let out;
+    // Dadi animati: i tiri dell'azione (prove, danni, incontri, meteo) si registrano e poi si mostrano.
+    const rec = DnD.dadi.registratore();
+    let logFrom = 0;
+    let lastLine = '';
     DnD.store.update((st) => {
       const w = world(st);
       if (!w || !w.grid) return;
+      w.registro = rec;
+      logFrom = w.ex.log.length;
       if (undoable !== false) {
         undoStack.push(snapshot(st));
         if (undoStack.length > UNDO_MAX) undoStack.shift();
         redoStack.length = 0;
       }
       out = fn(w);
+      const fresh = w.ex.log.slice(logFrom);
+      lastLine = fresh.length ? fresh[fresh.length - 1].text : '';
     });
     render();
+    // Solo i dadi veri: le scelte pesate (meteo, quale incontro) usano lo stesso generatore con altre facce.
+    const tiro = rec.tiro('Esplorazione', 'esplorazione', { testo: lastLine });
+    if (tiro) DnD.uiDadi.mostraTiro(Object.assign(tiro, { totale: null, gruppi: tiro.gruppi.filter((g) => [4, 6, 8, 10, 12, 20, 100].includes(g.sides)) }));
     return out;
   }
   function undo() {

@@ -1,0 +1,112 @@
+/* Dadi animati (js/ui-dadi.js): area di lancio del menù Dadi e overlay non bloccante del combattimento e
+   dell'esplorazione. Colore del dado dalla palette (variabile --die-color), testo e bordi dal tema dell'app.
+   «Riduci animazioni»: nessun movimento (il risultato compare subito). */
+
+.dice-buttons { grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); }
+.dice-extra { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* ---------- Area di lancio ---------- */
+.dice-stage {
+  --die-size: 64px;
+  --die-color: #d4453a;
+  --roll-ms: 900ms;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.6rem;
+  min-height: calc(var(--die-size) + 1.2rem); padding: 0.6rem; border-radius: var(--radius);
+  background: radial-gradient(ellipse at 50% 120%, rgba(0, 0, 0, 0.18), transparent 70%), var(--bg-2);
+  perspective: 600px; cursor: pointer; overflow: hidden;
+}
+.dice-stage.small { --die-size: 40px; min-height: 0; padding: 0.3rem; background: none; gap: 0.35rem; cursor: default; }
+.die-slot { position: relative; display: flex; gap: 0.15rem; transition: opacity 0.3s, filter 0.3s; }
+.die-slot.dropped { opacity: 0.35; filter: grayscale(0.7); }
+.die-many { color: var(--muted); font-size: 0.85rem; }
+
+/* Dado piatto in SVG con il numero sulla faccia. */
+.die-anim { position: relative; width: var(--die-size); height: var(--die-size); flex: none; }
+.die-anim svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35)); }
+.die-body { fill: var(--die-color); stroke: rgba(0, 0, 0, 0.45); stroke-width: 2.5; stroke-linejoin: round; }
+.die-edge { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 1.6; }
+.die-face {
+  position: absolute; left: 50%; transform: translate(-50%, -50%);
+  font-weight: 800; font-size: calc(var(--die-size) * 0.3); line-height: 1; color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75); font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.die-anim.d100-tens .die-face, .die-slot.d100 .die-anim:first-child .die-face { font-size: calc(var(--die-size) * 0.24); }
+
+/* d6 in 3D: cubo con i puntini. */
+.die-cube-wrap { width: 100%; height: 100%; perspective: 400px; }
+.die-cube { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform var(--roll-ms) cubic-bezier(0.18, 0.8, 0.3, 1.02); }
+.cube-face {
+  position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  padding: 14%; gap: 4%; border-radius: 16%; background: var(--die-color);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.3), inset 0 -6px 10px rgba(0, 0, 0, 0.25); backface-visibility: hidden;
+}
+.cube-face .pip { border-radius: 50%; background: #fff; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.4); }
+.cube-face .pip.off { visibility: hidden; }
+.cube-face.f1 { transform: translateZ(calc(var(--die-size) / 2)); }
+.cube-face.f2 { transform: rotateY(90deg) translateZ(calc(var(--die-size) / 2)); }
+.cube-face.f3 { transform: rotateX(90deg) translateZ(calc(var(--die-size) / 2)); }
+.cube-face.f4 { transform: rotateX(-90deg) translateZ(calc(var(--die-size) / 2)); }
+.cube-face.f5 { transform: rotateY(-90deg) translateZ(calc(var(--die-size) / 2)); }
+.cube-face.f6 { transform: rotateY(180deg) translateZ(calc(var(--die-size) / 2)); }
+
+/* Lancio: arriva da sopra con rotazione, rimbalza e rallenta (i dadi piatti ruotano in prospettiva). */
+.die-anim.rolling { animation: die-throw var(--roll-ms) cubic-bezier(0.2, 0.75, 0.3, 1) var(--delay, 0ms) both; }
+.die-anim.rolling:not(.cube) svg { animation: die-spin var(--roll-ms) cubic-bezier(0.15, 0.7, 0.3, 1) var(--delay, 0ms) both; }
+@keyframes die-throw {
+  0% { transform: translate(-60%, -120%) scale(0.7); opacity: 0; }
+  15% { opacity: 1; }
+  45% { transform: translate(8%, 6%) scale(1); }
+  62% { transform: translate(0, -18%); }
+  78% { transform: translate(-2%, 0); }
+  88% { transform: translate(0, -5%); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes die-spin {
+  from { transform: rotate(var(--spin, 540deg)) rotateX(35deg); }
+  to { transform: rotate(0deg) rotateX(0deg); }
+}
+
+/* 20 naturale: bagliore dorato; 1 naturale: effetto scuro e tremolio leggero. */
+.landed .die-slot.crit-max .die-anim { filter: drop-shadow(0 0 10px #f2c94c) drop-shadow(0 0 4px #fff3c4); animation: die-glow 1.2s ease-in-out 2; }
+.landed .die-slot.crit-max .die-face { color: #fff8d6; text-shadow: 0 0 8px #f2c94c, 0 1px 2px rgba(0, 0, 0, 0.7); }
+.landed .die-slot.crit-min .die-anim { filter: brightness(0.45) saturate(0.6) drop-shadow(0 0 6px rgba(0, 0, 0, 0.9)); animation: die-shake 0.45s ease-in-out 1; }
+@keyframes die-glow { 50% { filter: drop-shadow(0 0 18px #f2c94c) drop-shadow(0 0 6px #fff); } }
+@keyframes die-shake { 20% { transform: translateX(-3px) rotate(-3deg); } 40% { transform: translateX(3px) rotate(3deg); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+
+/* Riepilogo: etichetta, gruppi con i modificatori, totale. */
+.die-summary { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+.die-label { color: var(--muted); font-size: 0.85rem; }
+.die-groups { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.2rem 0.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.die-sum small { color: var(--muted); font-weight: 600; }
+.die-total { font-size: 2rem; font-weight: 800; color: var(--accent); }
+.die-crit.max { color: #c99a1a; font-weight: 800; letter-spacing: 0.05em; }
+.die-crit.min { color: var(--danger-text, #b3261e); font-weight: 800; }
+.die-text { font-size: 0.85rem; text-align: center; }
+
+/* ---------- Overlay: piccolo, in basso al centro, non intercetta i clic, si chiude da solo ---------- */
+.dice-overlay {
+  position: fixed; left: 50%; bottom: 1rem; transform: translate(-50%, 140%); z-index: 55; pointer-events: none;
+  opacity: 0; transition: transform 0.25s ease, opacity 0.25s ease; max-width: min(92vw, 460px);
+}
+.dice-overlay.visible { transform: translate(-50%, 0); opacity: 1; }
+.dice-card {
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.45rem 0.8rem;
+  background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.dice-card .die-total { font-size: 1.4rem; }
+
+/* Riduci animazioni: nessun movimento, il risultato compare subito. */
+html[data-reduce-motion] .die-anim.rolling, html[data-reduce-motion] .die-anim.rolling svg,
+html[data-reduce-motion] .landed .die-slot.crit-max .die-anim, html[data-reduce-motion] .landed .die-slot.crit-min .die-anim { animation: none; }
+html[data-reduce-motion] .die-cube { transition: none; }
+html[data-reduce-motion] .dice-overlay { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .die-anim.rolling, .die-anim.rolling svg, .landed .die-slot.crit-max .die-anim, .landed .die-slot.crit-min .die-anim { animation: none; }
+  .die-cube, .dice-overlay { transition: none; }
+}
+@media print { .dice-overlay { display: none !important; } }
+
+/* Impostazioni: gruppi a scomparsa (movimento, dadi animati). */
+details.settings-group > summary { cursor: pointer; font-weight: 600; }
+details.settings-group[open] { border-top: 1px solid var(--border); padding-top: 0.3rem; }

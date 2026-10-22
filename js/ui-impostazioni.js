@@ -1,5 +1,6 @@
 // Impostazioni: pulsante ingranaggio con pannello a comparsa e pulsante rapido sole/luna.
-// Il pannello gestisce tema, dimensione del testo, animazioni ridotte ed esportazione/importazione.
+// Il pannello gestisce tema, dimensione del testo, animazioni ridotte, regole del movimento, dadi animati ed
+// esportazione/importazione.
 (function (DnD) {
   'use strict';
 
@@ -110,12 +111,37 @@
         el('input', { type: 'radio', name, value, onchange: () => { I.set({ [key]: value }); sync(); } }), ' ' + label))));
     const reduce = el('input', { type: 'checkbox', onchange: () => { I.set({ reduceMotion: reduce.checked }); } });
     const bossFx = el('input', { type: 'checkbox', onchange: () => { I.set({ bossEffects: bossFx.checked }); } });
+    // Movimento e dadi animati: gruppi a scomparsa.
+    const check = (key, label, title) => {
+      const input = el('input', { type: 'checkbox', 'data-setting': key, onchange: () => { I.set({ [key]: input.checked }); sync(); } });
+      return el('label', { class: 'check small', title: title || null }, input, ' ' + label);
+    };
+    const select = (key, label, options) => el('label', { class: 'inline small' }, label + ' ',
+      el('select', { 'data-setting': key, onchange: (e) => { I.set({ [key]: e.target.value }); sync(); } }, options.map(([v, t]) => el('option', { value: v, text: t }))));
+    const volume = el('input', { type: 'range', min: 0, max: 100, step: 5, 'aria-label': 'Volume dei dadi', onchange: () => I.set({ diceVolume: Number(volume.value) }) });
+    const movementGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Movimento' }),
+      radios('diagonali', 'Diagonali (come il misuratore)', I.DIAGONALS.map((k) => [k, DnD.movimento.DIAGONAL_NAMES[k]]), 'diagonals'),
+      radios('senza-velocita', 'Modalità senza velocità (scalare, nuotare…)', I.MISSING_MODES.map((k) => [k, DnD.movimento.MISSING_NAMES[k]]), 'missingMode'));
+    const diceGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Dadi animati' }),
+      check('diceAnim', 'Dadi animati'),
+      el('div', { class: 'radio-row' }, check('diceMenu', 'Menù Dadi'), check('diceCombat', 'Combattimento'), check('diceExploration', 'Esplorazione')),
+      select('diceSpeed', 'Velocità', [['lenta', 'Lenta'], ['normale', 'Normale'], ['veloce', 'Veloce'], ['istantanea', 'Istantanea']]),
+      select('diceColor', 'Colore', DnD.colori.PALETTE.map((p) => [p.key, p.name])),
+      el('div', { class: 'radio-row' }, check('diceSound', 'Suoni', 'Rotolio e tonfo sintetizzati, spenti di base'), volume),
+      el('button', { type: 'button', class: 'btn small', text: '🎲 Prova', onclick: () => {
+        const rec = DnD.dadi.registratore();
+        DnD.regole.rollSave({ bonus: 0, mode: 'vantaggio', dc: null }, rec.rng);
+        DnD.dadi.roll(2, 6, 0, rec.rng);
+        if (!DnD.uiDadi.mostraTiro(rec.tiro('Prova dei dadi', 'combattimento'))) toast('Dadi animati spenti per il combattimento.');
+      } }),
+      el('p', { class: 'muted small', text: 'Con «Riduci animazioni» il risultato compare subito, senza movimento. Spazio salta l\'animazione.' }));
     const panel = el('div', { class: 'settings-panel', id: 'settings-panel', role: 'dialog', 'aria-label': 'Impostazioni', hidden: true },
       el('h2', { text: 'Impostazioni' }),
       radios('tema', 'Tema', [['chiaro', 'Chiaro'], ['scuro', 'Scuro'], ['auto', 'Automatico']], 'theme'),
       radios('testo', 'Dimensione del testo', [['piccolo', 'Piccola'], ['normale', 'Normale'], ['grande', 'Grande']], 'textSize'),
       el('label', { class: 'check' }, reduce, ' Riduci animazioni'),
       el('label', { class: 'check', title: 'Barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel combattimento' }, bossFx, ' Effetti boss'),
+      movementGroup, diceGroup,
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Dati' }),
         el('div', { class: 'settings-actions' },
@@ -137,6 +163,15 @@
       for (const input of panel.querySelectorAll('input[name="testo"]')) input.checked = input.value === s.textSize;
       reduce.checked = s.reduceMotion;
       bossFx.checked = s.bossEffects;
+      for (const input of panel.querySelectorAll('input[name="diagonali"]')) input.checked = input.value === s.diagonals;
+      for (const input of panel.querySelectorAll('input[name="senza-velocita"]')) input.checked = input.value === s.missingMode;
+      for (const input of panel.querySelectorAll('[data-setting]')) {
+        if (input.type === 'checkbox') input.checked = Boolean(s[input.dataset.setting]);
+        else input.value = s[input.dataset.setting];
+      }
+      volume.value = String(s.diceVolume);
+      volume.disabled = !s.diceSound;
+      for (const k of ['diceMenu', 'diceCombat', 'diceExploration', 'diceSpeed', 'diceColor']) { const n = panel.querySelector('[data-setting="' + k + '"]'); if (n) n.disabled = !s.diceAnim; }
       const dark = I.isDark();
       clear(themeBtn).append(svgIcon(dark ? ICONS.sun : ICONS.moon));
       themeBtn.title = dark ? 'Passa al tema chiaro' : 'Passa al tema scuro';

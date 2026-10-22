@@ -1,8 +1,8 @@
 // Service worker minimale: mette in cache i file dell'app per l'uso offline.
 // Aumenta CACHE quando modifichi i file, così i client scaricano la nuova versione.
-const CACHE = 'session-forge-v20';
+const CACHE = 'session-forge-v21';
 const FILES = [
-  './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './icons/icon.svg', './js/impostazioni.js',
+  './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './css/dadi.css', './icons/icon.svg', './js/impostazioni.js',
   './js/config.js', './js/dadi.js', './js/regole.js', './js/classi.js', './js/magie.js', './js/equipaggiamento.js', './js/nomi.js', './js/colori.js',
   './js/libreria-icone.js', './js/icone.js', './js/immagini.js', './js/tileset.js', './js/tile.js', './js/tilemap.js', './js/collisioni.js',
   './js/griglia.js', './js/movimento.js', './js/layout-combattimento.js', './js/creature-dati.js', './js/creature.js', './js/boss.js', './js/biomi.js', './js/eventi.js',

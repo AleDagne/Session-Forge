@@ -3446,6 +3446,110 @@
     }
   });
 
+  // ======================= Dadi animati =======================
+  const DD = () => DnD.dadi;
+
+  test('Dadi animati: il risultato mostrato è quello deciso prima (registratore), anche saltando l\'animazione', async () => {
+    const rec = DD().registratore(seq(3, 6, 2, 15));
+    const r = DD().roll(3, 6, 2, rec.rng);
+    const t = rec.tiro('3d6+2', 'menu');
+    eq([t.gruppi.length, t.gruppi[0].values, t.gruppi[0].modifier, t.totale], [1, r.rolls, 2, r.total], 'un gruppo con i dadi del roll');
+    const plan = DD().pianoAnimazione(t, { speed: 'normale' });
+    eq([plan.dadi.map((d) => d.value), plan.durata, plan.animati], [[3, 6, 2], 900, true]);
+    eq(DD().testoGruppo(t.gruppi[0]), '3 + 6 + 2 + 2 = 13');
+    if (typeof document === 'undefined' || !DnD.uiDadi) return;
+    // Animazione interrotta subito: le facce finali sono quelle decise.
+    const stage = document.createElement('div');
+    stage.className = 'dice-stage';
+    document.body.append(stage);
+    try {
+      const plan2 = DD().pianoAnimazione({ gruppi: [{ sides: 20, values: [17], natural: true }, { sides: 8, values: [5] }, { sides: 6, values: [4] }] }, { speed: 'lenta' });
+      const a = DnD.uiDadi.animate(stage, plan2, { sound: false });
+      a.skip();
+      await a.done;
+      eq([...stage.querySelectorAll('.die-face')].map((n) => n.textContent), ['17', '5'], 'facce dei dadi piatti');
+      eq(stage.querySelector('.die-cube').style.transform, 'rotateX(90deg)', 'cubo del d6 sulla faccia 4');
+      ok(stage.classList.contains('landed') && !stage.querySelector('.rolling'), 'animazione finita');
+    } finally {
+      stage.remove();
+    }
+  });
+
+  test('Dadi animati: 4d6 con scarto, vantaggio e svantaggio, 20 e 1 naturali, d100', () => {
+    const rec = DD().registratore(seq(5, 2, 6, 3));
+    const r = R().roll4d6DropLowest(rec.rng);
+    const g = rec.gruppi()[0];
+    eq([rec.gruppi().length, g.values, g.dropped, g.total, r.total], [1, [5, 2, 6, 3], [1], 14, 14], '4d6: il 2 attenuato');
+    eq(DD().pianoAnimazione(rec.tiro('4d6')).dadi.map((d) => d.dropped), [false, true, false, false]);
+    const adv = DD().registratore(seq(5, 17));
+    R().rollSave({ bonus: 3, mode: 'vantaggio', dc: null }, adv.rng);
+    eq(adv.gruppi()[0].dropped, [0], 'vantaggio: scartato il 5');
+    const dis = DD().registratore(seq(5, 17));
+    R().rollSave({ bonus: 3, mode: 'svantaggio', dc: null }, dis.rng);
+    eq(dis.gruppi()[0].dropped, [1], 'svantaggio: scartato il 17');
+    const twin = DD().registratore(seq(9, 9));
+    R().rollSave({ bonus: 0, mode: 'vantaggio', dc: null }, twin.rng);
+    eq(twin.gruppi()[0].dropped, [1], 'pari: se ne attenua uno solo');
+    // 20 e 1 naturali (solo sui d20 tenuti e «naturali»).
+    const crit = DD().registratore(seq(20, 1));
+    R().resolveAttack({ toHit: 5, targetAC: 15, damageDice: '1d8', damageBonus: 3, mode: 'svantaggio' }, crit.rng);
+    eq(DD().pianoAnimazione(crit.tiro('Attacco')).dadi.map((d) => [d.value, d.dropped, d.crit]), [[20, true, null], [1, false, 'min']], 'svantaggio: tiene l\'1 (fallimento)');
+    const hit = DD().registratore(seq(20, 4, 7, 2));
+    R().resolveAttack({ toHit: 5, targetAC: 15, damageDice: '1d8', damageBonus: 3, mode: 'normale' }, hit.rng);
+    const ph = DD().pianoAnimazione(hit.tiro('Critico'));
+    eq([ph.dadi.map((d) => d.crit), ph.gruppi.map((x) => x.sides), ph.gruppi[1].values], [['max', null, null], [20, 8], [4, 7]], '20 naturale e danni raddoppiati');
+    eq(DD().pianoAnimazione({ gruppi: [{ sides: 20, values: [20] }] }).dadi[0].crit, null, 'un d20 di un\'espressione non è «naturale»');
+    // d100: due d10.
+    eq([DD().d100Faces(47), DD().d100Faces(100), DD().d100Faces(7)], [['40', '7'], ['00', '0'], ['00', '7']]);
+    const p100 = DD().pianoAnimazione({ gruppi: [{ sides: 100, values: [47] }] });
+    eq([p100.dadi[0].faces, p100.conta], [['40', '7'], 2]);
+  });
+
+  test('Dadi animati: limite di dadi animati, velocità, «Riduci animazioni», interruttori, coda', () => {
+    const many = (n) => ({ gruppi: [{ sides: 6, values: Array(n).fill(3) }] });
+    eq([DD().pianoAnimazione(many(12)).soloTotale, DD().pianoAnimazione(many(13)).soloTotale, DD().pianoAnimazione(many(13)).dadi.length, DD().pianoAnimazione(many(13)).totale],
+      [false, true, 0, 39], 'oltre 12: solo il totale');
+    eq(['lenta', 'normale', 'veloce', 'istantanea'].map((v) => DD().pianoAnimazione(many(2), { speed: v }).durata), [1200, 900, 600, 0]);
+    const still = DD().pianoAnimazione(many(2), { speed: 'lenta', reduceMotion: true });
+    eq([still.durata, still.animati, still.dadi.length], [0, false, 2], 'Riduci animazioni: subito, senza movimento');
+    // Interruttori (generale e per categoria).
+    const I = DnD.impostazioni;
+    const prev = I.get();
+    try {
+      I.set({ diceAnim: true, diceCombat: false });
+      eq([DnD.uiDadi.enabled('combattimento'), DnD.uiDadi.enabled('menu'), DnD.uiDadi.mostraTiro({ categoria: 'combattimento', gruppi: [{ sides: 20, values: [5] }] })], [false, true, false]);
+      I.set({ diceAnim: false, diceCombat: true });
+      eq([DnD.uiDadi.enabled('combattimento'), DnD.uiDadi.enabled('esplorazione')], [false, false], 'interruttore generale spento');
+    } finally {
+      I.set(prev);
+    }
+    eq(I.normalize({ diceSpeed: 'turbo', diceVolume: 300, diceColor: '<x>', diceSound: 1 }).diceSpeed, 'normale');
+    eq([I.normalize({ diceVolume: 300 }).diceVolume, I.normalize({ diceColor: '<x>' }).diceColor, I.normalize({}).diceSound], [100, 'rosso', false]);
+    // Coda: uno alla volta, con la pausa; i più vecchi si saltano oltre il massimo.
+    const shown = [];
+    const pending = [];
+    const timer = { set: (fn) => { pending.push(fn); return pending.length; }, clear() {} };
+    let finish = null;
+    const q = DD().coda((t, done) => { shown.push(t.etichetta); finish = done; }, { timer, gap: () => 10, max: 2 });
+    q.push({ etichetta: 'a' });
+    q.push({ etichetta: 'b' });
+    q.push({ etichetta: 'c' });
+    q.push({ etichetta: 'd' });
+    eq([shown, q.size()], [['a'], 3], 'il primo subito, due in attesa (c, d)');
+    finish();
+    pending.shift()();
+    finish();
+    pending.shift()();
+    eq(shown, ['a', 'c', 'd'], 'in ordine, «b» saltato oltre il massimo');
+    // Esplorazione: il registratore non cambia la sequenza del seme.
+    const plain = DnD.biomi.seededRng(42);
+    const rec = DD().registratore();
+    const wrapped = rec.wrap(DnD.biomi.seededRng(42));
+    const a = [plain(20), plain(6), plain(100)];
+    eq([wrapped(20), wrapped(6), wrapped(100)], a, 'stessi valori');
+    eq(rec.gruppi().map((g) => g.sides), [20, 6, 100]);
+  });
+
   async function runTests() {
     const results = [];
     for (const { name, fn } of tests) {

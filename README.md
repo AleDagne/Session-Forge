@@ -531,7 +531,8 @@ players: [{ …scheda…, inventory: [{ equipmentId, qty, equipped }], coins: { 
              minRank, requireNode, icon, gridSize, theme, enterText, exitText }], uses, featureUses, spellUses } }]
            (i giocatori standard non hanno «type»; un declassato conserva il percorso in «legendArchive»)
 pathTemplates: [{ id, name, description, path }]   modelli di percorso, comuni a tutte le sessioni
-equipment: [{ id, name, category, description, weight, cost: { amount, unit }, rarity, attunement, icon, tags, weapon, armor }]
+equipment: [{ id, name, category, description, weight, cost: { amount, unit }, rarity, attunement, icon, tags, speedBonus (m), weapon, armor }]
+combattimento: { …, freeMovement }   (i combattenti precedenti con «speed» in metri ricevono la velocità a piedi)
 mapObjects: [{ id, name, otype, icon, mode, tiles, container, interactive, hidden, blocks, state, lock, trap, contents, coins }]
 griglia: { w, h, feetPerCell, background: { kind, color, imageId, fit, x, y, scale, opacity, pxPerCell },
            structures, items (oggetti di mappa piazzati, con stato e contenuto propri), labels, zones, tileMap }
@@ -545,7 +546,8 @@ events: [{ id, name, icon, description, readText, notes, trigger, area, visibili
 sessione.exploration: { gridId, stack: [{ gridId, parties }], parties: [{ id, name, icon, pos, memberIds }], activeParty,
            time: { day, hour, total }, weather, pace, mode, supplies, members: { id: { hp, maxHp, exhaustion, conditions, xp } },
            variables, log, queue, pending (combattimento in attesa), seed }
-combattente: { …, w, h, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
+combattente: { …, w, h, speeds: { cammina, scalare, nuotare, volare, scavare } (ft), speedOverride, moveMode, conditions,
+               movement: { used, dashes, stood, disengaged, start, moves }, ignoreSpeed, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
                boss: { …campi del boss, phase, revealed, defeated },
                legend: { theme, rank, transformations, uses, senses, texts, passive, form: { id, name, hpMode, theme, roundsLeft, prev } } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
@@ -618,6 +620,63 @@ dall'**IA** giocano da soli; spento, tutto funziona come prima.
 
 I nemici e i giocatori esistenti ricevono temperamento Aggressivo e archetipo Automatico; un combattimento
 in corso riprende con i valori di base (giocatori Manuale, nemici IA). Tutto è incluso in Esporta/Importa.
+
+## Velocità e movimento
+
+Nel combattimento ogni pedina ha una **velocità in piedi** per modalità (camminare, scalare, nuotare, volare,
+scavare), convertita in caselle: piedi / piedi per cella della griglia, per difetto (30 ft con celle da 5 ft = 6
+caselle; con celle da 10 ft = 3). Logica in `js/movimento.js`.
+
+- **Fonti**: razza (giocatori) o scheda della creatura (tutte le modalità; nelle librerie le velocità sono in metri,
+  1,5 m = 5 ft), più i **nodi del Percorso** dei leggendari, gli **oggetti equipaggiati** (campo *Bonus alla
+  velocità* dell'Attrezzatura, anche negativo) e la **trasformazione** attiva (velocità della forma).
+  *Modifica* del combattente sovrascrive a mano la velocità di ogni modalità (vuoto = dalla scheda).
+- **Movimento residuo**: si azzera a velocità piena all'inizio del turno del combattente. Lo spostamento lo consuma
+  e il residuo è sempre visibile: nella scheda, sopra la pedina di turno («🦶 4») e nella barra del turno. Non si
+  può superare: trascinando oltre, la pedina si ferma all'ultima cella raggiungibile con un avviso.
+- **Costo per casella**: 1 normale, 2 terreno difficile (tile con costo), celle bloccate non attraversabili
+  (strutture, porte chiuse, TileMap, come `isCellBlocked`); pedine ostili bloccano, quelle alleate si
+  attraversano ma non ci si ferma sopra; niente angoli tagliati. Le pedine più grandi muovono tutto l'ingombro.
+  Diagonali con la regola del misuratore (Impostazioni › Movimento): **sempre 1** (come prima) o **alternata
+  1-2-1**. A parità di costo il percorso scelto è quello con meno diagonali.
+- **Modalità**: si cambia dal menu della pedina. Senza la velocità di quella modalità la creatura non può usarla
+  oppure costa il doppio (con la velocità a piedi), a scelta nelle Impostazioni. Volando il terreno difficile non
+  conta.
+- **Azioni**: **🏃 Scatto** (aggiunge la velocità al residuo, usa l'azione), **↩ Disimpegno** (promemoria: niente
+  attacchi di opportunità), **⤒ Rialzati** da prono (costa metà velocità), **↶ Annulla spostamento** (torna alla
+  posizione d'inizio turno e restituisce il movimento speso). Anche dal menu della pedina.
+- **Condizioni** (scheda › *Condizioni…*, applicate in automatico): afferrato, trattenuto, paralizzato (e
+  pietrificato, privo di sensi) = velocità 0; prono = striscia, ogni casella costa una in più; **rallentato** =
+  metà velocità. Il motivo compare accanto al valore.
+- **Anteprima** mentre si trascina: celle raggiungibili in verde (residuo) e in arancio (con lo Scatto), percorso
+  tratteggiato e costo sul cursore («costo 4 · restano 2»).
+- **Master**: *Movimento libero* nella barra della griglia (nessun limite per nessuno) e *🦶 Ignora velocità* per
+  singolo combattente (eventi, teletrasporti).
+- Il **log** registra ogni spostamento («Kael si muove di 4 caselle, restano 2 caselle (10 ft)»); annulla/ripeti
+  della griglia (Ctrl+Z / Ctrl+Y) copre anche il residuo. Il **combattimento simulato** pianifica con il residuo e
+  il costo reale del percorso (non la distanza in linea d'aria) e lo consuma.
+- Fuori dal combattimento (editor, esplorazione) valgono le regole di prima e quelle dei biomi.
+
+## Dadi animati
+
+Il risultato si decide **prima**, con lo stesso generatore senza bias (`crypto.getRandomValues`): un
+*registratore* (`dadi.registratore`) registra i dadi tirati da attacchi, danni, tiri salvezza, prove, iniziativa,
+ricariche e incantesimi, e l'animazione li mostra finendo sempre su quei valori. Il log e la cronologia hanno il
+tiro anche se l'animazione è saltata o spenta. La parte visiva (`uiDadi.mostraTiro(tiro)`) è separata dal calcolo,
+pronta per dadi condivisi in futuro.
+
+- **Aspetto**: d4, d6 (cubo 3D con i puntini), d8, d10, d12, d20 e d100 (due d10, decine e unità) disegnati in
+  SVG/CSS, colore scelto nella palette dell'app. Lancio con rotazione, rimbalzo e rallentamento; più dadi rotolano
+  insieme e si sommano. Il dado scartato (vantaggio e svantaggio, 4d6 «scarta il più basso») è attenuato. 20
+  naturale: bagliore dorato; 1 naturale: effetto scuro e tremolio. Accanto, i gruppi con i modificatori e il totale.
+- **Dove**: nel menù **Dadi** (area di lancio, con d100, «d20 con vantaggio/svantaggio» e «4d6, scarta il più
+  basso») e come piccolo **overlay** in basso nel Combattimento e nell'Esplorazione: non copre i controlli
+  (`pointer-events: none`), si chiude da solo e mette i tiri in coda (veloce durante i turni automatici dell'IA).
+- **Impostazioni › Dadi animati**: interruttore generale e per categoria (menù, combattimento, esplorazione),
+  velocità (lenta, normale, veloce, istantanea), colore, **suoni** sintetizzati con la Web Audio API (rotolio e
+  tonfo, volume regolabile, spenti di base) e *Prova*. **Salta animazione** con il pulsante, un clic sull'area o
+  Spazio. Con *Riduci animazioni* il risultato compare subito senza movimento; oltre 12 dadi si mostra solo il
+  totale.
 
 ## Note del master
 
@@ -742,6 +801,16 @@ personaggio con il danno in eccesso, PF temporanei, usi e durata, fine anticipat
 tema della forma; promozione e declassamento, migrazione, esportazione e importazione; temi unificati con il Boss,
 scheda del combattente a tema ed effetti fermi con *Riduci animazioni*.
 
+Per **velocità e movimento**: conversione piedi/celle con scale diverse e fonti della velocità (razza, oggetti,
+creatura, nodi, trasformazione, sovrascrittura); residuo per turno, azzeramento, limite e fermata all'ultima
+cella; costo con terreno difficile, diagonali con le due regole, pedina 2×2 nello stretto, pedine ostili e alleate;
+Scatto, Rialzarsi, annulla spostamento; condizioni (afferrato, trattenuto, paralizzato, prono, rallentato);
+modalità con velocità mancante vietata o doppia; anteprima delle celle raggiungibili; IA con il residuo;
+salvataggio, migrazione, movimento libero e annulla/ripeti con il residuo. Per i **dadi animati**: risultato
+mostrato uguale a quello deciso anche con l'animazione interrotta, 4d6 con scarto, vantaggio e svantaggio, 20 e 1
+naturali, d100, limite dei dadi animati, velocità, *Riduci animazioni*, interruttori, coda dei tiri e
+registrazione dell'esplorazione senza cambiare il seme.
+
 ## Struttura
 
 ```
@@ -751,9 +820,11 @@ manifest.json, sw.js  PWA (installazione e uso offline)
 css/style.css         temi chiaro/scuro con variabili CSS e layout responsive
 css/boss.css          area dei boss, cornice con spade, barra, vignettatura ed effetti (variabili del tema)
 css/leggendario.css   grafica divina dei leggendari: temi e motivi, ali, sigilli, lance, percorso, animazioni
+css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti dei 20 e degli 1
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
-js/dadi.js            generatore casuale e parser delle espressioni di dadi
+js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
+js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
 js/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)

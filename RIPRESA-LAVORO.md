@@ -17,8 +17,8 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
 - Dal 22 ottobre 2026 (sessione sul PC desktop) la cartella **è un repository git**: la cronologia parte dal commit
   «Stato iniziale». Claude Code avvia il server da `.claude/launch.json` sulla porta **5617** (la 8080 era occupata).
 - L'app parte e tutti gli script si caricano senza errori di sintassi.
-- `test.html`: **tutti i 178 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
-- Versione dei dati: **11** (cache del service worker: `session-forge-v20`).
+- `test.html`: **tutti i 188 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
+- Versione dei dati: **11** (cache del service worker: `session-forge-v21`).
 
 ## Prova a mano dell'interfaccia (22 ottobre 2026, PC desktop)
 
@@ -108,6 +108,22 @@ Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo
 - `css/leggendario.css`: **versione di base** (temi con variabili `--lg-*`, raggi, polvere, editor del percorso,
   animazioni, «Riduci animazioni»).
 
+## Fase «Velocità e movimento, dadi animati» — FATTA (22 ottobre 2026)
+
+- `js/movimento.js` (nuovo, logica pura): velocità in piedi per modalità (fonti: razza, creatura, nodi, oggetti
+  con il nuovo campo *Bonus alla velocità*, forma, sovrascrittura), celle = piedi / piedi per cella, residuo per
+  turno, Scatto, Disimpegno, Rialzarsi, annulla spostamento, condizioni (aggiunta «rallentato»), percorso minimo
+  con diagonali 1 o 1-2-1 e costi additivi. L'IA (`ia.paths`) ora usa questo percorso e il residuo.
+- Griglia: aggancio `movement` (anteprima delle celle raggiungibili, percorso, costo, fermata all'ultima cella),
+  misuratore con la regola delle diagonali, residuo nell'istantanea di annulla/ripeti.
+- Dadi: `dadi.registratore` (le funzioni dei tiri annotano vantaggio, scarto e modificatori senza cambiare i
+  risultati), `pianoAnimazione`, `coda`; `ui-dadi.js` riscritto con `mostraTiro` (overlay e area di lancio),
+  `css/dadi.css`; Impostazioni › Movimento e Dadi animati.
+- **Da provare a mano** (in aggiunta all'elenco qui sotto): trascinare pedine con terreno difficile e diagonali
+  1-2-1, cambio di modalità dal menu della pedina, condizioni, Movimento libero e Ignora velocità, turni IA
+  automatici con l'overlay dei dadi, suoni con il volume, esplorazione (prove degli eventi) con i dadi.
+- Limiti noti: nessuna regola di luce/acqua; i biomi non cambiano il costo nel combattimento (solo le tile).
+
 ## Effetti dei nodi e README — FATTI (22 ottobre 2026)
 
 - **Abilità**: competenza (×1) e maestria (×2) dei nodi valgono nelle prove degli eventi dell'esplorazione
@@ -145,9 +161,9 @@ Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo
      vignettatura, scheda e pedina cambiano); tema chiaro dell'app; Impostazioni › «Riduci animazioni» (tutto
      fermo, niente Ascensione) ed «Effetti boss» spenti (niente lampo né barra).
    - Esporta/Importa: archivio completo e singola sessione con un leggendario; Duplica sessione.
-   - Installata come app (PWA): dopo l'aggiornamento parte la nuova versione (cache `session-forge-v20`).
+   - Installata come app (PWA): dopo l'aggiornamento parte la nuova versione (cache `session-forge-v21`).
 2. Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app).
-3. **Service worker**: ora `session-forge-v20`; aumentarlo di nuovo dopo le prossime modifiche.
+3. **Service worker**: ora `session-forge-v21`; aumentarlo di nuovo dopo le prossime modifiche.
 
 ## Test già presenti per questa fase (in `js/test.js`, tutti passano)
 

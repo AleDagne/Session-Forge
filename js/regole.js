@@ -52,6 +52,8 @@
     let natural = rolls[0];
     if (mode === MODES.vantaggio) natural = Math.max(...rolls);
     if (mode === MODES.svantaggio) natural = Math.min(...rolls);
+    // Per i dadi animati (dadi.registratore): con vantaggio/svantaggio il dado scartato si mostra attenuato.
+    if (rng.nota) rng.nota({ sides: 20, values: rolls, dropped: rolls.length > 1 ? [rolls.indexOf(natural) === 0 ? 1 : 0] : [], natural: true });
     return { rolls, natural };
   }
 
@@ -127,6 +129,7 @@
 
   function rollInitiative(dexMod, rng) {
     const roll = rng(20);
+    if (rng.nota) rng.nota({ sides: 20, values: [roll], modifier: dexMod, total: roll + dexMod, natural: true });
     return { initiativeRoll: roll, initiative: roll + dexMod };
   }
 
@@ -136,6 +139,7 @@
   function roll4d6DropLowest(rng) {
     const rolls = [rng(6), rng(6), rng(6), rng(6)];
     const dropIndex = rolls.indexOf(Math.min(...rolls));
+    if (rng.nota) rng.nota({ sides: 6, values: rolls, dropped: [dropIndex], total: rolls.reduce((a, b) => a + b, 0) - rolls[dropIndex] });
     return { rolls, dropIndex, total: rolls.reduce((a, b) => a + b, 0) - rolls[dropIndex] };
   }
 

@@ -127,6 +127,23 @@
   // Interruttore del master: nessun limite di velocità.
   const freeBox = el('input', { type: 'checkbox', onchange: (e) => mutate((c) => { c.freeMovement = e.target.checked; log(c, 'sistema', 'Movimento libero ' + (c.freeMovement ? 'attivo: nessun limite di velocità.' : 'disattivato.')); }) });
 
+  // ---------- Dadi animati ----------
+  // Ogni azione registra i dadi che tira (risultato deciso prima, con lo stesso generatore senza bias); finita
+  // l'azione, l'overlay li mostra con il riepilogo. Il log ha già tutto anche se l'animazione è saltata o spenta.
+  let diceRec = null;
+  const dice = () => (diceRec ? diceRec.rng : DnD.dadi.randomInt);
+  const beginDice = () => { diceRec = DnD.dadi.registratore(); };
+  function endDice(label, text) {
+    const r = diceRec;
+    diceRec = null;
+    if (!r) return;
+    const c = combat();
+    // Senza riepilogo: l'ultima riga del log (l'esito dell'azione).
+    const last = c && c.log.length ? c.log[c.log.length - 1].text : '';
+    // Turni automatici dell'IA: coda veloce, il gioco non rallenta.
+    DnD.uiDadi.mostraTiro(r.tiro(label, 'combattimento', { testo: text || last }), { veloce: Boolean(c && c.ai && c.ai.simulated && c.ai.mode === 'auto') });
+  }
+
   // ---------- Combattimento simulato (IA) ----------
   const IA = DnD.ia;
   const KI = DnD.iaDati;
@@ -589,7 +606,9 @@
         errorBox.textContent = 'Seleziona almeno un giocatore o un nemico.';
         return;
       }
-      const combatants = R.createCombatants(players, entries, st.races, DnD.dadi.randomInt, st.spells, st.equipment);
+      beginDice();
+      const combatants = R.createCombatants(players, entries, st.races, dice(), st.spells, st.equipment);
+      endDice('Iniziativa', '');
       for (const x of combatants) {
         if (setup.control[x.sourceId]) x.control = setup.control[x.sourceId];
         if (setup.faction[x.sourceId]) x.faction = setup.faction[x.sourceId];
@@ -651,9 +670,13 @@
   function renderInitiative() {
     const inputs = {};
     const list = order();
-    const rerollAll = () => mutate((c) => {
-      for (const x of c.combatants) Object.assign(x, R.rollInitiative(x.dexMod, DnD.dadi.randomInt));
-    });
+    const rerollAll = () => {
+      beginDice();
+      mutate((c) => {
+        for (const x of c.combatants) Object.assign(x, R.rollInitiative(x.dexMod, dice()));
+      });
+      endDice('Iniziativa ritirata', '');
+    };
     const begin = () => {
       const errors = {};
       for (const x of list) {
@@ -713,10 +736,11 @@
     log(c, 'turno', 'Turno di ' + cur.name + '.');
     // Trasformazione leggendaria: la durata scende all'inizio del turno.
     for (const line of DnD.leggendario.tick(cur)) log(c, 'sistema', line);
-    if (cur.creature) for (const line of M.startTurn(cur.creature, DnD.dadi.randomInt)) log(c, 'sistema', line);
+    if (cur.creature) for (const line of M.startTurn(cur.creature, dice())) log(c, 'sistema', line);
   }
 
   function nextTurn() {
+    beginDice();
     mutate((c) => {
       const sorted = R.sortByInitiative(c.combatants);
       const res = R.nextTurn(sorted, c.currentId, c.round);
@@ -728,6 +752,8 @@
       c.currentId = res.currentId;
       startTurnOf(c, sorted, prev, c.currentId, newRound);
     });
+    const cur = combat() && combat().currentId ? byId(combat().currentId) : null;
+    endDice(cur ? 'Ricarica di ' + cur.name : 'Ricarica', '');
   }
 
   function endCombat() {
@@ -794,12 +820,14 @@
   function performAttack(attackerId, targetId, weaponId, mode) {
     let summary = '';
     let summaryType = 'info';
+    const names = [byId(attackerId), byId(targetId)].map((x) => (x ? x.name : ''));
+    beginDice();
     mutate((c) => {
       const a = byId(attackerId);
       const t = byId(targetId);
       const w = a && a.weapons.find((x) => x.id === weaponId);
       if (!a || !t || !w) return;
-      const res = R.resolveAttack({ toHit: w.toHit, targetAC: t.ac, damageDice: w.damageDice, damageBonus: w.damageBonus, mode }, DnD.dadi.randomInt);
+      const res = R.resolveAttack({ toHit: w.toHit, targetAC: t.ac, damageDice: w.damageDice, damageBonus: w.damageBonus, mode }, dice());
       const d20 = mode === R.MODES.normale
         ? 'd20 = ' + res.natural
         : 'd20 con ' + mode + ' [' + res.d20Rolls.join(', ') + '] → ' + res.natural;
@@ -831,6 +859,7 @@
         summary += ' ' + t.name + ' è a terra!';
       }
     });
+    endDice(names[0] + ' attacca ' + names[1], summary);
     if (summary) toast(summary, summaryType);
   }
 
@@ -966,6 +995,7 @@
 
   function performCast(casterId, spellId, slotLevel, targetIds, mode) {
     let summaryText = '';
+    beginDice();
     mutate((c, st) => {
       const a = byId(casterId);
       const sc = a && a.spellcasting;
@@ -987,7 +1017,7 @@
       const res = DnD.magie.resolveSpell({
         spell: sp, slotLevel, mode, caster: { attack: sc.attack, dc: sc.dc, mod: sc.mod },
         targets: targets.map((t) => ({ id: t.id, ac: t.ac, saves: t.saves })),
-      }, DnD.dadi.randomInt);
+      }, dice());
       const e = sp.effect;
       const dmgType = e.damageType ? ' ' + e.damageType : '';
       const diceText = (r) => (r ? DnD.dadi.formatExpr(r.count, r.sides, r.modifier) + ': ' + rollText(r.rolls, r.modifier) + ' = ' + Math.max(0, r.total) : '');
@@ -1029,6 +1059,7 @@
       for (const n of downed) log(c, 'a-terra', n + ' è a terra!');
       summaryText = a.name + ' lancia ' + sp.name + (downed.length ? ' · a terra: ' + downed.join(', ') : '');
     });
+    endDice(summaryText.split(' · ')[0], summaryText);
     if (summaryText) toast(summaryText, 'success');
   }
 
@@ -1054,10 +1085,11 @@
         const m = body.querySelector('input[name="modo-ts"]:checked').value;
         let summaryText = '';
         let summaryType = 'info';
+        beginDice();
         mutate((c) => {
           const t = byId(target.id);
           if (!t) return;
-          const r = R.rollSave({ bonus: t.saves[ab], mode: m, dc: dcValue }, DnD.dadi.randomInt);
+          const r = R.rollSave({ bonus: t.saves[ab], mode: m, dc: dcValue }, dice());
           const d20 = m === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + m + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
           const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
           log(c, r.success === false ? 'mancato' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': ' + d20 + ' ' +
@@ -1065,6 +1097,7 @@
           summaryText = t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)');
           summaryType = r.success === false ? 'error' : r.success ? 'success' : 'info';
         });
+        endDice(target.name + ': tiro salvezza su ' + R.ABILITY_NAMES[ab], summaryText);
         if (summaryText) toast(summaryText, summaryType);
         return undefined;
       } },
@@ -1235,6 +1268,9 @@
   // ciascuna. Consuma usi, ricarica o punti leggendari.
   function performCreatureAction(attackerId, actionId, targetIds, mode) {
     const downed = [];
+    const who = byId(attackerId);
+    const act = who && who.creature ? M.allActions(who.creature).find((y) => y.id === actionId) : null;
+    beginDice();
     mutate((c) => {
       const x = byId(attackerId);
       const st = x && x.creature;
@@ -1254,7 +1290,7 @@
           const before = t.hp;
           const who = steps.length > 1 ? x.name + ' — ' + sub.name : header;
           if (sub.mech.kind === 'attacco') {
-            const r = M.resolveAttack(st, sub, t, mode, DnD.dadi.randomInt);
+            const r = M.resolveAttack(st, sub, t, mode, dice());
             const d20 = mode === 'normale' ? 'd20 = ' + r.natural : 'd20 con ' + mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
             let text = who + ' contro ' + t.name + ': ' + d20 + ' ' + R.formatModifier(r.bonus) + ' = ' + r.total + ' contro CA ' + t.ac;
             if (r.fumble || !r.hit) { log(c, 'mancato', text + (r.fumble ? '. 1 NATURALE: mancato.' : ' → mancato.')); continue; }
@@ -1265,7 +1301,7 @@
               (applied.notes.length ? ' (' + applied.notes.join('; ') + ')' : '') + ' → ' + applied.total + ' danni. ' + t.name + ': ' + before + ' → ' + t.hp + ' PF.';
             log(c, r.crit ? 'critico' : 'colpito', text);
           } else if (sub.mech.kind === 'salvezza') {
-            const r = M.resolveSave(st, sub, t, DnD.dadi.randomInt);
+            const r = M.resolveSave(st, sub, t, dice());
             const applied = M.applyDamageParts(r.parts, t.defenses, false);
             hurt(t, applied.total);
             let text = who + ': ' + t.name + ' tira salvezza su ' + R.ABILITY_NAMES[r.ability] + ' ' + r.total + ' contro CD ' + r.dc + ' → ' + (r.success ? 'riesce' : 'fallisce');
@@ -1278,7 +1314,7 @@
               t.pendingSave = { full: r.full.map((q) => ({ amount: q.amount, type: q.type })), half: sub.mech.half, applied: before - t.hp, magical: false, text: sub.name };
             }
           } else if (sub.mech.kind === 'cura') {
-            const r = M.resolveHeal(st, sub, DnD.dadi.randomInt);
+            const r = M.resolveHeal(st, sub, dice());
             t.hp = R.heal(t.hp, t.maxHp, r.amount);
             log(c, 'cura', who + ': ' + t.name + ' recupera ' + (t.hp - before) + ' PF [' + r.rolls.join(', ') + ']: ' + before + ' → ' + t.hp + ' PF.');
           }
@@ -1286,6 +1322,7 @@
         }
       });
     });
+    endDice((who ? who.name : '') + (act ? ': ' + act.name : ''), downed.length ? 'A terra: ' + downed.join(', ') : '');
     if (downed.length) toast('A terra: ' + downed.join(', '), 'success');
   }
 
