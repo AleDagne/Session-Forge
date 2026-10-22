@@ -3108,6 +3108,27 @@
     eq([h.undo({ v: 2 }), h.redo({ v: 1 })], [{ v: 1 }, { v: 2 }]);
   });
 
+  test('Percorso: la raggiera tiene ogni ramo nello spicchio del suo genitore', () => {
+    // Nucleo → A → A1, A2 e Nucleo → B → B1: i figli stanno più vicini al proprio genitore che all'altro ramo.
+    const p = PT().radialLayout(PT().normalizePath({ nodes: [{ id: 'nucleo', core: true }, { id: 'a' }, { id: 'a1' }, { id: 'a2' }, { id: 'b' }, { id: 'b1' }, { id: 'solo' }],
+      links: [['nucleo', 'a'], ['a', 'a1'], ['a', 'a2'], ['nucleo', 'b'], ['b', 'b1']] }), 100);
+    const at = (id) => PT().nodeById(p, id);
+    const dist = (x, y) => Math.hypot(at(x).x - at(y).x, at(x).y - at(y).y);
+    ok(dist('a1', 'a') < dist('a1', 'b') && dist('a2', 'a') < dist('a2', 'b') && dist('b1', 'b') < dist('b1', 'a'), 'figli vicini al genitore');
+    eq([Math.round(Math.hypot(at('a').x, at('a').y)), Math.round(Math.hypot(at('b1').x, at('b1').y)), Math.round(Math.hypot(at('solo').x, at('solo').y))], [100, 200, 300], 'anelli per distanza; irraggiungibili all\'esterno');
+  });
+
+  test('Leggendari: un nodo che alza la COS aumenta i PF massimi di 1 per livello per ogni punto di modificatore', () => {
+    const st = { races: [], equipment: [], spells: [], players: [] };
+    const c = legendaryOf(30); // COS 18 (+4)
+    c.legend.path.nodes.push({ id: 'k', name: 'K', cost: 1, effects: [{ kind: 'caratteristica', ability: 'COS', value: 2 }, { kind: 'bonus', stat: 'pf', value: 5 }] });
+    c.legend.path.links.push(['nucleo', 'k']);
+    c.legend.path = PT().normalizePath(c.legend.path);
+    eq(LG().effectivePlayer(c, st).maxHp, 200);
+    c.legend.unlocked = ['nucleo', 'k'];
+    eq(LG().effectivePlayer(c, st).maxHp, 200 + 5 + 30, 'COS 20 (+5): +1 × 30 livelli, più il bonus diretto');
+  });
+
   // Trasformazione di prova: forma draconica 100 PF, CA 19, FOR 26, DES 10, COS 24; fasi a 50%.
   function formOf(extra) {
     return LG().normalizeTransformation(Object.assign({ id: 't1', name: 'Forma del drago', epithet: 'Ali d\'oro', uses: { per: 'lungo', n: 1 }, duration: { unit: 'round', value: 2 },

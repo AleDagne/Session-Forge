@@ -253,7 +253,7 @@
       clear(body).append(
         el('p', { class: 'muted small', text: [OM.TYPE_NAMES[it.otype], it.state === 'aperto' ? 'aperto' : 'chiuso', it.lock.locked ? 'chiuso a chiave' : '',
           it.hidden ? 'nascosto ai giocatori' : '', it.trap.enabled ? (it.trap.armed ? 'trappola attiva' + (it.trap.found ? ' (individuata)' : '') : 'trappola disinnescata') : ''].filter(Boolean).join(' · ') }),
-        it.description ? el('p', { class: 'small', text: it.description }) : null,
+        it.description ? el('p', { class: 'small', text: it.description }) : '',
         el('div', { class: 'input-row' }, el('span', { class: 'field-label', text: 'Chi agisce' }), who, el('label', { class: 'inline small' }, 'bonus', bonus)),
         el('div', { class: 'head-actions' },
           b(it.state === 'aperto' ? 'Chiudi' : 'Apri', () => act((x) => OM.toggleOpen(x, hasKey(x)).text), !it.interactive),

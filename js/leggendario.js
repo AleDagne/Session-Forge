@@ -146,7 +146,10 @@
     const base = R().derivedStats(c, race, st && st.equipment);
     if (fx.saves.length) { e.saveMode = 'manuale'; e.saves = [...new Set(base.saves.concat(fx.saves))]; }
     if (fx.stats.competenza) e.profBonusOverride = base.profBonus + fx.stats.competenza;
-    if (fx.stats.pf) e.maxHp = Math.max(1, c.maxHp + fx.stats.pf);
+    // PF: bonus diretti più il modificatore di COS cresciuto (o calato) con i nodi, per ogni livello.
+    const conDelta = fx.abilities.COS ? R().modifier(R().derivedStats(e, race, st && st.equipment).abilities.COS) - R().modifier(base.abilities.COS) : 0;
+    const hpBonus = (fx.stats.pf || 0) + conDelta * c.level;
+    if (hpBonus) e.maxHp = Math.max(c.level, c.maxHp + hpBonus);
     if (fx.stats.ca) { if (e.acMode === 'auto') e.armor.bonus = (e.armor.bonus || 0) + fx.stats.ca; else e.ac += fx.stats.ca; }
     if (e.spellcasting) {
       const sc = e.spellcasting;

@@ -400,9 +400,13 @@
         ]));
       return;
     }
+    const playerSummary = (c) => { // i leggendari con gli effetti dei nodi già applicati
+      const e = DnD.leggendario.effectivePlayer(c, st);
+      return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + R.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
+    };
     const summary = (c) => (DnD.boss.isMonster(c)
       ? [c.type === 'boss' ? 'Boss' : 'Creatura', 'GS ' + c.cr, 'PF ' + M.hpInfo(c).total, 'CA ' + c.ac]
-      : [DnD.classi.className(c.classId), 'PF ' + c.maxHp, 'CA ' + R.derivedStats(c, st.races.find((r) => r.id === c.raceId)).ac.total]);
+      : playerSummary(c));
     const qtyInputs = {};
     const errorBox = el('div', { class: 'error', 'aria-live': 'polite' });
     // Controllo (Manuale o IA) e fazione per riga: di base giocatori Manuale, nemici IA.
@@ -544,7 +548,7 @@
         el('div', { class: 'head-actions' },
           el('button', { class: 'btn', text: 'Ritira tutti', onclick: rerollAll }),
           el('button', { class: 'btn danger', text: 'Annulla', onclick: cancel }))),
-      DnD.uiEsplorazione ? DnD.uiEsplorazione.combatBanner() : null,
+      (DnD.uiEsplorazione && DnD.uiEsplorazione.combatBanner()) || '',
       el('div', { class: 'panel' },
         el('p', { class: 'muted', text: 'd20 + modificatore di DES tirati automaticamente. Puoi correggere i valori a mano.' }),
         el('table', { class: 'init-table' },

@@ -231,33 +231,37 @@
     }
     return p;
   }
-  // Disposizione automatica a raggiera: anelli concentrici per distanza (in collegamenti) dal Nucleo.
+  // Disposizione automatica a raggiera: anelli concentrici per distanza (in collegamenti) dal Nucleo. Ogni ramo
+  // dell'albero di visita riceve uno spicchio proporzionale alle sue foglie, così i figli stanno vicino al
+  // genitore e i rami non si incrociano. I nodi irraggiungibili vanno su un anello esterno.
   function radialLayout(path, ring) {
     const p = clone(path);
-    const step = ring || 140;
+    const step = ring || 190;
+    const pos = (n, a, d) => { n.x = Math.round(Math.cos(a) * step * d); n.y = Math.round(Math.sin(a) * step * d); };
     const depth = new Map([[CORE_ID, 0]]);
+    const children = new Map([[CORE_ID, []]]);
     const order = [CORE_ID];
-    for (let i = 0; i < order.length; i++) for (const x of neighbors(p, order[i])) if (!depth.has(x)) { depth.set(x, depth.get(order[i]) + 1); order.push(x); }
-    const maxD = Math.max(0, ...depth.values());
-    for (const n of p.nodes) if (!depth.has(n.id)) depth.set(n.id, maxD + 1);
-    const rings = new Map();
-    for (const n of p.nodes) { const d = depth.get(n.id); if (!rings.has(d)) rings.set(d, []); rings.get(d).push(n); }
-    // Ordine angolare: i figli vicini all'angolo del genitore.
-    const angle = new Map([[CORE_ID, 0]]);
-    for (const [d, list] of [...rings.entries()].sort((a, b) => a[0] - b[0])) {
-      if (d === 0) { list.forEach((n) => { n.x = 0; n.y = 0; }); continue; }
-      list.sort((a, b) => parentAngle(a) - parentAngle(b));
-      list.forEach((n, i) => {
-        const a = (i / list.length) * Math.PI * 2 - Math.PI / 2;
-        angle.set(n.id, a);
-        n.x = Math.round(Math.cos(a) * step * d);
-        n.y = Math.round(Math.sin(a) * step * d);
-      });
+    for (let i = 0; i < order.length; i++) {
+      for (const x of neighbors(p, order[i])) {
+        if (depth.has(x)) continue;
+        depth.set(x, depth.get(order[i]) + 1);
+        children.get(order[i]).push(x);
+        children.set(x, []);
+        order.push(x);
+      }
     }
-    function parentAngle(n) {
-      const ps = neighbors(p, n.id).filter((x) => depth.get(x) === depth.get(n.id) - 1);
-      return ps.length ? angle.get(ps[0]) || 0 : 0;
-    }
+    const leaves = new Map();
+    for (const id of [...order].reverse()) leaves.set(id, Math.max(1, children.get(id).reduce((s, x) => s + leaves.get(x), 0)));
+    const place = (id, a0, a1) => {
+      const n = nodeById(p, id);
+      if (id === CORE_ID) { n.x = 0; n.y = 0; } else pos(n, (a0 + a1) / 2, depth.get(id));
+      let a = a0;
+      for (const x of children.get(id)) { const w = ((a1 - a0) * leaves.get(x)) / leaves.get(id); place(x, a, a + w); a += w; }
+    };
+    if (nodeById(p, CORE_ID)) place(CORE_ID, -Math.PI, Math.PI);
+    const lost = p.nodes.filter((n) => !depth.has(n.id));
+    const outer = Math.max(0, ...depth.values()) + 1;
+    lost.forEach((n, i) => pos(n, (i / lost.length) * Math.PI * 2 - Math.PI / 2, outer));
     return p;
   }
 
@@ -317,7 +321,7 @@
     ];
     const links = [[CORE_ID, 'n-vigore'], [CORE_ID, 'n-passo'], [CORE_ID, 'n-mente'], ['n-vigore', 'n-pelle'], ['n-mente', 'n-occhi'], ['n-passo', 'n-lama'], ['n-passo', 'n-scudo'],
       ['n-mente', 'n-fiamma'], ['n-fiamma', 'n-stelle'], ['n-stelle', 'n-forma'], ['n-pelle', 'n-corona'], ['n-occhi', 'n-corona'], ['n-mente', 'n-eco']];
-    return radialLayout(normalizePath({ name: 'Ascesa dell\'Eterno', nodes, links }), 150);
+    return radialLayout(normalizePath({ name: 'Ascesa dell\'Eterno', nodes, links }), 190);
   }
   const exampleTemplate = () => normalizeTemplate({ id: 'modello-ascesa-eterno', name: 'Ascesa dell\'Eterno', description: 'Percorso d\'esempio originale: corpo, spirito, guerra, arcano e ascesa.', path: example() });
 

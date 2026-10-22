@@ -425,7 +425,7 @@
       const r = P.canUnlock(p, [...have], id, opts.ctx());
       const body = el('div', { class: 'form legend-node-detail' },
         el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(n.icon, 40), el('div', {}, el('b', { text: n.name }),
-          el('div', { class: 'muted small', text: [n.category, n.core ? 'Nucleo' : 'costo ' + n.cost + ' punti', n.minRank ? 'rango ' + n.minRank : ''].filter(Boolean).join(' · ') }))),
+          el('div', { class: 'muted small', text: [n.category, n.core ? 'Nucleo' : 'costo ' + n.cost + (n.cost === 1 ? ' punto' : ' punti'), n.minRank ? 'rango ' + n.minRank : ''].filter(Boolean).join(' · ') }))),
         n.description ? el('p', { class: 'muted', text: n.description }) : null,
         el('ul', {}, n.effects.map((e) => el('li', { text: effectText(e) }))),
         have.has(id) ? el('p', { class: 'ok-text', text: '✦ Già sbloccato.' }) : el('p', { class: r.ok ? 'ok-text' : 'warn-text', text: r.ok ? 'Si può sbloccare.' : 'Non ancora: ' + r.reason + '.' }));
@@ -505,6 +505,7 @@
       return el('div', { class: 'effect-block' }, head, body);
     }
 
+    const duplicateBtn = (cls) => el('button', { type: 'button', class: 'btn ' + cls, text: '⧉ Duplica', onclick: () => { const r = P.duplicateNodes(path(), selected); commit(r.path, 'duplica'); selected = r.ids; refresh(); } });
     function refreshSide() {
       clear(side);
       if (mode !== 'editor') return;
@@ -514,7 +515,7 @@
         side.append(el('h3', { text: selected.length ? selected.length + ' nodi selezionati' : 'Percorso' }),
           el('p', { class: 'muted small', text: p.nodes.length + ' nodi · ' + p.links.length + ' collegamenti' }),
           selected.length ? el('div', { class: 'head-actions' },
-            el('button', { type: 'button', class: 'btn small', text: '⧉ Duplica', onclick: () => { const r = P.duplicateNodes(path(), selected); commit(r.path, 'duplica'); selected = r.ids; refresh(); } }),
+            duplicateBtn('btn small'),
             el('button', { type: 'button', class: 'btn small danger', text: '🗑 Elimina', onclick: () => removeSelected(selected) })) : el('p', { class: 'muted small', text: 'Clicca un nodo per modificarlo.' }),
           warnings.length ? el('ul', { class: 'warn-text small' }, warnings.map((w) => el('li', { text: '⚠ ' + w }))) : el('p', { class: 'ok-text small', text: '✓ Tutti i nodi sono raggiungibili dal Nucleo.' }));
         return;
@@ -533,7 +534,7 @@
         el('button', { type: 'button', class: 'btn small', text: '+ Effetto', onclick: () => { n.effects.push(P.normalizeEffect({ kind: 'bonus' })); drawEffects(); } }));
       drawEffects();
       const others = p.nodes.filter((x) => x.id !== n.id);
-      side.append(
+      side.append(...[
         el('h3', { text: n.core ? '☀ Nucleo' : 'Nodo' }),
         field('Nome', textInput(n.name, { maxlength: 60, oninput: (e) => { n.name = e.target.value; } })),
         field('Descrizione', el('textarea', { rows: 2, value: n.description, oninput: (e) => { n.description = e.target.value; } })),
@@ -552,9 +553,10 @@
             others.map((x) => opt(x.id, x.name, n.requires.includes(x.id))))),
         el('fieldset', {}, el('legend', { text: 'Effetti' }), effects),
         el('div', { class: 'form-actions' },
+          n.core ? null : duplicateBtn(''),
           n.core ? null : el('button', { type: 'button', class: 'btn danger', text: 'Elimina', onclick: () => removeSelected([n.id]) }),
           el('button', { type: 'button', class: 'btn primary', text: 'Applica', onclick: () => save('nodo') })),
-        warnings.length ? el('ul', { class: 'warn-text small' }, warnings.map((w) => el('li', { text: '⚠ ' + w }))) : null);
+        warnings.length ? el('ul', { class: 'warn-text small' }, warnings.map((w) => el('li', { text: '⚠ ' + w }))) : null].filter(Boolean));
     }
 
     function refreshToolbar() {

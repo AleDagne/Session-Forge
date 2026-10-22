@@ -173,9 +173,9 @@
         card.append(
           el('div', { class: 'card-title' }, el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(c.icon, 36), el('h3', { text: c.name }),
             c.shared ? el('span', { class: 'tag', text: 'Condiviso' }) : null)),
-          c.legend.title ? el('p', { class: 'boss-card-title', text: c.legend.title }) : null,
+          c.legend.title ? el('p', { class: 'boss-card-title', text: c.legend.title }) : '',
           el('p', { class: 'muted small', text: [DnD.classi.className(c.classId), 'livello ' + c.level, 'rango ' + L.rank(c)].filter(Boolean).join(' · ') }),
-          el('p', { class: 'small', text: '✦ ' + (c.legend.unlocked.length - 1) + ' nodi sbloccati · punti ' + pts.left + '/' + pts.total + ' · ' + c.legend.transformations.length + ' trasformazioni' }),
+          el('p', { class: 'small', text: '✦ ' + (c.legend.unlocked.length - 1) + (c.legend.unlocked.length === 2 ? ' nodo sbloccato' : ' nodi sbloccati') + ' · punti ' + pts.left + '/' + pts.total + ' · ' + c.legend.transformations.length + ' trasformazioni' }),
           el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: c.shared, onchange: (e) => { update(c.id, (p) => { p.shared = e.target.checked; }); render(); } }), ' Condividi con tutte le sessioni'),
           el('div', { class: 'card-actions' },
             el('button', { class: 'btn primary', text: 'Apri', onclick: () => { viewing = c.id; part = 'scheda'; render(); } }),
@@ -345,9 +345,9 @@
         const card = DnD.uiBoss.applyTheme(el('article', { class: 'card boss-card' }), DnD.boss.THEME_IDS.includes(t.creature.boss.theme) ? t.creature.boss.theme : 'infernale');
         card.append(
           el('div', { class: 'card-title' }, el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(t.icon, 34), el('h3', { text: t.name }))),
-          t.epithet ? el('p', { class: 'boss-card-title', text: t.epithet }) : null,
+          t.epithet ? el('p', { class: 'boss-card-title', text: t.epithet }) : '',
           el('p', { class: 'muted small', text: DnD.creature.typeLine(t.creature) + ' · PF ' + DnD.creature.hpInfo(t.creature).total + (t.hpMode === 'temporanei' ? ' temporanei' : ' (sostituiscono)') + ' · CA ' + t.creature.ac }),
-          el('p', { class: 'small', text: t.uses.n + ' usi per riposo ' + t.uses.per + ' · ' + t.duration.value + ' ' + t.duration.unit + ' · ' + (t.activation === 'bonus' ? 'azione bonus' : 'azione') +
+          el('p', { class: 'small', text: t.uses.n + (t.uses.n === 1 ? ' uso' : ' usi') + ' per riposo ' + t.uses.per + ' · ' + t.duration.value + ' ' + t.duration.unit + ' · ' + (t.activation === 'bonus' ? 'azione bonus' : 'azione') +
             (t.minRank ? ' · rango ' + t.minRank : '') + (t.requireNode ? ' · serve un nodo' : '') }),
           el('p', { class: avail.has(t.id) ? 'ok-text small' : 'warn-text small', text: avail.has(t.id) ? '✦ Disponibile' : 'Non ancora disponibile (rango o nodo mancante)' }),
           el('div', { class: 'card-actions' },
@@ -366,8 +366,6 @@
     const t = clone(c.legend.transformations.find((x) => x.id === editingForm));
     if (!t) { editingForm = null; render(); return; }
     const chk = (obj, k, label) => el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; } }), ' ' + label);
-    const icon = DnD.uiIcone.iconPicker(t.icon, false, 'Icona in forma', null);
-    const gridSize = DnD.uiCreature.gridSizeEditor(t.gridSize, { size: () => t.creature.size });
     const themeSel = el('select', { 'aria-label': 'Tema della forma' }, opt('', 'Tema del personaggio', !t.theme),
       L.THEMES.map((x) => opt(x, '✦ ' + L.THEME_NAMES[x], t.theme === x)), DnD.boss.THEME_IDS.map((x) => opt(x, DnD.boss.THEMES[x].name, t.theme === x)));
     const rules = frame('Regole della trasformazione', [
@@ -382,8 +380,8 @@
         chk(t.fusion, 'keepFeatures', 'Mantiene i privilegi leggendari e le difese')),
       el('div', { class: 'grid-3 tight' },
         field('PF della forma', el('select', { onchange: (e) => { t.hpMode = e.target.value; } }, opt('sostituisce', 'Sostituiscono i PF (eccesso al personaggio)', t.hpMode === 'sostituisce'), opt('temporanei', 'PF temporanei', t.hpMode === 'temporanei'))),
-        field('Usi', el('div', { class: 'input-row' }, numberInput(t.uses.n, { class: 'qty', min: 1, max: 10, oninput: (e) => { t.uses.n = readNumber(e.target) || 1; } }), 'per riposo',
-          el('select', { onchange: (e) => { t.uses.per = e.target.value; } }, opt('lungo', 'lungo', t.uses.per === 'lungo'), opt('breve', 'breve', t.uses.per === 'breve')))),
+        field('Usi', el('div', { class: 'input-row' }, numberInput(t.uses.n, { class: 'qty', min: 1, max: 10, oninput: (e) => { t.uses.n = readNumber(e.target) || 1; } }),
+          el('select', { 'aria-label': 'Ricarica degli usi', onchange: (e) => { t.uses.per = e.target.value; } }, opt('lungo', 'per riposo lungo', t.uses.per === 'lungo'), opt('breve', 'per riposo breve', t.uses.per === 'breve')))),
         field('Durata', el('div', { class: 'input-row' }, numberInput(t.duration.value, { class: 'qty', min: 1, max: 1000, oninput: (e) => { t.duration.value = readNumber(e.target) || 1; } }),
           el('select', { onchange: (e) => { t.duration.unit = e.target.value; } }, opt('round', 'round', t.duration.unit === 'round'), opt('minuti', 'minuti', t.duration.unit === 'minuti')))),
         field('Attivazione', el('select', { onchange: (e) => { t.activation = e.target.value; } }, opt('azione', 'Azione', t.activation === 'azione'), opt('bonus', 'Azione bonus', t.activation === 'bonus'))),
@@ -391,7 +389,6 @@
         field('Tema', themeSel)),
       chk(t, 'canEndEarly', 'Può terminare in anticipo'),
       chk(t, 'requireNode', 'Richiede un nodo del Percorso che la sblocca (effetto «Sblocca trasformazione»)'),
-      el('div', { class: 'grid-2 tight' }, icon.node, gridSize.node),
       el('div', { class: 'grid-2 tight' },
         field('Testo di entrata', el('textarea', { rows: 2, value: t.enterText, oninput: (e) => { t.enterText = e.target.value; } })),
         field('Testo di uscita', el('textarea', { rows: 2, value: t.exitText, oninput: (e) => { t.exitText = e.target.value; } }))),
@@ -400,13 +397,14 @@
       el('button', { class: 'btn', text: '← Trasformazioni', onclick: () => { editingForm = null; render(); } })), rules, divider());
     const formHost = el('div', {});
     host.append(formHost);
-    DnD.uiMostri.monsterForm(formHost, Object.assign(clone(t.creature), { id: t.creature.id || DnD.dadi.uid(), type: 'boss' }), {
+    // Icona e dimensione sulla griglia della forma si scelgono nella scheda boss (un solo posto).
+    DnD.uiMostri.monsterForm(formHost, Object.assign(clone(t.creature), { id: t.creature.id || DnD.dadi.uid(), type: 'boss', icon: t.icon, gridSize: t.gridSize }), {
       kind: 'boss', heading: 'Scheda della forma (creatura boss)', submitText: '🜂 Salva la trasformazione', submitClass: 'legend-ascend-btn', savedText: 'Trasformazione salvata.',
-      extra: (m, ctx) => DnD.uiBoss.bossFields(m, ctx, host.closest('.boss-forge') || host),
+      // Il tema boss della forma vale per barra e vignettatura in combattimento: non ricolora la pagina divina.
+      extra: (m, ctx) => DnD.uiBoss.bossFields(m, ctx, el('div')),
       wrap: (head, form) => frame('Forma', [head, form], { sideSwords: true }),
       save: (creature) => {
-        const r = icon.read();
-        const saved = L.normalizeTransformation(Object.assign(t, { creature, icon: r.icon || t.icon, theme: themeSel.value }, gridSize.read()));
+        const saved = L.normalizeTransformation(Object.assign(t, { creature, icon: creature.icon || t.icon, gridSize: creature.gridSize, theme: themeSel.value }));
         update(id, (x) => { const i = x.legend.transformations.findIndex((y) => y.id === saved.id); x.legend.transformations[i] = saved; });
       },
       onDone: () => { editingForm = null; render(); },
@@ -418,7 +416,7 @@
     const id = c.id;
     host.append(frame('Opzioni del master', [
       el('div', { class: 'grid-2 tight' },
-        field('Titolo del personaggio', textInput(c.legend.title, { maxlength: 80, placeholder: 'es. Lama dell\'Alba', onchange: (e) => { update(id, (x) => { x.legend.title = e.target.value.trim(); }); } })),
+        field('Titolo del personaggio', textInput(c.legend.title, { maxlength: 80, placeholder: 'es. Lama dell\'Alba', onchange: (e) => { update(id, (x) => { x.legend.title = e.target.value.trim(); }); render(); } })),
         field('Tema', el('select', { onchange: (e) => { update(id, (x) => { x.legend.theme = e.target.value; }); render(); } }, L.THEMES.map((x) => opt(x, L.THEME_NAMES[x], x === c.legend.theme))))),
       el('div', { class: 'grid-2 tight' },
         field('Punti percorso bonus (dal master)', numberInput(c.legend.pointsBonus, { min: 0, max: 100, onchange: (e) => { update(id, (x) => { x.legend.pointsBonus = Math.max(0, readNumber(e.target) || 0); }); render(); } })),

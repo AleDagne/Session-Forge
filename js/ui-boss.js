@@ -323,7 +323,7 @@
             el('div', { class: 'card-title' },
               el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(c.icon, 36), el('h3', { text: c.name }), c.shared ? el('span', { class: 'tag', text: 'Condiviso' }) : null),
               el('span', { class: 'ac-badge', text: 'CA ' + c.ac })),
-            c.boss.title ? el('p', { class: 'boss-card-title', text: c.boss.title + (c.boss.epithet ? ' · ' + c.boss.epithet : '') }) : null,
+            c.boss.title ? el('p', { class: 'boss-card-title', text: c.boss.title + (c.boss.epithet ? ' · ' + c.boss.epithet : '') }) : '',
             el('p', { class: 'muted small', text: M.typeLine(c) }),
             el('p', { text: 'PF ' + M.hpInfo(c).text + ' · GS ' + M.crText(c) }),
             el('p', { class: 'small muted', text: c.boss.phases.length + ' fasi (' + c.boss.phases.map((p) => p.threshold + '%').join(', ') + ') · tema ' + B.THEMES[c.boss.theme].name +

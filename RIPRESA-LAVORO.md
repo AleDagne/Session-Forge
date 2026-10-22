@@ -14,11 +14,36 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
 
 ## Stato al momento della pausa
 
+- Dal 22 ottobre 2026 (sessione sul PC desktop) la cartella **è un repository git**: la cronologia parte dal commit
+  «Stato iniziale». Claude Code avvia il server da `.claude/launch.json` sulla porta **5617** (la 8080 era occupata).
 - L'app parte e tutti gli script si caricano senza errori di sintassi.
-- `test.html`: **173 test su 174 passano**. Quello che non passa («Boss UI: la vignettatura non intercetta i clic…»)
-  usa `document.elementFromPoint` e fallisce solo quando la pagina dei test è in una scheda o in un pannello non
-  visibile. Aprendo `test.html` in una finestra normale dovrebbe passare: verificarlo per primo.
-- Versione dei dati: **11** (cache del service worker: `session-forge-v17`).
+- `test.html`: **tutti i 176 test passano** (in una finestra visibile).
+- Versione dei dati: **11** (cache del service worker: `session-forge-v18`).
+
+## Prova a mano dell'interfaccia (22 ottobre 2026, PC desktop)
+
+Provati nell'app e funzionanti: elenco Leggendari, «+ Nuovo leggendario» con validazione e animazione di Ascensione,
+scheda con riepilogo ed effetti «da: nodo», Percorso in Sblocca (dettagli, sblocco, linea attiva, punti) e in
+Modifica (aggiungi nodo, collega trascinando, pannello del nodo, Applica, annulla/ripeti, raggiera), Opzioni del
+master (titolo, tema Cosmico, bonus, rimodella), Trasformazioni (da creatura esistente, modifica, salva, duplica,
+ordina, elimina), combattimento (Trasformati, barra boss in alto, vignettatura, ritorno a 0 PF con danno in
+eccesso, pulsante disattivato senza usi).
+
+Corretto durante la prova:
+- I PF massimi non salivano quando un nodo aumenta la COS: ora +1 PF per livello per ogni punto di modificatore
+  (`leggendario.effectivePlayer`), con test.
+- «null» scritto come testo da `append` nativo: card leggendari, card boss, card trasformazioni, pannello del
+  Nucleo, schermata dell'iniziativa (sempre visibile!), scheda degli oggetti di mappa.
+- Raggiera: ora è ad albero (spicchio per ramo proporzionale alle foglie, anelli più larghi), con test.
+- Editor della trasformazione: tolti icona e dimensione doppie (ora solo quelle della scheda boss, che erano
+  ignorate); il tema boss della forma non ricolora più la pagina divina; campi Usi/Durata schiacciati; campo di
+  ricerca icone schiacciato nei contenitori stretti.
+- «Duplica» anche per il singolo nodo; titolo del personaggio aggiornato subito nell'intestazione; setup del
+  combattimento con PF/CA effettivi dei leggendari; singolari («1 punto», «1 nodo sbloccato», «1 uso»).
+
+Note rimaste: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app); nella
+forma ci sono due temi (quello boss per barra/vignetta e quello «✦» per il lampo): da unificare nel punto 2;
+l'alone sulla pedina è appena visibile.
 
 ## Fatto in questa fase (punti dell'ordine di lavoro)
 
@@ -66,7 +91,9 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
 
 ## Da fare
 
-1. **Provare a mano tutta l'interfaccia dei leggendari** nell'app e correggere ciò che non va:
+1. **FATTO (vedi «Prova a mano» sopra)**. Restano da provare a mano: «Eleva a leggendario» e Declassa, modelli
+   di percorso ed esporta/importa JSON, «Torna normale» e annulla/ripeti nel combattimento, fine a durata. Elenco
+   originale:
    - Giocatori › Leggendari: elenco, «+ Nuovo leggendario» (form + animazione di Ascensione), «Eleva a
      leggendario» da Standard, Declassa.
    - Percorso: modalità Modifica (tutti gli strumenti, pannello del nodo, «Applica», annulla/ripeti) e Sblocca
@@ -89,7 +116,7 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
    trasformazione dall'interfaccia del combattimento con annulla/ripeti.
 5. **README.md**: aggiungere la sezione «Personaggi leggendari» (livelli 20-40, Percorso, Trasformazioni, grafica),
    la riga della migrazione v11, i nuovi file nella «Struttura» e i test.
-6. **Service worker**: già aggiornato (`session-forge-v17`, nuovi file in elenco); aumentarlo di nuovo dopo le
+6. **Service worker**: ora `session-forge-v18`; aumentarlo di nuovo dopo le
    prossime modifiche.
 
 ## Test già presenti per questa fase (in `js/test.js`, tutti passano)
