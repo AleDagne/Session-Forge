@@ -3131,7 +3131,7 @@
 
   // Trasformazione di prova: forma draconica 100 PF, CA 19, FOR 26, DES 10, COS 24; fasi a 50%.
   function formOf(extra) {
-    return LG().normalizeTransformation(Object.assign({ id: 't1', name: 'Forma del drago', epithet: 'Ali d\'oro', uses: { per: 'lungo', n: 1 }, duration: { unit: 'round', value: 2 },
+    return LG().normalizeTransformation(Object.assign({ id: 't1', name: 'Forma del drago', epithet: 'Ali d\'oro', theme: 'gelo', uses: { per: 'lungo', n: 1 }, duration: { unit: 'round', value: 2 },
       creature: { name: 'Drago d\'oro', size: 'Enorme', hitDice: 10, hpOverride: 100, ac: 19, abilities: { FOR: 26, DES: 10, COS: 24, INT: 8, SAG: 8, CAR: 8 },
         actions: [{ id: 'm', name: 'Morso', mech: { kind: 'attacco', damages: [{ dice: '2d10', type: 'perforante' }] } }],
         boss: { theme: 'gelo', phases: [{ threshold: 100 }, { threshold: 50, name: 'Furia' }] } } }, extra || {}));
@@ -3148,6 +3148,12 @@
     const r = LG().transform(x, t);
     eq([r.ok, x.abilities.FOR, x.abilities.INT, x.maxHp, x.hp, x.ac, x.w, x.legend.uses.t1], [true, 26, 18, 100, 100, 19, 3, 0], 'FOR, DES, COS dalla forma; INT, SAG, CAR dal personaggio');
     eq([x.boss.title, x.boss.theme, DnD.boss.bars([x], 'giocatori').shown.length], ['Forma del drago · Ali d\'oro', 'gelo', 1], 'barra boss in alto (nome del giocatore + forma)');
+    eq(DnD.boss.normalizeCombatBoss(x.boss).theme, 'gelo');
+    // Tema vuoto: la forma prende il tema del personaggio (chiave «lg:»), che sopravvive al salvataggio.
+    const y = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    LG().transform(y, Object.assign({}, t, { theme: '' }));
+    eq([y.boss.theme, DnD.boss.normalizeCombatBoss(y.boss).theme, DnD.boss.theme(y.boss.theme).legendary], ['lg:divino', 'lg:divino', true], 'tema del personaggio');
+    eq(DnD.boss.theme('lg:inesistente').name, 'Infernale', 'tema sconosciuto: ripiego');
     eq(LG().transform(x, t).ok, false, 'già trasformato');
     // Fasi del boss in forma: sotto il 50%.
     x.hp = 40;
@@ -3210,6 +3216,42 @@
     ok(dst.players.some((x) => x.type === 'leggendario' && x.name === 'Aria'), 'sessione');
     const mig = DnD.dati.normalizeState({ version: 10, races: [], npcs: [], players: [{ id: 'z', name: 'Zed', level: 20 }] });
     eq([mig.version, mig.players[0].type, mig.pathTemplates.length], [11, undefined, 1], 'v10 → v11: giocatori standard, modello d\'esempio');
+  });
+
+  test('Leggendari UI: temi unificati con il Boss, lance di luce, scheda del combattente a tema, «Riduci animazioni»', () => {
+    if (!hasBossUi() || !DnD.uiLeggendario) return;
+    const html = document.documentElement;
+    // Un solo sistema di temi: chiave «lg:<id>» per i leggendari, variabili --lg-* e motivo del tema.
+    const node = DnD.uiLeggendario.applyTheme(document.createElement('div'), 'cosmico');
+    eq([node.dataset.bossTheme, node.dataset.legendMotif, node.classList.contains('legend-theme')], ['lg:cosmico', 'stelle', true]);
+    ok(/--lg-gold:#9fa8ff/.test(node.getAttribute('style')) && /--boss-accent:#9fa8ff/.test(node.getAttribute('style')), 'stesse variabili per Boss e leggendari');
+    const boss = DnD.uiBoss.applyTheme(node, 'gelo');
+    eq([boss.classList.contains('legend-theme'), boss.dataset.legendMotif], [false, undefined], 'tema del Boss: niente variabili leggendarie');
+    eq(DnD.uiLeggendario.applyTheme(document.createElement('div'), 'divino').dataset.bossTheme, 'lg:divino', '«divino» dei leggendari non si confonde con quello del Boss');
+    // Scheda del combattente: tema della forma attiva al posto di quello del personaggio.
+    const x = { legend: { theme: 'divino', form: null } };
+    ok(/--lg-gold:#f2c94c/.test(DnD.uiLeggendario.cardStyle(x)), 'tema del personaggio');
+    x.legend.form = { theme: 'lg:abissale' };
+    ok(/--lg-gold:#b48cff/.test(DnD.uiLeggendario.cardStyle(x)), 'in forma: tema della forma');
+    // Animazioni leggendarie con «Riduci animazioni»: ferme, niente Ascensione né lampo.
+    const host = DnD.uiLeggendario.applyTheme(document.createElement('div'), 'divino');
+    host.innerHTML = '<div class="legend-dust"></div><div class="legend-rays"></div><svg class="legend-sigil"></svg><svg class="legend-wings"></svg>';
+    document.body.append(host);
+    const hadReduce = 'reduceMotion' in html.dataset;
+    const orig = DnD.impostazioni.reduceMotion;
+    try {
+      html.dataset.reduceMotion = '';
+      eq([...host.children].map((e) => getComputedStyle(e).animationName), ['none', 'none', 'none', 'none'], 'sfondo e ali fermi');
+      DnD.impostazioni.reduceMotion = () => true;
+      let done = false;
+      DnD.uiLeggendario.ascension({ name: 'X', legend: { theme: 'divino', title: '' } }, () => { done = true; });
+      DnD.uiLeggendario.transformFlash('lg:divino');
+      ok(done && !document.querySelector('.legend-ascension') && !document.querySelector('.legend-transform-flash'), 'senza animazioni: niente Ascensione né lampo');
+    } finally {
+      DnD.impostazioni.reduceMotion = orig;
+      if (!hadReduce) delete html.dataset.reduceMotion;
+      host.remove();
+    }
   });
 
   async function runTests() {

@@ -31,6 +31,12 @@
     const n = parseInt(String(hex).slice(1), 16);
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   }
+  // Colori del tema leggendario in cui sta il canvas (variabili --lg-*; di base il tema Divino).
+  function palette(node) {
+    const cs = getComputedStyle(node);
+    const v = (k, def) => { const x = cs.getPropertyValue(k).trim(); return /^#[0-9a-f]{6}$/i.test(x) ? x : def; };
+    return { gold: v('--lg-gold', '#f2c94c'), light: v('--lg-light', '#fff8e1'), accent: v('--lg-accent', '#e8b84a'), bg: v('--lg-bg', '#0c0a06') };
+  }
 
   // opts: {
   //   mode: 'editor' | 'sblocca', getPath(), setPath(path, label) (salva), getUnlocked(), ctx() -> { rank, bonus },
@@ -99,17 +105,21 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const now = performance.now();
       const moving = !motionOff();
-      // Sfondo cosmico: nebulosa e stelle lontane (si spostano poco con la vista).
-      const g = ctx.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, Math.max(W, H) * 0.7);
-      g.addColorStop(0, '#1a1430');
-      g.addColorStop(0.55, '#0b0918');
-      g.addColorStop(1, '#040308');
-      ctx.fillStyle = g;
+      const C = palette(canvas);
+      // Sfondo cosmico del tema: fondo, due nebulose (oro e metallo) e stelle lontane (si spostano poco con la vista).
+      ctx.fillStyle = C.bg;
       ctx.fillRect(0, 0, W, H);
+      for (const [x, y, col, a] of [[0.5, 0.5, C.gold, 0.16], [0.2, 0.8, C.accent, 0.12]]) {
+        const g = ctx.createRadialGradient(W * x, H * y, 10, W * x, H * y, Math.max(W, H) * 0.65);
+        g.addColorStop(0, rgba(col, a));
+        g.addColorStop(1, rgba(col, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
       if (!starField) starField = stars(hash(path().name), 180);
       for (const s of starField) {
         const tw = moving ? 0.5 + 0.5 * Math.sin(now / 900 + s.tw) : 1;
-        ctx.fillStyle = 'rgba(255,250,235,' + (s.a * (0.6 + 0.4 * tw)).toFixed(3) + ')';
+        ctx.fillStyle = rgba(C.light, (s.a * (0.6 + 0.4 * tw)).toFixed(3));
         ctx.beginPath();
         ctx.arc(((s.x * W + view.panX * 0.15) % W + W) % W, ((s.y * H + view.panY * 0.15) % H + H) % H, s.r + 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -139,9 +149,9 @@
         ctx.moveTo(A.x, A.y);
         ctx.quadraticCurveTo(mx, my, B.x, B.y);
         if (active) {
-          ctx.strokeStyle = 'rgba(255,214,120,0.9)';
+          ctx.strokeStyle = rgba(C.gold, 0.9);
           ctx.lineWidth = 3;
-          ctx.shadowColor = 'rgba(255,214,120,0.8)';
+          ctx.shadowColor = rgba(C.gold, 0.8);
           ctx.shadowBlur = 10;
           ctx.stroke();
           if (moving) {
@@ -152,7 +162,7 @@
             ctx.stroke();
           }
         } else {
-          ctx.strokeStyle = mode === 'sblocca' && (avail.has(a.id) || avail.has(b.id)) ? 'rgba(200,190,255,0.45)' : 'rgba(170,160,210,0.28)';
+          ctx.strokeStyle = mode === 'sblocca' && (avail.has(a.id) || avail.has(b.id)) ? rgba(C.light, 0.45) : rgba(C.light, 0.22);
           ctx.lineWidth = 1.6;
           ctx.stroke();
         }
@@ -170,7 +180,7 @@
           const y = A.y + (B.y - A.y) * k;
           const gl = ctx.createRadialGradient(x, y, 0, x, y, 22);
           gl.addColorStop(0, 'rgba(255,255,255,1)');
-          gl.addColorStop(1, 'rgba(255,214,120,0)');
+          gl.addColorStop(1, rgba(C.gold, 0));
           ctx.fillStyle = gl;
           ctx.beginPath();
           ctx.arc(x, y, 22, 0, Math.PI * 2);
@@ -189,13 +199,13 @@
         ctx.globalAlpha = dim ? 0.45 : 1;
         if (n.core) {
           const halo = ctx.createRadialGradient(S.x, S.y, r * 0.4, S.x, S.y, r * 2.4);
-          halo.addColorStop(0, 'rgba(255,236,170,0.55)');
-          halo.addColorStop(1, 'rgba(255,214,120,0)');
+          halo.addColorStop(0, rgba(C.light, 0.55));
+          halo.addColorStop(1, rgba(C.gold, 0));
           ctx.fillStyle = halo;
           ctx.beginPath();
           ctx.arc(S.x, S.y, r * 2.4, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = 'rgba(255,236,170,0.7)';
+          ctx.strokeStyle = rgba(C.light, 0.7);
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(S.x, S.y, r * 1.35, 0, Math.PI * 2);
@@ -226,7 +236,7 @@
         const gem = ctx.createRadialGradient(S.x - r * 0.35, S.y - r * 0.4, r * 0.1, S.x, S.y, r);
         gem.addColorStop(0, on || n.core ? '#ffffff' : rgba(n.color, 0.9));
         gem.addColorStop(0.35, on || n.core ? n.color : rgba(n.color, 0.55));
-        gem.addColorStop(1, '#0a0812');
+        gem.addColorStop(1, C.bg);
         if (on) { ctx.shadowColor = n.color; ctx.shadowBlur = 22; }
         ctx.fillStyle = gem;
         ctx.beginPath();
@@ -238,7 +248,7 @@
         ctx.closePath();
         ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = on ? 'rgba(255,240,200,0.95)' : 'rgba(220,210,255,0.5)';
+        ctx.strokeStyle = on ? rgba(C.light, 0.95) : rgba(C.light, 0.45);
         ctx.lineWidth = selected.includes(n.id) ? 3 : 1.5;
         if (selected.includes(n.id)) ctx.strokeStyle = '#ffffff';
         ctx.stroke();
@@ -250,13 +260,13 @@
           ctx.save();
           ctx.font = (n.core ? '700 ' : '600 ') + Math.max(10, 12 * Math.min(1.3, view.zoom)) + 'px system-ui, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillStyle = dim ? 'rgba(220,215,240,0.55)' : '#f4ecd8';
+          ctx.fillStyle = dim ? rgba(C.light, 0.55) : C.light;
           ctx.shadowColor = '#000';
           ctx.shadowBlur = 4;
           ctx.fillText(n.name, S.x, S.y + r + 15);
           if (!n.core) {
             ctx.font = Math.max(9, 10 * Math.min(1.3, view.zoom)) + 'px system-ui, sans-serif';
-            ctx.fillStyle = 'rgba(255,214,120,0.9)';
+            ctx.fillStyle = rgba(C.gold, 0.9);
             ctx.fillText('◆'.repeat(n.cost) + (n.minRank ? ' · rango ' + n.minRank : ''), S.x, S.y + r + 28);
           }
           ctx.restore();

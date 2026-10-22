@@ -1,7 +1,10 @@
-/* Personaggi leggendari: area "divina" (riusa .boss-forge di css/boss.css con le variabili --lg-*), editor del
-   Percorso leggendario, riquadro nel combattimento e animazioni. Versione di base: la grafica completa
-   (raggi, polvere, filigrane, temi rifiniti) è ancora da completare. Nessun colore scritto nei componenti. */
+/* Personaggi leggendari: area "divina" (riusa .boss-forge di css/boss.css), editor del Percorso leggendario,
+   scheda nel combattimento e animazioni. I colori arrivano solo dalle variabili del tema (--lg-*), impostate da
+   ui-boss.js con le palette di leggendario.js; il motivo del tema (data-legend-motif) sceglie gli effetti di
+   sfondo: raggi (Divino), piume e nuvole (Angelico), vortice (Abissale), braci e scaglie (Draconico), stelle
+   (Cosmico). Con «Riduci animazioni» tutto resta fermo e leggibile. */
 
+/* ---------- Variabili di base (tema Divino) ---------- */
 .legend-theme {
   --lg-gold: #f2c94c;
   --lg-light: #fff8e1;
@@ -9,60 +12,207 @@
   --lg-bg: #0c0a06;
   --lg-accent: #e8b84a;
 }
-.legend-forge { background-color: var(--lg-bg); box-shadow: inset 0 0 90px var(--lg-glow), 0 10px 40px rgba(0, 0, 0, 0.35); }
-.legend-head { position: relative; }
-.legend-wings { display: block; width: min(240px, 60%); height: auto; margin: 0 auto -0.4rem; color: var(--lg-gold); filter: drop-shadow(0 0 8px var(--lg-glow)); }
-.legend-title { text-shadow: 0 0 22px var(--lg-glow); }
-/* Raggi di luce dall'alto e polvere luminosa lenta. */
-.legend-rays {
-  position: absolute; inset: 0 0 auto 0; height: 60%; z-index: -1; pointer-events: none;
-  background: repeating-conic-gradient(from 180deg at 50% -10%, transparent 0deg 6deg, var(--lg-glow) 7deg 8deg, transparent 9deg 14deg);
-  opacity: 0.18; mask-image: linear-gradient(to bottom, #000, transparent);
+/* Tinte derivate (anche sulla scheda del combattente, che riceve solo le variabili del tema). */
+.legend-theme, .combatant.legendary {
+  --lg-soft: color-mix(in srgb, var(--lg-light) 16%, transparent);
+  --lg-faint: color-mix(in srgb, var(--lg-gold) 35%, transparent);
 }
+
+/* ---------- Area divina: fondo quasi nero, vignettatura dorata e bianca, raggi, polvere, sigilli ---------- */
+.legend-forge {
+  background-color: var(--lg-bg);
+  background-image:
+    radial-gradient(ellipse 70% 42% at 50% -6%, var(--lg-soft), transparent 70%),
+    radial-gradient(ellipse at center, transparent 58%, var(--lg-glow) 190%),
+    linear-gradient(var(--boss-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--boss-line) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  box-shadow: inset 0 0 90px var(--lg-glow), inset 0 0 0 1px var(--lg-faint), 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+.legend-forge .btn.primary { color: var(--lg-bg); }
+.legend-forge .boss-sword { filter: drop-shadow(0 0 6px var(--lg-glow)); }
+.legend-head { position: relative; }
+.legend-title { text-shadow: 0 0 22px var(--lg-glow), 0 0 2px var(--lg-light); }
+.legend-forge .boss-subtitle { color: color-mix(in srgb, var(--lg-light) 72%, transparent); }
+
+/* Raggi di luce che scendono dall'alto, con un'oscillazione lentissima. */
+.legend-rays {
+  position: absolute; inset: -10% -10% auto -10%; height: 70%; z-index: -1; pointer-events: none;
+  background: repeating-conic-gradient(from 180deg at 50% -10%, transparent 0deg 6deg, var(--lg-glow) 7deg 8deg, transparent 9deg 14deg);
+  opacity: 0.22; mask-image: linear-gradient(to bottom, #000, transparent);
+  transform-origin: 50% 0; animation: legend-sway 18s ease-in-out infinite alternate;
+}
+@keyframes legend-sway { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg); } }
+
+/* Polvere luminosa lenta che sale. */
 .legend-dust {
-  position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35;
-  background-image: radial-gradient(circle, var(--lg-light) 0 1px, transparent 1.5px), radial-gradient(circle, var(--lg-gold) 0 1px, transparent 1.5px);
+  position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.4;
+  background-image: radial-gradient(circle, var(--lg-light) 0 1px, transparent 1.5px), radial-gradient(circle, var(--lg-gold) 0 1px, transparent 1.6px);
   background-size: 90px 90px, 140px 140px; background-position: 0 0, 40px 60px;
   animation: legend-dust 40s linear infinite;
 }
 @keyframes legend-dust { to { background-position: 0 -900px, 40px -1340px; } }
-.legend-forge .boss-sword { filter: drop-shadow(0 0 6px var(--lg-glow)); }
-.legend-frame { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 34px var(--lg-glow), inset 0 0 40px rgba(0, 0, 0, 0.6); }
-.legend-divider { filter: drop-shadow(0 0 4px var(--lg-glow)); }
-.legend-ascend-btn.btn.primary, .btn.legend-ascend-btn {
-  border: 1px solid var(--lg-gold, #f2c94c); background: linear-gradient(180deg, var(--lg-gold, #f2c94c), var(--lg-accent, #e8b84a)); color: #1a1405;
-  font-weight: 700; letter-spacing: 0.08em; box-shadow: 0 0 12px var(--lg-glow, rgba(255, 222, 140, 0.55)); transition: box-shadow 0.25s;
+
+/* Sigilli con rune in sottofondo, che ruotano molto piano. */
+.legend-sigil {
+  position: absolute; z-index: -1; pointer-events: none; width: 400px; height: 400px; right: -130px; top: -130px;
+  color: var(--lg-gold); opacity: 0.14; filter: drop-shadow(0 0 6px var(--lg-glow));
+  animation: legend-spin 240s linear infinite;
 }
-.legend-ascend-btn:hover, .legend-ascend-btn:focus-visible { box-shadow: 0 0 26px var(--lg-light, #fff8e1), 0 0 50px var(--lg-glow, rgba(255, 222, 140, 0.55)); }
-.legend-card { border-left: 3px solid var(--lg-gold) !important; }
-.legend-points { color: var(--lg-gold); font-weight: 700; letter-spacing: 0.05em; }
+.legend-sigil.left { left: -170px; right: auto; top: auto; bottom: -170px; width: 460px; height: 460px; opacity: 0.1; animation-direction: reverse; }
+@keyframes legend-spin { to { transform: rotate(360deg); } }
+
+/* Strato del motivo del tema (vuoto per il Divino, che ha già i raggi più forti). */
+.legend-motif { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+[data-legend-motif="raggi"] .legend-rays { opacity: 0.28; }
+/* Angelico: nuvole luminose in basso e piume sottili che scendono. */
+[data-legend-motif="piume"] .legend-motif {
+  background:
+    radial-gradient(ellipse 40% 18% at 15% 104%, var(--lg-soft), transparent 70%),
+    radial-gradient(ellipse 45% 20% at 55% 108%, var(--lg-soft), transparent 70%),
+    radial-gradient(ellipse 35% 16% at 90% 104%, var(--lg-soft), transparent 70%);
+}
+[data-legend-motif="piume"] .legend-dust {
+  background-image: radial-gradient(ellipse 2.5px 8px, var(--lg-light) 0 35%, transparent 75%), radial-gradient(ellipse 2px 6px, var(--lg-light) 0 35%, transparent 75%), radial-gradient(circle, var(--lg-light) 0 1px, transparent 1.5px);
+  background-size: 130px 170px, 190px 230px, 110px 110px; background-position: 0 0, 70px 90px, 30px 20px; opacity: 0.45;
+  animation-name: legend-fall; animation-duration: 55s;
+}
+@keyframes legend-fall { to { background-position: 60px 1020px, 130px 1240px, 30px 1120px; } }
+/* Abissale: vortice che ruota dal basso, raggi spenti. */
+[data-legend-motif="abisso"] .legend-rays { opacity: 0.08; }
+[data-legend-motif="abisso"] .legend-motif {
+  inset: auto -20% -60% -20%; height: 120%;
+  background: repeating-conic-gradient(from 0deg at 50% 50%, transparent 0deg 10deg, var(--lg-glow) 12deg 14deg, transparent 16deg 24deg);
+  mask-image: radial-gradient(circle at 50% 50%, #000 0, transparent 55%);
+  opacity: 0.35; animation: legend-spin 90s linear infinite;
+}
+/* Draconico: braci che salgono veloci e scaglie appena accennate. */
+[data-legend-motif="scaglie"] .legend-motif {
+  background-image: radial-gradient(circle at 50% 0, transparent 9px, var(--lg-faint) 10px, transparent 11px);
+  background-size: 22px 14px; opacity: 0.18; mask-image: linear-gradient(to top, #000, transparent 60%);
+}
+[data-legend-motif="scaglie"] .legend-dust {
+  background-image: radial-gradient(circle, var(--lg-gold) 0 1.4px, transparent 2px), radial-gradient(circle, var(--lg-accent) 0 1.2px, transparent 1.8px);
+  opacity: 0.6; animation-duration: 16s;
+}
+/* Cosmico: cielo stellato fitto che pulsa piano e nebulosa. */
+[data-legend-motif="stelle"] .legend-rays { opacity: 0.1; }
+[data-legend-motif="stelle"] .legend-motif {
+  background-image:
+    radial-gradient(circle, var(--lg-light) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle, var(--lg-light) 0 0.6px, transparent 1px),
+    radial-gradient(circle, var(--lg-gold) 0 1.1px, transparent 1.6px),
+    radial-gradient(ellipse 50% 35% at 70% 30%, var(--lg-glow), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 20% 75%, color-mix(in srgb, var(--lg-accent) 35%, transparent), transparent 70%);
+  background-size: 53px 47px, 31px 37px, 97px 89px, 100% 100%, 100% 100%;
+  background-position: 0 0, 13px 7px, 41px 23px, 0 0, 0 0;
+  animation: legend-twinkle 6s ease-in-out infinite alternate;
+}
+@keyframes legend-twinkle { from { opacity: 0.55; } to { opacity: 0.95; } }
+
+/* ---------- Ali e aureola ---------- */
+.legend-wings { display: block; width: min(260px, 64%); height: auto; margin: 0 auto -0.5rem; overflow: visible; filter: drop-shadow(0 0 10px var(--lg-glow)); animation: legend-breathe 6s ease-in-out infinite; }
+.legend-feather { stroke: color-mix(in srgb, var(--lg-bg) 55%, transparent); stroke-width: 0.5; }
+.legend-feather.f1 { opacity: 0.92; }
+.legend-feather.f2 { opacity: 0.8; }
+.legend-feather.f3 { opacity: 0.68; }
+.legend-wing-arm { fill: none; stroke: var(--lg-light); stroke-width: 1.4; opacity: 0.7; }
+.legend-rachis { stroke: var(--lg-light); stroke-width: 0.5; opacity: 0.55; fill: none; }
+.legend-halo { fill: none; stroke-width: 3; }
+.legend-halo.thin { stroke: var(--lg-light); stroke-width: 1; opacity: 0.5; }
+.legend-halo-rays { stroke: var(--lg-light); stroke-width: 1.2; stroke-linecap: round; opacity: 0.7; }
+@keyframes legend-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+
+/* ---------- Cornice ornata: doppio filo dorato, angoli luminosi, lance di luce, filigrana ---------- */
+.legend-frame {
+  border-color: var(--lg-gold);
+  outline-color: var(--lg-faint);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 34px var(--lg-glow), inset 0 0 0 4px var(--lg-bg), inset 0 0 0 5px var(--lg-faint), inset 0 0 40px rgba(0, 0, 0, 0.6);
+}
+.legend-frame .boss-corner { color: var(--lg-gold); filter: drop-shadow(0 0 4px var(--lg-glow)); }
+.legend-frame .boss-frame-plate { background: var(--lg-bg); border-color: var(--lg-gold); color: var(--lg-light); box-shadow: 0 0 16px var(--lg-glow); }
+.legend-frame .boss-frame-plate::before, .legend-frame .boss-frame-plate::after { content: '✦'; color: var(--lg-gold); margin: 0 0.7rem; letter-spacing: 0; }
+.legend-filigree { position: absolute; left: 50%; bottom: 0; width: 120px; height: 20px; transform: translate(-50%, 55%); color: var(--lg-gold); pointer-events: none; filter: drop-shadow(0 0 4px var(--lg-glow)); }
+.legend-lance { filter: drop-shadow(0 0 6px var(--lg-glow)) drop-shadow(0 0 2px var(--lg-light)); }
+.legend-lance-orb { fill: var(--lg-light); }
+.legend-lance-flare { fill: var(--lg-glow); animation: legend-flare 3.2s ease-in-out infinite; transform-origin: 13px 8px; }
+.legend-lance-wing { fill: var(--lg-gold); }
+.legend-lance-edge { stroke: var(--lg-light); stroke-width: 0.7; opacity: 0.8; }
+@keyframes legend-flare { 0%, 100% { opacity: 0.5; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+
+/* Divisore sacro: filo che sfuma, stella a quattro punte al centro e due punti. */
+.legend-divider {
+  position: relative;
+  background:
+    radial-gradient(circle, var(--lg-gold) 0 2px, transparent 2.5px) calc(50% - 26px) 50% / 6px 6px no-repeat,
+    radial-gradient(circle, var(--lg-gold) 0 2px, transparent 2.5px) calc(50% + 26px) 50% / 6px 6px no-repeat,
+    linear-gradient(90deg, transparent, var(--lg-gold) 30%, var(--lg-gold) 70%, transparent) center / 100% 1px no-repeat;
+  filter: drop-shadow(0 0 4px var(--lg-glow));
+}
+.legend-divider::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%);
+  background: var(--lg-light);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+
+/* ---------- Pulsanti, elenco, scheda ---------- */
+.legend-ascend-btn.btn.primary, .btn.legend-ascend-btn {
+  border: 1px solid var(--lg-light); background: linear-gradient(180deg, var(--lg-gold), var(--lg-accent)); color: var(--lg-bg);
+  font-weight: 700; letter-spacing: 0.08em; box-shadow: 0 0 12px var(--lg-glow); transition: box-shadow 0.25s;
+}
+.legend-ascend-btn:hover, .legend-ascend-btn:focus-visible { box-shadow: 0 0 26px var(--lg-light), 0 0 50px var(--lg-glow); }
+.legend-ascend-btn:disabled { filter: grayscale(0.7); opacity: 0.6; box-shadow: none; }
+.legend-card { border-left: 3px solid var(--lg-gold) !important; box-shadow: 0 0 18px var(--lg-glow); }
+.legend-points { color: var(--lg-gold); font-weight: 700; letter-spacing: 0.05em; text-shadow: 0 0 8px var(--lg-glow); }
 .legend-sources { columns: 2 260px; font-size: 0.9rem; }
 .ok-text { color: var(--ok-text, #1a6a36); }
 .legend-forge .ok-text { color: #9be7a9; }
+.legend-forge .tabs .tab[aria-selected="true"], .legend-forge [role="tab"][aria-selected="true"] { color: var(--lg-light); border-color: var(--lg-gold); }
 
-/* Editor del Percorso leggendario. */
+/* ---------- Editor del Percorso leggendario ---------- */
 .path-editor { display: flex; flex-direction: column; gap: 0.5rem; }
 .path-toolbar, .path-head { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; justify-content: space-between; }
 .path-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 0.6rem; min-height: 460px; }
 .path-sblocca .path-body { grid-template-columns: minmax(0, 1fr); }
-.path-canvas-wrap { position: relative; min-height: 460px; height: 62vh; border-radius: 8px; overflow: hidden; border: 1px solid var(--boss-line-strong, var(--border)); }
+.path-canvas-wrap { position: relative; min-height: 460px; height: 62vh; border-radius: 8px; overflow: hidden; border: 1px solid var(--lg-gold, var(--border)); box-shadow: 0 0 22px var(--lg-glow, transparent), inset 0 0 30px rgba(0, 0, 0, 0.6); }
 .path-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; cursor: grab; }
 .path-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--lg-gold, var(--accent)); }
 .path-side { overflow-y: auto; max-height: 62vh; display: flex; flex-direction: column; gap: 0.5rem; }
 .path-side:empty { display: none; }
-.path-toolbar .btn.tool.active { background: var(--lg-gold, var(--accent)); color: #1a1405; border-color: var(--lg-gold, var(--accent)); }
+.path-toolbar .btn.tool.active { background: var(--lg-gold, var(--accent)); color: var(--lg-bg, var(--on-primary)); border-color: var(--lg-gold, var(--accent)); }
 .effect-block { border-left: 3px solid var(--lg-gold, var(--accent)); padding: 0.35rem 0.5rem; background: rgba(0, 0, 0, 0.25); border-radius: 4px; display: flex; flex-direction: column; gap: 0.3rem; }
 @media (max-width: 980px) { .path-body { grid-template-columns: minmax(0, 1fr); } .path-side { max-height: none; } }
 
-/* Combattimento: scheda più ricca (senza coprire pulsanti e testi), riquadro delle trasformazioni. */
-.combatant.legendary { border-top-color: #e8b84a; box-shadow: 0 0 0 1px rgba(232, 184, 74, 0.6), 0 0 14px rgba(255, 222, 140, 0.35); }
-.combatant.legendary.current { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(255, 222, 140, 0.55); }
-.legend-box { border-top: 1px dashed var(--border); padding-top: 0.4rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-.tag.legend-tag { background: #5a4410; color: #fff3cf; }
+/* ---------- Combattimento: cornice più ricca (angoli dorati, aureola sopra il bordo) senza coprire nulla ---------- */
+.combatant.legendary {
+  position: relative;
+  border-color: var(--lg-faint);
+  border-top-color: var(--lg-gold);
+  background-image:
+    linear-gradient(var(--lg-gold), var(--lg-gold)), linear-gradient(var(--lg-gold), var(--lg-gold)),
+    linear-gradient(var(--lg-gold), var(--lg-gold)), linear-gradient(var(--lg-gold), var(--lg-gold)),
+    linear-gradient(var(--lg-gold), var(--lg-gold)), linear-gradient(var(--lg-gold), var(--lg-gold)),
+    radial-gradient(ellipse 80% 40% at 50% 0, var(--lg-soft), transparent 70%);
+  background-size: 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 100% 100%;
+  background-position: left 4px bottom 4px, left 4px bottom 4px, right 4px bottom 4px, right 4px bottom 4px, left 4px top 4px, right 4px top 4px, 0 0;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1px var(--lg-faint), 0 0 16px var(--lg-glow);
+}
+.combatant.legendary::before {
+  content: ''; position: absolute; left: 50%; top: -9px; width: 46px; height: 12px; transform: translateX(-50%);
+  border: 2px solid var(--lg-gold); border-radius: 50%; box-shadow: 0 0 8px var(--lg-glow), inset 0 0 4px var(--lg-glow);
+  pointer-events: none;
+}
+.combatant.legendary.current { box-shadow: 0 0 0 2px var(--accent), 0 0 22px var(--lg-glow); }
+.combatant.legendary.transformed { box-shadow: 0 0 0 1px var(--lg-gold), 0 0 26px var(--lg-glow), inset 0 0 26px var(--lg-glow); animation: legend-aura 3.5s ease-in-out infinite; }
+.combatant.legendary.transformed.current { box-shadow: 0 0 0 2px var(--accent), 0 0 30px var(--lg-glow), inset 0 0 26px var(--lg-glow); }
+@keyframes legend-aura { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 6px var(--lg-glow)); } }
+.legend-box { border-top: 1px dashed var(--lg-faint, var(--border)); padding-top: 0.4rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.tag.legend-tag { background: var(--lg-bg); color: var(--lg-light); border: 1px solid var(--lg-gold); }
 
-/* Animazioni: Ascensione (colonna di luce) e trasformazione (lampo e ali). Un clic le salta. */
-.legend-ascension { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(circle, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.92)); cursor: pointer; animation: boss-summon-out 0.5s ease 2.7s forwards; }
-.legend-ascension .legend-wings { position: absolute; top: 18%; width: min(420px, 80vw); animation: legend-wings 1s ease-out both; }
+/* ---------- Animazioni: Ascensione (colonna di luce) e trasformazione (lampo e ali). Un clic le salta. ---------- */
+.legend-ascension { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(circle, var(--lg-glow), rgba(0, 0, 0, 0.86) 38%, rgba(0, 0, 0, 0.96)); cursor: pointer; animation: boss-summon-out 0.5s ease 2.7s forwards, boss-shake 0.5s ease 0.3s; }
+.legend-ascension .legend-wings { position: absolute; top: 16%; width: min(440px, 80vw); animation: legend-wings 1s ease-out both; }
 .legend-column { position: absolute; top: 0; bottom: 0; left: 50%; width: 160px; transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--lg-light), transparent); opacity: 0.6; animation: legend-column 1.4s ease-out both; }
 .legend-ascension-name b { text-shadow: 0 0 30px var(--lg-gold), 0 0 4px #000; }
 @keyframes legend-column { from { opacity: 0; transform: translateX(-50%) scaleX(0.1); } 40% { opacity: 0.9; } to { opacity: 0.45; transform: translateX(-50%) scaleX(1); } }
@@ -70,8 +220,13 @@
 .legend-transform-flash { position: fixed; inset: 0; z-index: 59; pointer-events: none; display: grid; place-items: center; background: radial-gradient(circle, var(--lg-light), var(--lg-glow) 50%, transparent 75%); animation: boss-flash 1.2s ease-out forwards; }
 .legend-transform-flash .legend-wings { width: min(500px, 85vw); animation: legend-wings 0.8s ease-out both; }
 
-/* Riduci animazioni: tutto statico e leggibile. Effetti boss spenti: niente lampo. */
-html[data-reduce-motion] .legend-dust, html[data-reduce-motion] .legend-column, html[data-reduce-motion] .legend-wings { animation: none; }
+/* ---------- Riduci animazioni: tutto statico e leggibile. Effetti boss spenti: niente lampo. ---------- */
+html[data-reduce-motion] .legend-dust, html[data-reduce-motion] .legend-rays, html[data-reduce-motion] .legend-sigil,
+html[data-reduce-motion] .legend-motif, html[data-reduce-motion] .legend-wings, html[data-reduce-motion] .legend-column,
+html[data-reduce-motion] .legend-lance-flare, html[data-reduce-motion] .combatant.legendary.transformed { animation: none; }
 html[data-reduce-motion] .legend-ascension, html[data-reduce-motion] .legend-transform-flash { display: none; }
 html[data-boss-effects="off"] .legend-transform-flash { display: none; }
-@media print { .legend-rays, .legend-dust, .legend-wings, .legend-ascension, .legend-transform-flash { display: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .legend-dust, .legend-rays, .legend-sigil, .legend-motif, .legend-wings, .legend-column, .legend-lance-flare, .combatant.legendary.transformed { animation: none; }
+}
+@media print { .legend-rays, .legend-dust, .legend-motif, .legend-sigil, .legend-wings, .legend-lance, .legend-filigree, .legend-ascension, .legend-transform-flash { display: none !important; } }

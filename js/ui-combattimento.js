@@ -1198,6 +1198,7 @@
     return el('article', {
       class: 'combatant ' + x.kind + (current ? ' current' : '') + (down ? ' down' : '') + (x.id === selectedId ? ' selected' : '') + (x.legend ? ' legendary' : '') + (x.legend && x.legend.form ? ' transformed' : ''),
       'data-id': x.id,
+      style: x.legend && DnD.uiLeggendario ? DnD.uiLeggendario.cardStyle(x) : null,
       onclick: (e) => { if (!e.target.closest('button')) selectCombatant(x.id === selectedId ? null : x.id, 'card'); },
     },
       el('div', { class: 'combatant-head' },

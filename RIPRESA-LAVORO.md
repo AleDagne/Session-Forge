@@ -17,8 +17,8 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
 - Dal 22 ottobre 2026 (sessione sul PC desktop) la cartella **è un repository git**: la cronologia parte dal commit
   «Stato iniziale». Claude Code avvia il server da `.claude/launch.json` sulla porta **5617** (la 8080 era occupata).
 - L'app parte e tutti gli script si caricano senza errori di sintassi.
-- `test.html`: **tutti i 176 test passano** (in una finestra visibile).
-- Versione dei dati: **11** (cache del service worker: `session-forge-v18`).
+- `test.html`: **tutti i 177 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
+- Versione dei dati: **11** (cache del service worker: `session-forge-v19`).
 
 ## Prova a mano dell'interfaccia (22 ottobre 2026, PC desktop)
 
@@ -41,9 +41,28 @@ Corretto durante la prova:
 - «Duplica» anche per il singolo nodo; titolo del personaggio aggiornato subito nell'intestazione; setup del
   combattimento con PF/CA effettivi dei leggendari; singolari («1 punto», «1 nodo sbloccato», «1 uso»).
 
-Note rimaste: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app); nella
-forma ci sono due temi (quello boss per barra/vignetta e quello «✦» per il lampo): da unificare nel punto 2;
-l'alone sulla pedina è appena visibile.
+Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app).
+
+## Grafica divina completa (punto 2 del «Da fare») — FATTA (22 ottobre 2026)
+
+- **Temi unificati con il Boss**: le palette dei 5 temi leggendari stanno in `leggendario.js` (`PALETTES`, stessa
+  forma dei temi di `boss.js`). `boss.theme(id)` risolve sia i temi del Boss sia le chiavi `lg:<id>` dei leggendari
+  (niente confusione tra «divino» del Boss e «divino» leggendario); `boss.normalizeBoss` le accetta.
+  `uiBoss.applyTheme/themeStyle` sono l'unico punto in cui i colori entrano nell'interfaccia: per i temi leggendari
+  aggiungono le variabili `--lg-*`, la classe `legend-theme` e `data-legend-motif`.
+- **Tema della forma unico**: un solo campo «Tema» nelle regole della trasformazione (Tema del personaggio, 5 temi
+  ✦, temi del Boss). `leggendario.formTheme` lo risolve; vale per barra in alto, vignettatura, alone della pedina,
+  lampo, card e scheda del combattente. Nella scheda boss della forma è nascosto il riquadro «Presentazione»
+  (titolo, epiteto, introduzione, tema), che la trasformazione ignorava.
+- **Grafica** (`css/leggendario.css`, `ui-leggendario.js`): vignettatura dorata e bianca, raggi che oscillano,
+  polvere, due sigilli con rune che ruotano, ali a tre file di piume lungo l'arco dell'ala con aureola e raggi,
+  lance di luce al posto delle spade, filigrana sotto le cornici, angoli luminosi, divisori sacri. Motivi per tema:
+  raggi (Divino), nuvole e piume (Angelico), vortice (Abissale), braci e scaglie (Draconico), stelle e nebulosa
+  (Cosmico). Il canvas del Percorso prende i colori dal tema.
+- **Combattimento**: scheda del leggendario con angoli dorati, aureola sopra il bordo e alone (più forte in forma),
+  colori del tema attivo (quello della forma se trasformato); pedina con alone, aureola sotto la barra della vita e,
+  in forma, ali ai lati.
+- Contrasto verificato nel tema scuro e chiaro; «Riduci animazioni» ferma tutto (test nuovo in `test.html`).
 
 ## Fatto in questa fase (punti dell'ordine di lavoro)
 
@@ -104,19 +123,15 @@ l'alone sulla pedina è appena visibile.
      nome + forma, fasi, ritorno a 0 PF con danno in eccesso, fine a durata, «Torna normale», annulla/ripeti.
    - Attenzione: nella scheda della forma `monsterForm` con `extra: bossFields` modifica il tema della «forgia»
      del boss: verificare che non rompa la grafica divina.
-2. **Grafica divina completa (punto 8)**: rifinire `css/leggendario.css` (filigrane e angoli ornati, aureola e ali
-   più curate, rune in sottofondo, lance di luce al posto delle spade), i 5 temi (Divino, Angelico, Abissale,
-   Draconico, Cosmico, quest'ultimo con stelle), il tema della trasformazione che sostituisce quello del
-   personaggio quando è attiva, la cornice più ricca della scheda nel combattimento e il contrasto in entrambi i temi.
+2. **FATTO** (vedi «Grafica divina completa» sopra).
 3. **Effetti dei nodi nei calcoli ancora mancanti**: competenze in abilità/strumenti non entrano in alcun calcolo
    della scheda (i giocatori non hanno abilità calcolate: per ora sono solo nel riepilogo); i sensi sono solo
    mostrati; le magie «N al giorno» si aggiungono agli incantesimi conosciuti ma senza contare gli usi.
 4. **Test da aggiungere in `test.html`** (alcuni ci sono già, vedi sotto): editor del grafo dell'interfaccia,
-   sblocco dall'interfaccia, effetti disattivati con «Riduci animazioni» per le animazioni leggendarie,
-   trasformazione dall'interfaccia del combattimento con annulla/ripeti.
+   sblocco dall'interfaccia, trasformazione dall'interfaccia del combattimento con annulla/ripeti.
 5. **README.md**: aggiungere la sezione «Personaggi leggendari» (livelli 20-40, Percorso, Trasformazioni, grafica),
    la riga della migrazione v11, i nuovi file nella «Struttura» e i test.
-6. **Service worker**: ora `session-forge-v18`; aumentarlo di nuovo dopo le
+6. **Service worker**: ora `session-forge-v19`; aumentarlo di nuovo dopo le
    prossime modifiche.
 
 ## Test già presenti per questa fase (in `js/test.js`, tutti passano)

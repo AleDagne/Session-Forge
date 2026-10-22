@@ -25,14 +25,22 @@
 
   // ---------- Componenti ----------
   // Variabili CSS del tema (l'unico punto in cui i colori del tema entrano nell'interfaccia).
+  // I temi leggendari («lg:<id>») aggiungono le variabili --lg-* e trasformano le spade in lance di luce.
   function themeStyle(themeId) {
-    const t = B.THEMES[themeId] || B.THEMES.infernale;
-    return '--boss-accent:' + t.accent + ';--boss-glow:' + t.glow + ';--boss-shadow:' + t.shadow + ';--boss-frame:' + t.frame + ';--boss-bg:' + t.bg;
+    const t = B.theme(themeId);
+    const base = '--boss-accent:' + t.accent + ';--boss-glow:' + t.glow + ';--boss-shadow:' + t.shadow + ';--boss-frame:' + t.frame + ';--boss-bg:' + t.bg;
+    if (!t.legendary) return base;
+    return base + ';--lg-gold:' + t.accent + ';--lg-light:' + t.glow + ';--lg-glow:' + t.shadow + ';--lg-accent:' + t.frame + ';--lg-bg:' + t.bg +
+      ';--boss-steel:' + t.glow + ';--boss-steel-dark:' + t.accent + ';--boss-grip:' + t.frame;
   }
   function applyTheme(node, themeId) {
+    const t = B.theme(themeId);
     node.classList.add('boss-theme');
+    node.classList.toggle('legend-theme', Boolean(t.legendary));
     node.setAttribute('style', themeStyle(themeId));
     node.dataset.bossTheme = themeId;
+    if (t.legendary) node.dataset.legendMotif = t.motif;
+    else delete node.dataset.legendMotif;
     return node;
   }
 
@@ -136,7 +144,7 @@
   }
   // Alone del colore del tema e, se prevista, aura di raggio in celle (dal bordo della pedina).
   function drawAura(ctx, t, cx, cy, dw, dh, s) {
-    const th = B.THEMES[t.boss.theme] || B.THEMES.infernale;
+    const th = B.theme(t.boss.theme);
     ctx.save();
     if (t.boss.aura) {
       const rx = dw / 2 + t.boss.aura * s;
@@ -163,7 +171,7 @@
   }
   // Corona sopra la pedina.
   function drawCrown(ctx, t, cx, top, size, s) {
-    const th = B.THEMES[t.boss.theme] || B.THEMES.infernale;
+    const th = B.theme(t.boss.theme);
     const w = Math.max(12, Math.min(size * 0.38, s * 0.9));
     const h = w * 0.62;
     const x = cx - w / 2;
@@ -326,7 +334,7 @@
             c.boss.title ? el('p', { class: 'boss-card-title', text: c.boss.title + (c.boss.epithet ? ' · ' + c.boss.epithet : '') }) : '',
             el('p', { class: 'muted small', text: M.typeLine(c) }),
             el('p', { text: 'PF ' + M.hpInfo(c).text + ' · GS ' + M.crText(c) }),
-            el('p', { class: 'small muted', text: c.boss.phases.length + ' fasi (' + c.boss.phases.map((p) => p.threshold + '%').join(', ') + ') · tema ' + B.THEMES[c.boss.theme].name +
+            el('p', { class: 'small muted', text: c.boss.phases.length + ' fasi (' + c.boss.phases.map((p) => p.threshold + '%').join(', ') + ') · tema ' + B.theme(c.boss.theme).name +
               (c.legendary.length ? ' · ' + c.legendary.length + ' leggendarie' : '') }),
             el('label', { class: 'check small' },
               el('input', { type: 'checkbox', checked: c.shared, onchange: (e) => { DnD.store.update(() => { c.shared = e.target.checked; }); render(); } }),
@@ -450,7 +458,9 @@
   }
 
   // Campi del boss nel form della creatura: presentazione e tema in alto; fasi, scala e aura in fondo.
-  function bossFields(m, ctx, forgeNode) {
+  // opts.presentation === false: niente titolo, epiteto, introduzione e tema (le trasformazioni leggendarie
+  // hanno i loro nelle regole della forma).
+  function bossFields(m, ctx, forgeNode, opts) {
     const b = m.boss = B.normalizeBoss(m.boss);
     const title = textInput(b.title, { maxlength: 80, placeholder: 'es. Il Re delle Ceneri', 'data-key': 'boss.title', oninput: (e) => { b.title = e.target.value; ctx.refresh(); } });
     const epithet = textInput(b.epithet, { maxlength: 60, placeholder: 'es. Signore del Vulcano', oninput: (e) => { b.epithet = e.target.value; ctx.refresh(); } });
@@ -522,7 +532,7 @@
 
     return {
       preview,
-      top: [frame('Presentazione', [
+      top: opts && opts.presentation === false ? [] : [frame('Presentazione', [
         el('div', { class: 'grid-2 tight' }, field('Titolo', title, 'boss.title'), field('Epiteto breve', epithet)),
         field('Introduzione per il master', intro),
         el('div', { class: 'field' }, el('label', { text: 'Tema visivo' }), themeRow),

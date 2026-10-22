@@ -17,6 +17,10 @@
     divino: { name: 'Divino', accent: '#e8c35a', glow: '#fff3c4', shadow: 'rgba(220, 180, 70, 0.45)', frame: '#7a6224', bg: '#0f0c05', motif: 'raggi' },
   };
   const THEME_IDS = Object.keys(THEMES);
+  // Tema per id: i temi del Boss o, con la chiave «lg:<id>», quelli dei leggendari (leggendario.js, PALETTES).
+  const legendPalette = (id) => (typeof id === 'string' && id.startsWith('lg:') && DnD.leggendario ? DnD.leggendario.PALETTES[id.slice(3)] || null : null);
+  const isTheme = (id) => THEME_IDS.includes(id) || Boolean(legendPalette(id));
+  const theme = (id) => legendPalette(id) || THEMES[id] || THEMES.infernale;
   const EFFECTS = ['nessuno', 'lampo', 'tremolio'];
   const EFFECT_NAMES = { nessuno: 'Nessuno', lampo: 'Lampo', tremolio: 'Tremolio' };
   const TEMPERAMENTS = ['', 'aggressivo', 'furbo'];
@@ -64,7 +68,7 @@
       title: str(b.title, 80),
       epithet: str(b.epithet, 60),
       intro: str(b.intro, 3000),
-      theme: THEME_IDS.includes(b.theme) ? b.theme : 'infernale',
+      theme: isTheme(b.theme) ? b.theme : 'infernale',
       phases: normalizePhases(b.phases),
       scaleByPlayers: Boolean(b.scaleByPlayers),
       aura: int(b.aura, 0, 0, MAX_AURA),
@@ -236,7 +240,7 @@
   }
 
   DnD.boss = {
-    THEMES, THEME_IDS, EFFECTS, EFFECT_NAMES, TEMPERAMENTS, MAX_PHASES, MAX_AURA, MAX_BARS,
+    THEMES, THEME_IDS, theme, isTheme, EFFECTS, EFFECT_NAMES, TEMPERAMENTS, MAX_PHASES, MAX_AURA, MAX_BARS,
     normalizeBoss, normalizePhases, isBoss, isMonster, promote,
     pctOf, phaseForHp, updatePhase, disabledActions, temperamentAt, vignetteLevel,
     scaledHp, combatState, normalizeCombatBoss, checkCombat, bars,

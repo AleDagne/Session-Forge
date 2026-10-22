@@ -14,27 +14,9 @@
   const opt = (value, text, selected) => el('option', { value, text, selected });
   const motionOff = () => DnD.impostazioni.reduceMotion() || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  // Temi: oro e luce (gold), riflesso (light), alone (glow), fondo (bg); le variabili del Boss si allineano
-  // così cornici e spade diventano «lance di luce».
-  const THEMES = {
-    divino: { gold: '#f2c94c', light: '#fff8e1', glow: 'rgba(255, 222, 140, 0.55)', bg: '#0c0a06', accent: '#e8b84a' },
-    angelico: { gold: '#bfe3ff', light: '#ffffff', glow: 'rgba(190, 230, 255, 0.55)', bg: '#070b12', accent: '#8fd0ff' },
-    abissale: { gold: '#b48cff', light: '#efe3ff', glow: 'rgba(140, 80, 230, 0.55)', bg: '#07040d', accent: '#8e5cc9' },
-    draconico: { gold: '#f2b23c', light: '#fff1d0', glow: 'rgba(230, 90, 40, 0.5)', bg: '#0d0605', accent: '#e0322b' },
-    cosmico: { gold: '#9fa8ff', light: '#eef0ff', glow: 'rgba(110, 120, 255, 0.5)', bg: '#05051a', accent: '#5c6cff' },
-  };
-  function themeStyle(id) {
-    const t = THEMES[id] || THEMES.divino;
-    return ['--lg-gold:' + t.gold, '--lg-light:' + t.light, '--lg-glow:' + t.glow, '--lg-bg:' + t.bg, '--lg-accent:' + t.accent,
-      '--boss-accent:' + t.gold, '--boss-glow:' + t.light, '--boss-shadow:' + t.glow, '--boss-frame:' + t.accent, '--boss-bg:' + t.bg,
-      '--boss-steel:' + t.light, '--boss-steel-dark:' + t.gold, '--boss-grip:' + t.accent].join(';');
-  }
-  function applyTheme(node, id) {
-    node.classList.add('boss-theme', 'legend-theme');
-    node.setAttribute('style', themeStyle(id));
-    node.dataset.legendTheme = id;
-    return node;
-  }
+  // Temi: le palette stanno in leggendario.js (PALETTES) e passano per lo stesso sistema del Boss (ui-boss.js):
+  // id leggendario («divino») o chiave di tema («lg:divino», «gelo»).
+  const applyTheme = (node, id) => DnD.uiBoss.applyTheme(node, L.themeKey(id || 'divino'));
 
   // ---------- Componenti grafici ----------
   function svg(markup, cls, viewBox) {
@@ -45,26 +27,103 @@
     n.innerHTML = markup;
     return n;
   }
-  // Ali e aureola stilizzate sopra il titolo.
-  const WINGS = (() => {
-    const feathers = (side) => Array.from({ length: 7 }, (_, i) => {
-      const len = 70 - i * 7;
-      const ang = -10 - i * 11;
-      return '<path transform="translate(' + (side * 18) + ' 40) scale(' + side + ' 1) rotate(' + ang + ')" d="M0 0 Q' + (len * 0.55) + ' -9 ' + len + ' 0 Q' + (len * 0.55) + ' 5 0 0Z" fill="currentColor" opacity="' + (0.95 - i * 0.09).toFixed(2) + '"/>';
+  // I colori degli SVG vengono solo dalle variabili del tema (--lg-*): gradienti con stop-color: var(...).
+  let seq = 0;
+  const grad = (id, a, b, vertical) => '<linearGradient id="' + id + '"' + (vertical ? ' x1="0" y1="0" x2="0" y2="1"' : '') + '><stop offset="0" style="stop-color:var(' + a + ')"/><stop offset="1" style="stop-color:var(' + b + ')"/></linearGradient>';
+
+  // Ali e aureola sopra il titolo: tre file di piume per lato (copritrici, secondarie, remiganti) aperte a
+  // ventaglio, con la nervatura; aureola doppia con raggi corti.
+  function wingsMarkup(id) {
+    // Arco dell'ala (ala destra, dal centro verso l'esterno): curva quadratica; le piume partono dall'arco e
+    // pendono in basso e verso l'esterno, più lunghe verso la punta. L'ala sinistra è lo specchio.
+    const arm = (t) => ({ x: (1 - t) * (1 - t) * 14 + 2 * (1 - t) * t * 58 + t * t * 114, y: (1 - t) * (1 - t) * 50 + 2 * (1 - t) * t * 14 + t * t * 10 });
+    const row = (n, t0, t1, len0, len1, a0, a1, w, cls) => Array.from({ length: n }, (_, i) => {
+      const k = n > 1 ? i / (n - 1) : 0;
+      const p = arm(t0 + (t1 - t0) * k);
+      const len = len0 + (len1 - len0) * k;
+      return '<g transform="translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ') rotate(' + (a0 + (a1 - a0) * k).toFixed(1) + ')">' +
+        '<path class="' + cls + '" d="M0 0 Q' + (len * 0.5).toFixed(1) + ' ' + (-w) + ' ' + len.toFixed(1) + ' 0 Q' + (len * 0.5).toFixed(1) + ' ' + w + ' 0 0Z"/>' +
+        '<path class="legend-rachis" d="M1 0 L' + (len * 0.9).toFixed(1) + ' 0"/></g>';
     }).join('');
-    return '<g transform="translate(120 10)">' + feathers(1) + feathers(-1) + '</g>' +
-      '<ellipse cx="120" cy="22" rx="26" ry="7" fill="none" stroke="currentColor" stroke-width="3"/><ellipse cx="120" cy="22" rx="32" ry="10" fill="none" stroke="currentColor" stroke-width="1" opacity="0.5"/>';
+    const wing = row(13, 0.04, 1, 30, 78, 88, 14, 7.5, 'legend-feather f1') + row(10, 0, 0.9, 18, 40, 76, 20, 6.5, 'legend-feather f2') +
+      row(8, 0, 0.82, 10, 20, 62, 26, 4.5, 'legend-feather f3') + '<path class="legend-wing-arm" d="M14 50 Q58 14 114 10"/>';
+    const rays = Array.from({ length: 12 }, (_, i) => {
+      const a = (i / 12) * Math.PI * 2;
+      return '<path d="M' + (120 + Math.cos(a) * 33).toFixed(1) + ' ' + (18 + Math.sin(a) * 9.5).toFixed(1) + ' L' + (120 + Math.cos(a) * 41).toFixed(1) + ' ' + (18 + Math.sin(a) * 12.5).toFixed(1) + '"/>';
+    }).join('');
+    return '<defs>' + grad(id + 'f', '--lg-light', '--lg-gold', true) + grad(id + 'h', '--lg-light', '--lg-gold', true) + '</defs>' +
+      '<g style="fill:url(#' + id + 'f)"><g transform="translate(120 0)">' + wing + '</g><g transform="translate(120 0) scale(-1 1)">' + wing + '</g></g>' +
+      '<g class="legend-halo-rays">' + rays + '</g>' +
+      '<ellipse class="legend-halo" cx="120" cy="18" rx="25" ry="7" style="stroke:url(#' + id + 'h)"/>' +
+      '<ellipse class="legend-halo thin" cx="120" cy="18" rx="31" ry="9.5"/>';
+  }
+  const wings = () => { const id = 'lgw' + (++seq); return svg(wingsMarkup(id), 'legend-wings', '-6 0 252 100'); };
+
+  // Sigillo sacro in sottofondo: cerchi, esagramma, stella e rune originali tutt'intorno.
+  const SIGIL = (() => {
+    const glyphs = ['M-3 4 L0 -4 L3 4', 'M-3 -4 L3 4 M3 -4 L-3 4', 'M0 -4 L0 4 M-3 -1 L0 -4 L3 -1', 'M-3 -3 L3 -3 L0 4 Z', 'M-3 0 A3 3 0 1 0 3 0 A3 3 0 1 0 -3 0 M0 -4 L0 4', 'M-3 4 L-3 -4 L3 0 L-3 0'];
+    const ring = Array.from({ length: 18 }, (_, i) => {
+      const a = (i / 18) * Math.PI * 2;
+      return '<path transform="translate(' + (100 + Math.cos(a) * 84).toFixed(1) + ' ' + (100 + Math.sin(a) * 84).toFixed(1) + ') rotate(' + ((a * 180) / Math.PI + 90).toFixed(0) + ')" d="' + glyphs[i % glyphs.length] + '"/>';
+    }).join('');
+    const ticks = Array.from({ length: 72 }, (_, i) => {
+      const a = (i / 72) * Math.PI * 2;
+      const r0 = i % 6 ? 93 : 90;
+      return '<path d="M' + (100 + Math.cos(a) * r0).toFixed(1) + ' ' + (100 + Math.sin(a) * r0).toFixed(1) + ' L' + (100 + Math.cos(a) * 96).toFixed(1) + ' ' + (100 + Math.sin(a) * 96).toFixed(1) + '"/>';
+    }).join('');
+    const star = Array.from({ length: 16 }, (_, i) => {
+      const a = -Math.PI / 2 + (i / 16) * Math.PI * 2;
+      const r = i % 2 ? 9 : 24;
+      return (i ? 'L' : 'M') + (100 + Math.cos(a) * r).toFixed(1) + ' ' + (100 + Math.sin(a) * r).toFixed(1);
+    }).join(' ') + 'Z';
+    return '<g fill="none" stroke="currentColor"><circle cx="100" cy="100" r="97" stroke-width="1.6"/><circle cx="100" cy="100" r="76" stroke-width="0.8"/>' +
+      '<circle cx="100" cy="100" r="44" stroke-width="0.8" stroke-dasharray="2 5"/><g stroke-width="0.8">' + ticks + '</g><g stroke-width="1.3">' + ring + '</g>' +
+      '<path d="M100 26 L164 137 L36 137 Z M100 174 L36 63 L164 63 Z" stroke-width="1"/><path d="' + star + '" stroke-width="1.1"/></g>';
   })();
-  const wings = () => svg(WINGS, 'legend-wings', '0 0 240 70');
+  const sigil = (cls) => svg(SIGIL, 'legend-sigil' + (cls ? ' ' + cls : ''), '0 0 200 200');
+
+  // Lancia di luce (al posto delle spade del Boss): sfera in alto, asta sottile, punta a losanga che entra
+  // nella cornice. Stesse variabili di posizione delle spade (--x | --r, --y, --rot).
+  function lance(pos) {
+    const id = 'lgl' + (++seq);
+    const n = svg('<defs>' + grad(id, '--lg-light', '--lg-gold', true) + '</defs>' +
+      '<circle class="legend-lance-flare" cx="13" cy="8" r="9"/><circle class="legend-lance-orb" cx="13" cy="8" r="4.5"/>' +
+      '<path class="legend-lance-wing" d="M13 22 Q4 18 2 10 Q8 17 13 18 Q18 17 24 10 Q22 18 13 22Z"/>' +
+      '<rect x="11.6" y="14" width="2.8" height="78" rx="1.4" style="fill:url(#' + id + ')"/>' +
+      '<path d="M13 88 L19 100 L13 119 L7 100 Z" style="fill:url(#' + id + ')"/>' +
+      '<path class="legend-lance-edge" d="M13 90 L13 116"/>', 'boss-sword legend-lance', '0 0 26 120');
+    n.setAttribute('width', '26');
+    n.setAttribute('height', '120');
+    const style = [];
+    if (pos.x !== undefined) style.push('--x:' + pos.x);
+    if (pos.r !== undefined) style.push('--r:' + pos.r);
+    style.push('--y:' + (pos.y || '-46px'), '--rot:' + (pos.rot || '0deg'));
+    n.setAttribute('style', style.join(';'));
+    return n;
+  }
+  // Filigrana al centro del bordo inferiore della cornice: volute simmetriche e una gemma.
+  const FILIGREE = '<g fill="none" stroke="currentColor" stroke-width="1.3"><path d="M60 10 C48 10 44 2 34 4 C24 6 26 16 16 14 C10 13 8 8 2 9"/><path d="M60 10 C72 10 76 2 86 4 C96 6 94 16 104 14 C110 13 112 8 118 9"/>' +
+    '<path d="M40 6 C36 12 30 12 28 8 M80 6 C84 12 90 12 92 8" stroke-width="0.9"/></g><path d="M60 2 L66 10 L60 18 L54 10 Z" fill="currentColor"/>';
 
   function forge(title, subtitle, themeId) {
     const node = applyTheme(el('div', { class: 'boss-forge legend-forge' }), themeId || 'divino');
-    node.append(el('div', { class: 'legend-rays', 'aria-hidden': 'true' }), el('div', { class: 'legend-dust', 'aria-hidden': 'true' }),
+    node.append(el('div', { class: 'legend-rays', 'aria-hidden': 'true' }), el('div', { class: 'legend-motif', 'aria-hidden': 'true' }),
+      el('div', { class: 'legend-dust', 'aria-hidden': 'true' }), sigil(), sigil('left'),
       el('header', { class: 'boss-forge-head legend-head' }, wings(),
         el('h1', { class: 'boss-title legend-title', text: title }), subtitle ? el('p', { class: 'boss-subtitle', text: subtitle }) : null));
     return node;
   }
-  const frame = (title, content, opts) => DnD.uiBoss.frame(title, content, Object.assign({ class: 'legend-frame' }, opts || {}));
+  // Cornice del Boss con lance di luce e filigrana al posto delle spade.
+  function frame(title, content, opts) {
+    opts = opts || {};
+    const node = DnD.uiBoss.frame(title, content, Object.assign({}, opts, { class: 'legend-frame' + (opts.class ? ' ' + opts.class : ''), swords: false }));
+    if (opts.swords !== false) {
+      node.append(lance({ x: 'calc(50% - 150px)', y: '-46px', rot: '-14deg' }), lance({ r: 'calc(50% - 150px)', y: '-46px', rot: '14deg' }));
+      if (opts.sideSwords) node.append(lance({ x: '-22px', y: '30%', rot: '-62deg' }), lance({ r: '-22px', y: '58%', rot: '62deg' }));
+    }
+    node.append(svg(FILIGREE, 'legend-filigree', '0 0 120 20'));
+    return node;
+  }
   const divider = () => el('div', { class: 'boss-divider legend-divider', role: 'presentation' });
 
   // Ascensione (nuovo leggendario o promozione): colonna di luce, tremolio leggero, comparsa del nome.
@@ -90,25 +149,75 @@
     setTimeout(() => f.remove(), 1300);
   }
 
-  // Alone dorato e aureola sulla pedina del leggendario.
-  function drawHalo(ctx, t, cx, cy, dw, dh, top) {
-    const th = THEMES[t.legend.theme] || THEMES.divino;
+  // Pedina del leggendario. Tema attivo: quello della forma se trasformato, altrimenti quello del personaggio.
+  const activeTheme = (x) => (x.legend.form ? x.legend.form.theme : L.themeKey(x.legend.theme));
+  function rgba(hex, a) {
+    const n = parseInt(String(hex).slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  // Sotto la pedina: alone luminoso e, in forma, due ali stilizzate aperte dietro l'icona.
+  function drawHalo(ctx, t, cx, cy, dw, dh) {
+    const th = DnD.boss.theme(activeTheme(t));
     const r = Math.max(dw, dh) / 2;
     ctx.save();
-    const g = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 1.1);
-    g.addColorStop(0, th.glow);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
+    if (t.legend.form) {
+      ctx.fillStyle = rgba(th.glow, 0.55);
+      ctx.strokeStyle = rgba(th.accent, 0.9);
+      ctx.lineWidth = Math.max(1, r * 0.03);
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          const len = r * (1.15 - i * 0.18);
+          const ang = (-18 - i * 17) * (Math.PI / 180);
+          ctx.save();
+          ctx.translate(cx + side * r * 0.35, cy - r * 0.05);
+          ctx.scale(side, 1);
+          ctx.rotate(ang);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.quadraticCurveTo(len * 0.45, -r * 0.16, len, 0);
+          ctx.quadraticCurveTo(len * 0.6, r * 0.09, 0, 0);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+    const g = ctx.createRadialGradient(cx, cy, r * 0.45, cx, cy, r * 1.2);
+    g.addColorStop(0, th.shadow);
+    g.addColorStop(1, rgba(th.accent, 0));
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(cx, cy, dw / 2 * 1.1, dh / 2 * 1.1, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, dw / 2 * 1.2, dh / 2 * 1.2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = th.gold;
-    ctx.lineWidth = Math.max(1.5, r * 0.07);
+    ctx.strokeStyle = rgba(th.accent, 0.85);
+    ctx.lineWidth = Math.max(1.2, r * 0.05);
     ctx.beginPath();
-    ctx.ellipse(cx, top + Math.max(3, r * 0.12), r * 0.42, r * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, dw / 2 * 0.98, dh / 2 * 0.98, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
+  // Sopra la pedina, appena sotto la barra della vita (top): aureola luminosa al posto della corona del Boss.
+  function drawAureola(ctx, t, cx, top, size) {
+    const th = DnD.boss.theme(activeTheme(t));
+    const rx = Math.max(6, size * 0.24);
+    const ry = rx * 0.3;
+    const y = top + ry + 2;
+    ctx.save();
+    ctx.shadowColor = th.glow;
+    ctx.shadowBlur = Math.max(4, rx * 0.6);
+    ctx.strokeStyle = th.accent;
+    ctx.lineWidth = Math.max(1.6, rx * 0.22);
+    ctx.beginPath();
+    ctx.ellipse(cx, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = th.glow;
+    ctx.lineWidth = Math.max(0.8, rx * 0.08);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Variabili del tema attivo sulla scheda del combattente (cornice più ricca in css/leggendario.css).
+  const cardStyle = (x) => DnD.uiBoss.themeStyle(activeTheme(x));
 
   // ---------- Sezione ----------
   let root = null;
@@ -175,7 +284,7 @@
             c.shared ? el('span', { class: 'tag', text: 'Condiviso' }) : null)),
           c.legend.title ? el('p', { class: 'boss-card-title', text: c.legend.title }) : '',
           el('p', { class: 'muted small', text: [DnD.classi.className(c.classId), 'livello ' + c.level, 'rango ' + L.rank(c)].filter(Boolean).join(' · ') }),
-          el('p', { class: 'small', text: '✦ ' + (c.legend.unlocked.length - 1) + (c.legend.unlocked.length === 2 ? ' nodo sbloccato' : ' nodi sbloccati') + ' · punti ' + pts.left + '/' + pts.total + ' · ' + c.legend.transformations.length + ' trasformazioni' }),
+          el('p', { class: 'small', text: '✦ ' + (c.legend.unlocked.length - 1) + (c.legend.unlocked.length === 2 ? ' nodo sbloccato' : ' nodi sbloccati') + ' · punti ' + pts.left + '/' + pts.total + ' · ' + c.legend.transformations.length + (c.legend.transformations.length === 1 ? ' trasformazione' : ' trasformazioni') }),
           el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: c.shared, onchange: (e) => { update(c.id, (p) => { p.shared = e.target.checked; }); render(); } }), ' Condividi con tutte le sessioni'),
           el('div', { class: 'card-actions' },
             el('button', { class: 'btn primary', text: 'Apri', onclick: () => { viewing = c.id; part = 'scheda'; render(); } }),
@@ -342,7 +451,7 @@
     host.append(
       el('div', { class: 'input-row' }, fromCreature, el('button', { class: 'btn primary', text: '+ Aggiungi trasformazione', onclick: add })),
       c.legend.transformations.length ? el('div', { class: 'card-grid' }, c.legend.transformations.map((t, i) => {
-        const card = DnD.uiBoss.applyTheme(el('article', { class: 'card boss-card' }), DnD.boss.THEME_IDS.includes(t.creature.boss.theme) ? t.creature.boss.theme : 'infernale');
+        const card = applyTheme(el('article', { class: 'card boss-card' }), L.formTheme(t, c.legend.theme));
         card.append(
           el('div', { class: 'card-title' }, el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(t.icon, 34), el('h3', { text: t.name }))),
           t.epithet ? el('p', { class: 'boss-card-title', text: t.epithet }) : '',
@@ -367,7 +476,8 @@
     if (!t) { editingForm = null; render(); return; }
     const chk = (obj, k, label) => el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; } }), ' ' + label);
     const themeSel = el('select', { 'aria-label': 'Tema della forma' }, opt('', 'Tema del personaggio', !t.theme),
-      L.THEMES.map((x) => opt(x, '✦ ' + L.THEME_NAMES[x], t.theme === x)), DnD.boss.THEME_IDS.map((x) => opt(x, DnD.boss.THEMES[x].name, t.theme === x)));
+      L.THEMES.map((x) => opt(x, '✦ ' + L.THEME_NAMES[x], t.theme === x)),
+      DnD.boss.THEME_IDS.filter((x) => !L.THEMES.includes(x)).map((x) => opt(x, DnD.boss.THEMES[x].name, t.theme === x)));
     const rules = frame('Regole della trasformazione', [
       el('div', { class: 'grid-2 tight' },
         field('Nome', textInput(t.name, { maxlength: 60, oninput: (e) => { t.name = e.target.value; } })),
@@ -400,8 +510,8 @@
     // Icona e dimensione sulla griglia della forma si scelgono nella scheda boss (un solo posto).
     DnD.uiMostri.monsterForm(formHost, Object.assign(clone(t.creature), { id: t.creature.id || DnD.dadi.uid(), type: 'boss', icon: t.icon, gridSize: t.gridSize }), {
       kind: 'boss', heading: 'Scheda della forma (creatura boss)', submitText: '🜂 Salva la trasformazione', submitClass: 'legend-ascend-btn', savedText: 'Trasformazione salvata.',
-      // Il tema boss della forma vale per barra e vignettatura in combattimento: non ricolora la pagina divina.
-      extra: (m, ctx) => DnD.uiBoss.bossFields(m, ctx, el('div')),
+      // Il tema della forma si sceglie solo nelle regole (vale per barra, vignettatura, pedina e lampo).
+      extra: (m, ctx) => DnD.uiBoss.bossFields(m, ctx, el('div'), { presentation: false }),
       wrap: (head, form) => frame('Forma', [head, form], { sideSwords: true }),
       save: (creature) => {
         const saved = L.normalizeTransformation(Object.assign(t, { creature, icon: creature.icon || t.icon, gridSize: creature.gridSize, theme: themeSel.value }));
@@ -468,7 +578,7 @@
             if (ok) {
               // Gli usi restano scalati anche sulla scheda del giocatore (fino al riposo).
               update(player.id, (p) => { p.legend.uses[t.id] = left - 1; });
-              transformFlash(t.theme && THEMES[t.theme] ? t.theme : x.legend.theme);
+              transformFlash(L.formTheme(t, x.legend.theme));
             } else combatUndo.pop();
           } });
       }) : null,
@@ -483,7 +593,7 @@
 
   DnD.uiLeggendario = {
     pathWidget: () => pathWidget,
-    render, promote, demote, combatBox, drawHalo, ascension, transformFlash, applyTheme, THEMES,
+    render, promote, demote, combatBox, drawHalo, drawAureola, cardStyle, ascension, transformFlash, applyTheme,
     reset: () => { viewing = null; part = 'scheda'; editingForm = null; pathWidget = null; pathFor = null; },
   };
 })(globalThis.DnD = globalThis.DnD || {});

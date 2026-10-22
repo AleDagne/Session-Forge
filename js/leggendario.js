@@ -10,6 +10,20 @@
   const MAX_LEVEL = 40;
   const THEMES = ['divino', 'angelico', 'abissale', 'draconico', 'cosmico'];
   const THEME_NAMES = { divino: 'Divino', angelico: 'Angelico', abissale: 'Abissale', draconico: 'Draconico', cosmico: 'Cosmico' };
+  // Palette dei temi leggendari, nella stessa forma dei temi del Boss (boss.js), così barra, vignettatura, alone e
+  // cornici funzionano con entrambi: accent = oro, glow = luce, shadow = alone, frame = metallo, bg = fondo.
+  // Nell'interfaccia si usano con la chiave «lg:<id>» (boss.theme), per non confondersi con i temi del Boss.
+  const PALETTES = {
+    divino: { name: 'Divino', accent: '#f2c94c', glow: '#fff8e1', shadow: 'rgba(255, 222, 140, 0.55)', frame: '#e8b84a', bg: '#0c0a06', legendary: true, motif: 'raggi' },
+    angelico: { name: 'Angelico', accent: '#bfe3ff', glow: '#ffffff', shadow: 'rgba(190, 230, 255, 0.55)', frame: '#8fd0ff', bg: '#070b12', legendary: true, motif: 'piume' },
+    abissale: { name: 'Abissale', accent: '#b48cff', glow: '#efe3ff', shadow: 'rgba(140, 80, 230, 0.55)', frame: '#8e5cc9', bg: '#07040d', legendary: true, motif: 'abisso' },
+    draconico: { name: 'Draconico', accent: '#f2b23c', glow: '#fff1d0', shadow: 'rgba(230, 90, 40, 0.5)', frame: '#e0322b', bg: '#0d0605', legendary: true, motif: 'scaglie' },
+    cosmico: { name: 'Cosmico', accent: '#9fa8ff', glow: '#eef0ff', shadow: 'rgba(110, 120, 255, 0.5)', frame: '#5c6cff', bg: '#05051a', legendary: true, motif: 'stelle' },
+  };
+  // Chiave di tema per l'interfaccia: i temi leggendari diventano «lg:<id>», quelli del Boss restano come sono.
+  const themeKey = (id) => (THEMES.includes(id) ? 'lg:' + id : id);
+  // Tema della forma: quello scelto nella trasformazione o, se vuoto, quello del personaggio.
+  const formTheme = (t, legendTheme) => (t && t.theme ? themeKey(t.theme) : 'lg:' + (THEMES.includes(legendTheme) ? legendTheme : 'divino'));
   const PHYSICAL = ['FOR', 'DES', 'COS'];
 
   const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
@@ -252,7 +266,7 @@
     if (t.fusion.keepFeatures && prev.creature) for (const g of ['traits', 'actions', 'bonusActions', 'reactions']) st[g] = st[g].concat(prev.creature[g] || []);
     if (t.fusion.keepFeatures && prev.creature) { Object.assign(st.uses, prev.creature.uses); Object.assign(st.recharge, prev.creature.recharge); }
     x.creature = st;
-    x.boss = Object.assign(DnD.boss.combatState(Object.assign({}, m, { name: x.name })), { title: t.name + (t.epithet ? ' · ' + t.epithet : ''), revealed: true });
+    x.boss = Object.assign(DnD.boss.combatState(Object.assign({}, m, { name: x.name })), { title: t.name + (t.epithet ? ' · ' + t.epithet : ''), revealed: true, theme: formTheme(t, x.legend.theme) });
     if (t.hpMode === 'sostituisce') { x.maxHp = formHp; x.hp = formHp; }
     else { x.maxHp = prev.maxHp + formHp; x.hp = prev.hp + formHp; }
     x.ac = m.ac;
@@ -271,7 +285,7 @@
     };
     x.legend.uses[t.id] = left - 1;
     x.legend.form = {
-      id: t.id, name: t.name, hpMode: t.hpMode, prev, theme: t.theme || '',
+      id: t.id, name: t.name, hpMode: t.hpMode, prev, theme: x.boss.theme,
       roundsLeft: t.duration.unit === 'minuti' ? t.duration.value * 10 : t.duration.value, canEndEarly: t.canEndEarly, exitText: t.exitText,
     };
     return { ok: true, lines: ['✦ ' + x.name + ' si trasforma: ' + t.name + (t.epithet ? ', ' + t.epithet : '') + ' (' + (t.activation === 'bonus' ? 'azione bonus' : 'azione') + ', usi rimasti ' + (left - 1) + '/' + t.uses.n + ', durata ' + t.duration.value + ' ' + t.duration.unit + ').' + (t.enterText ? ' ' + t.enterText : '')] };
@@ -341,7 +355,7 @@
   }
 
   DnD.leggendario = {
-    MIN_LEVEL, MAX_LEVEL, THEMES, THEME_NAMES, PHYSICAL, FORM_KEYS,
+    MIN_LEVEL, MAX_LEVEL, THEMES, THEME_NAMES, PALETTES, themeKey, formTheme, PHYSICAL, FORM_KEYS,
     normalizeLegend, normalizeTransformation, isLegendary, rank, points, effects, effectivePlayer, derived, hpParams, featureActions,
     applyToCombatant, available, usesLeft, fusedAbilities, transform, revert, damage, tick, promote, demote, rest,
   };

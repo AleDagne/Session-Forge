@@ -528,16 +528,16 @@
       const cy = py + dh / 2;
       const pad = Math.min(dw, dh) * 0.12;
       const down = R.isDown(t);
-      // Boss: alone del colore del tema (e aura in celle) sotto la pedina.
+      // Boss: alone del colore del tema (e aura in celle) sotto la pedina. Leggendari: alone e, in forma, ali.
       if (t.boss && !down && DnD.uiBoss) DnD.uiBoss.drawAura(ctx, t, cx, cy, dw, dh, s);
-      // Leggendari: alone dorato e aureola (in forma trasformata vale l'alone del boss).
-      else if (t.legend && !down && DnD.uiLeggendario) DnD.uiLeggendario.drawHalo(ctx, t, cx, cy, dw, dh, py);
+      if (t.legend && !down && DnD.uiLeggendario) DnD.uiLeggendario.drawHalo(ctx, t, cx, cy, dw, dh);
       ctx.save();
       if (o.ghost) ctx.globalAlpha = 0.6;
       if (down) { ctx.globalAlpha = 0.45; ctx.filter = 'grayscale(1)'; }
       DnD.icone.drawIconRect(ctx, t.icon, px + pad, py + pad, dw - 2 * pad, dh - 2 * pad, requestDraw);
       ctx.restore();
-      if (t.boss && DnD.uiBoss) DnD.uiBoss.drawCrown(ctx, t, cx, py + pad, Math.min(dw, dh), s);
+      // Sopra la pedina: corona del boss (il leggendario, anche in forma, ha l'aureola sotto la barra della vita).
+      if (t.boss && !t.legend && DnD.uiBoss) DnD.uiBoss.drawCrown(ctx, t, cx, py + pad, Math.min(dw, dh), s);
       if (o.current) {
         ctx.save();
         ctx.beginPath();
@@ -565,6 +565,7 @@
       ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = down ? colors().missing : colors().hp[R.hpLevel(t.hp, t.maxHp)];
       ctx.fillRect(bx, by, bw * Math.max(0, t.hp / t.maxHp), bh);
+      if (t.legend && !down && DnD.uiLeggendario) DnD.uiLeggendario.drawAureola(ctx, t, cx, by + bh, Math.min(dw, dh));
       ctx.strokeStyle = colors().line5;
       ctx.lineWidth = 1;
       ctx.strokeRect(bx - 0.5, by - 0.5, bw + 1, bh + 1);
