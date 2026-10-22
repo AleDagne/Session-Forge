@@ -1,0 +1,77 @@
+/* Personaggi leggendari: area "divina" (riusa .boss-forge di css/boss.css con le variabili --lg-*), editor del
+   Percorso leggendario, riquadro nel combattimento e animazioni. Versione di base: la grafica completa
+   (raggi, polvere, filigrane, temi rifiniti) è ancora da completare. Nessun colore scritto nei componenti. */
+
+.legend-theme {
+  --lg-gold: #f2c94c;
+  --lg-light: #fff8e1;
+  --lg-glow: rgba(255, 222, 140, 0.55);
+  --lg-bg: #0c0a06;
+  --lg-accent: #e8b84a;
+}
+.legend-forge { background-color: var(--lg-bg); box-shadow: inset 0 0 90px var(--lg-glow), 0 10px 40px rgba(0, 0, 0, 0.35); }
+.legend-head { position: relative; }
+.legend-wings { display: block; width: min(240px, 60%); height: auto; margin: 0 auto -0.4rem; color: var(--lg-gold); filter: drop-shadow(0 0 8px var(--lg-glow)); }
+.legend-title { text-shadow: 0 0 22px var(--lg-glow); }
+/* Raggi di luce dall'alto e polvere luminosa lenta. */
+.legend-rays {
+  position: absolute; inset: 0 0 auto 0; height: 60%; z-index: -1; pointer-events: none;
+  background: repeating-conic-gradient(from 180deg at 50% -10%, transparent 0deg 6deg, var(--lg-glow) 7deg 8deg, transparent 9deg 14deg);
+  opacity: 0.18; mask-image: linear-gradient(to bottom, #000, transparent);
+}
+.legend-dust {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35;
+  background-image: radial-gradient(circle, var(--lg-light) 0 1px, transparent 1.5px), radial-gradient(circle, var(--lg-gold) 0 1px, transparent 1.5px);
+  background-size: 90px 90px, 140px 140px; background-position: 0 0, 40px 60px;
+  animation: legend-dust 40s linear infinite;
+}
+@keyframes legend-dust { to { background-position: 0 -900px, 40px -1340px; } }
+.legend-forge .boss-sword { filter: drop-shadow(0 0 6px var(--lg-glow)); }
+.legend-frame { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 34px var(--lg-glow), inset 0 0 40px rgba(0, 0, 0, 0.6); }
+.legend-divider { filter: drop-shadow(0 0 4px var(--lg-glow)); }
+.legend-ascend-btn.btn.primary, .btn.legend-ascend-btn {
+  border: 1px solid var(--lg-gold, #f2c94c); background: linear-gradient(180deg, var(--lg-gold, #f2c94c), var(--lg-accent, #e8b84a)); color: #1a1405;
+  font-weight: 700; letter-spacing: 0.08em; box-shadow: 0 0 12px var(--lg-glow, rgba(255, 222, 140, 0.55)); transition: box-shadow 0.25s;
+}
+.legend-ascend-btn:hover, .legend-ascend-btn:focus-visible { box-shadow: 0 0 26px var(--lg-light, #fff8e1), 0 0 50px var(--lg-glow, rgba(255, 222, 140, 0.55)); }
+.legend-card { border-left: 3px solid var(--lg-gold) !important; }
+.legend-points { color: var(--lg-gold); font-weight: 700; letter-spacing: 0.05em; }
+.legend-sources { columns: 2 260px; font-size: 0.9rem; }
+.ok-text { color: var(--ok-text, #1a6a36); }
+.legend-forge .ok-text { color: #9be7a9; }
+
+/* Editor del Percorso leggendario. */
+.path-editor { display: flex; flex-direction: column; gap: 0.5rem; }
+.path-toolbar, .path-head { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; justify-content: space-between; }
+.path-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 0.6rem; min-height: 460px; }
+.path-sblocca .path-body { grid-template-columns: minmax(0, 1fr); }
+.path-canvas-wrap { position: relative; min-height: 460px; height: 62vh; border-radius: 8px; overflow: hidden; border: 1px solid var(--boss-line-strong, var(--border)); }
+.path-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; cursor: grab; }
+.path-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--lg-gold, var(--accent)); }
+.path-side { overflow-y: auto; max-height: 62vh; display: flex; flex-direction: column; gap: 0.5rem; }
+.path-side:empty { display: none; }
+.path-toolbar .btn.tool.active { background: var(--lg-gold, var(--accent)); color: #1a1405; border-color: var(--lg-gold, var(--accent)); }
+.effect-block { border-left: 3px solid var(--lg-gold, var(--accent)); padding: 0.35rem 0.5rem; background: rgba(0, 0, 0, 0.25); border-radius: 4px; display: flex; flex-direction: column; gap: 0.3rem; }
+@media (max-width: 980px) { .path-body { grid-template-columns: minmax(0, 1fr); } .path-side { max-height: none; } }
+
+/* Combattimento: scheda più ricca (senza coprire pulsanti e testi), riquadro delle trasformazioni. */
+.combatant.legendary { border-top-color: #e8b84a; box-shadow: 0 0 0 1px rgba(232, 184, 74, 0.6), 0 0 14px rgba(255, 222, 140, 0.35); }
+.combatant.legendary.current { box-shadow: 0 0 0 2px var(--accent), 0 0 18px rgba(255, 222, 140, 0.55); }
+.legend-box { border-top: 1px dashed var(--border); padding-top: 0.4rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.tag.legend-tag { background: #5a4410; color: #fff3cf; }
+
+/* Animazioni: Ascensione (colonna di luce) e trasformazione (lampo e ali). Un clic le salta. */
+.legend-ascension { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(circle, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.92)); cursor: pointer; animation: boss-summon-out 0.5s ease 2.7s forwards; }
+.legend-ascension .legend-wings { position: absolute; top: 18%; width: min(420px, 80vw); animation: legend-wings 1s ease-out both; }
+.legend-column { position: absolute; top: 0; bottom: 0; left: 50%; width: 160px; transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--lg-light), transparent); opacity: 0.6; animation: legend-column 1.4s ease-out both; }
+.legend-ascension-name b { text-shadow: 0 0 30px var(--lg-gold), 0 0 4px #000; }
+@keyframes legend-column { from { opacity: 0; transform: translateX(-50%) scaleX(0.1); } 40% { opacity: 0.9; } to { opacity: 0.45; transform: translateX(-50%) scaleX(1); } }
+@keyframes legend-wings { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+.legend-transform-flash { position: fixed; inset: 0; z-index: 59; pointer-events: none; display: grid; place-items: center; background: radial-gradient(circle, var(--lg-light), var(--lg-glow) 50%, transparent 75%); animation: boss-flash 1.2s ease-out forwards; }
+.legend-transform-flash .legend-wings { width: min(500px, 85vw); animation: legend-wings 0.8s ease-out both; }
+
+/* Riduci animazioni: tutto statico e leggibile. Effetti boss spenti: niente lampo. */
+html[data-reduce-motion] .legend-dust, html[data-reduce-motion] .legend-column, html[data-reduce-motion] .legend-wings { animation: none; }
+html[data-reduce-motion] .legend-ascension, html[data-reduce-motion] .legend-transform-flash { display: none; }
+html[data-boss-effects="off"] .legend-transform-flash { display: none; }
+@media print { .legend-rays, .legend-dust, .legend-wings, .legend-ascension, .legend-transform-flash { display: none !important; } }

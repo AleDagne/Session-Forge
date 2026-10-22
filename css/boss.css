@@ -1,0 +1,381 @@
+/* Boss: area di creazione "tecnica ma artistica" (sempre scura), cornice con spade, barra della vita in alto,
+   vignettatura, banner ed effetti di fase. Componenti riusabili guidati da variabili CSS: il tema (boss.js,
+   THEMES) imposta --boss-accent, --boss-glow, --boss-shadow, --boss-frame e --boss-bg; qui nessun colore di
+   tema è scritto nei componenti. */
+
+/* ---------- Variabili di base (tema Infernale, sovrascritte dal tema scelto) ---------- */
+.boss-theme {
+  --boss-accent: #e0322b;
+  --boss-glow: #ff5a3c;
+  --boss-shadow: rgba(170, 16, 10, 0.55);
+  --boss-frame: #7a1c16;
+  --boss-bg: #120607;
+  --boss-text: #f4ece6;
+  --boss-muted: #cdbdb4;
+  --boss-line: rgba(255, 236, 226, 0.09);
+  --boss-line-strong: rgba(255, 236, 226, 0.2);
+  --boss-steel: #d9dde3;
+  --boss-steel-dark: #8d939c;
+  --boss-grip: #3a2320;
+  --boss-panel: rgba(8, 4, 4, 0.55);
+  --boss-input: rgba(0, 0, 0, 0.45);
+  --boss-ink: #0b0505;
+}
+
+/* ---------- Area di creazione: sempre scura, anche con il tema chiaro dell'app ---------- */
+.boss-forge {
+  /* Le variabili dell'app, dentro l'area, diventano scure: i componenti esistenti (form, schede) si adattano. */
+  --bg: var(--boss-bg);
+  --bg-2: rgba(255, 255, 255, 0.04);
+  --panel: var(--boss-panel);
+  --panel-2: rgba(255, 255, 255, 0.05);
+  --border: var(--boss-line-strong);
+  --text: var(--boss-text);
+  --muted: var(--boss-muted);
+  --accent: var(--boss-glow);
+  --primary: var(--boss-accent);
+  --primary-hover: var(--boss-glow);
+  --on-primary: #fff;
+  --selection: var(--boss-text);
+  --hp-track: rgba(255, 255, 255, 0.12);
+  color-scheme: dark;
+  position: relative;
+  isolation: isolate;
+  color: var(--boss-text);
+  background-color: var(--boss-bg);
+  /* Ombra del tema ai bordi (vignettatura radiale) e linee tecniche sottili. */
+  background-image:
+    radial-gradient(ellipse at center, transparent 45%, var(--boss-shadow) 100%),
+    linear-gradient(var(--boss-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--boss-line) 1px, transparent 1px);
+  background-size: 100% 100%, 48px 48px, 48px 48px;
+  border-radius: var(--radius);
+  padding: 1.5rem clamp(0.75rem, 2.5vw, 2rem) 2rem;
+  box-shadow: inset 0 0 80px var(--boss-shadow), 0 10px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+/* Grana leggera (rumore SVG inline) e cerchio di rune in un angolo. */
+.boss-forge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+.boss-runes {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  width: 420px;
+  height: 420px;
+  right: -140px;
+  top: -140px;
+  color: var(--boss-accent);
+  opacity: 0.16;
+}
+.boss-runes.left { left: -160px; right: auto; top: auto; bottom: -160px; }
+.boss-forge h2, .boss-forge h3, .boss-forge legend { color: var(--boss-text); }
+.boss-forge .muted, .boss-forge .hint, .boss-forge .calc-detail { color: var(--boss-muted); }
+.boss-forge input, .boss-forge select, .boss-forge textarea {
+  background: var(--boss-input);
+  color: var(--boss-text);
+  border-color: var(--boss-line-strong);
+}
+.boss-forge input:focus-visible, .boss-forge select:focus-visible, .boss-forge textarea:focus-visible, .boss-forge button:focus-visible {
+  outline: 2px solid var(--boss-glow);
+  outline-offset: 1px;
+}
+.boss-forge .panel { background: transparent; border: none; box-shadow: none; padding: 0; }
+.boss-forge .btn { background: rgba(255, 255, 255, 0.06); color: var(--boss-text); border-color: var(--boss-line-strong); }
+.boss-forge .btn:hover { border-color: var(--boss-accent); }
+.boss-forge .btn.primary { background: var(--boss-accent); border-color: var(--boss-accent); color: #fff; }
+.boss-forge .btn.danger { color: #ffb3a8; }
+.boss-forge .card { background: var(--boss-panel); border-color: var(--boss-line-strong); }
+.boss-forge .error { color: #ffb4a8; }
+.boss-forge .tag { background: rgba(255, 255, 255, 0.08); color: var(--boss-text); }
+
+/* Intestazione: titolo maiuscolo spaziato con un effetto di luce che scorre. */
+.boss-forge-head { position: relative; text-align: center; margin: 0.5rem auto 1.25rem; max-width: 760px; }
+.boss-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 3.4vw, 2.3rem);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  font-weight: 800;
+  background: linear-gradient(100deg, var(--boss-text) 0%, var(--boss-text) 40%, var(--boss-glow) 50%, var(--boss-text) 60%, var(--boss-text) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px var(--boss-shadow);
+  animation: boss-shine 5s linear infinite;
+}
+.boss-subtitle { margin: 0.35rem 0 0; color: var(--boss-muted); letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.78rem; }
+@keyframes boss-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* ---------- Cornice ornata con spade infilate nel bordo ---------- */
+.boss-frame {
+  position: relative;
+  border: 2px solid var(--boss-frame);
+  outline: 1px solid var(--boss-line-strong);
+  outline-offset: 5px;
+  border-radius: 4px;
+  padding: 2.4rem clamp(0.75rem, 2vw, 1.75rem) 1.75rem;
+  margin: 2.2rem 0.5rem 1rem;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.5));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 30px var(--boss-shadow), inset 0 0 40px rgba(0, 0, 0, 0.6);
+}
+/* Angoli decorati. */
+.boss-corner { position: absolute; width: 34px; height: 34px; color: var(--boss-accent); pointer-events: none; }
+.boss-corner.tl { left: -9px; top: -9px; }
+.boss-corner.tr { right: -9px; top: -9px; transform: scaleX(-1); }
+.boss-corner.bl { left: -9px; bottom: -9px; transform: scaleY(-1); }
+.boss-corner.br { right: -9px; bottom: -9px; transform: scale(-1, -1); }
+/* Targa del titolo della cornice, al centro del bordo superiore. */
+.boss-frame-plate {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 0.35rem 1.4rem;
+  background: var(--boss-bg);
+  border: 1px solid var(--boss-frame);
+  box-shadow: 0 0 14px var(--boss-shadow);
+  color: var(--boss-text);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 2;
+}
+/* Spade: impugnatura fuori dalla cornice, lama dentro. Posizione e inclinazione via variabili. */
+.boss-sword {
+  position: absolute;
+  width: 26px;
+  height: 120px;
+  pointer-events: none;
+  z-index: 3;
+  left: var(--x, auto);
+  right: var(--r, auto);
+  top: var(--y, auto);
+  transform: rotate(var(--rot, 0deg));
+  transform-origin: 50% 22%;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.7));
+}
+.boss-sword .blade { fill: url(#boss-blade); }
+.boss-sword .edge { stroke: var(--boss-steel); }
+.boss-sword .guard, .boss-sword .pommel { fill: var(--boss-frame); stroke: var(--boss-accent); }
+.boss-sword .grip { fill: var(--boss-grip); }
+.boss-sword .gem { fill: var(--boss-glow); }
+.boss-sword .stop-light { stop-color: var(--boss-steel); }
+.boss-sword .stop-dark { stop-color: var(--boss-steel-dark); }
+
+/* Sezioni del form dentro la cornice: bordo sottile con tacche agli angoli e divisori tecnici. */
+.boss-forge fieldset {
+  border: 1px solid var(--boss-line-strong);
+  border-radius: 2px;
+  background:
+    linear-gradient(var(--boss-accent), var(--boss-accent)) left top / 10px 2px no-repeat,
+    linear-gradient(var(--boss-accent), var(--boss-accent)) left top / 2px 10px no-repeat,
+    linear-gradient(var(--boss-accent), var(--boss-accent)) right bottom / 10px 2px no-repeat,
+    linear-gradient(var(--boss-accent), var(--boss-accent)) right bottom / 2px 10px no-repeat,
+    rgba(0, 0, 0, 0.25);
+}
+.boss-forge legend { letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.78rem; padding: 0 0.4rem; }
+.boss-divider {
+  height: 14px;
+  margin: 1.2rem 0;
+  background:
+    radial-gradient(circle, var(--boss-accent) 0 3px, transparent 3.5px) center / 14px 14px no-repeat,
+    repeating-linear-gradient(90deg, var(--boss-line-strong) 0 6px, transparent 6px 10px) center / 100% 1px no-repeat;
+}
+
+/* Disposizione: form a sinistra, anteprima viva a destra. */
+.boss-forge-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1.25rem; align-items: start; }
+.boss-preview { position: sticky; top: 0.75rem; display: grid; gap: 0.9rem; margin-top: 2.2rem; }
+.boss-preview .boss-frame { margin: 0.5rem 0 0; padding: 1.6rem 0.9rem 1rem; }
+.boss-preview canvas { display: block; margin: 0 auto; max-width: 100%; }
+.boss-preview-note { color: var(--boss-muted); font-size: 0.8rem; text-align: center; margin: 0; }
+@media (max-width: 980px) {
+  .boss-forge-grid { grid-template-columns: minmax(0, 1fr); }
+  .boss-preview { position: static; margin-top: 0; }
+}
+
+/* Temi selezionabili (pallini) e fasi. */
+.boss-theme-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.boss-theme-choice {
+  display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
+  padding: 0.35rem 0.7rem; border: 1px solid var(--boss-line-strong); border-radius: 999px; background: rgba(0, 0, 0, 0.3); color: var(--boss-text);
+}
+.boss-theme-choice[aria-pressed="true"] { border-color: var(--boss-glow); box-shadow: 0 0 10px var(--boss-shadow); }
+.boss-theme-dot { width: 0.9rem; height: 0.9rem; border-radius: 50%; background: var(--dot); box-shadow: 0 0 6px var(--dot); }
+.boss-phase { border-left: 3px solid var(--boss-accent); padding: 0.6rem 0.75rem; margin-bottom: 0.6rem; background: rgba(0, 0, 0, 0.3); }
+.boss-phase-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+.boss-phase-num { font-weight: 800; letter-spacing: 0.15em; color: var(--boss-glow); min-width: 4.5rem; }
+.boss-phase-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; }
+
+/* Pulsante principale "Evoca il boss" con bagliore al passaggio del mouse. */
+.boss-summon-btn.btn.primary {
+  font-size: 1.1rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 0.85rem 2.2rem;
+  border: 1px solid var(--boss-glow);
+  background: linear-gradient(180deg, var(--boss-accent), var(--boss-frame));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 14px var(--boss-shadow);
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+.boss-summon-btn.btn.primary:hover, .boss-summon-btn.btn.primary:focus-visible {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 28px var(--boss-glow), 0 0 60px var(--boss-shadow);
+  transform: translateY(-1px);
+}
+
+/* Elenco e scheda dei boss. */
+.boss-card { position: relative; border-left: 3px solid var(--boss-accent) !important; }
+.boss-card .boss-card-title { color: var(--boss-glow); letter-spacing: 0.08em; font-size: 0.8rem; text-transform: uppercase; margin: 0.1rem 0 0.4rem; }
+.boss-intro { font-style: italic; color: var(--boss-muted); border-left: 2px solid var(--boss-accent); padding-left: 0.75rem; }
+.boss-forge .statblock { background: rgba(250, 244, 236, 0.97); color: #241b16; }
+.boss-forge .statblock h2, .boss-forge .statblock h3 { color: #6d1610; }
+
+/* ---------- Barra della vita del boss (anteprima e combattimento) ---------- */
+.boss-bar {
+  --pct: 100%;
+  --lag: 100%;
+  color: var(--boss-text);
+  background: linear-gradient(180deg, rgba(10, 6, 6, 0.92), rgba(24, 10, 10, 0.92));
+  border: 1px solid var(--boss-frame);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 4px 18px var(--boss-shadow);
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem 0.5rem;
+}
+.boss-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+.boss-bar-name { font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; text-shadow: 0 0 10px var(--boss-shadow); }
+.boss-bar-title { color: var(--boss-muted); font-size: 0.8rem; letter-spacing: 0.08em; }
+.boss-bar-hp { font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.boss-bar-phase { font-size: 0.72rem; color: var(--boss-glow); letter-spacing: 0.12em; text-transform: uppercase; }
+.boss-bar-track {
+  position: relative;
+  height: 14px;
+  margin-top: 0.3rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+/* Danno recente: la parte appena persa si svuota con ritardo. */
+.boss-bar-lag { position: absolute; inset: 0 auto 0 0; width: var(--lag); background: rgba(255, 238, 200, 0.75); transition: width 0.7s ease-in 0.45s; }
+.boss-bar-fill {
+  position: absolute; inset: 0 auto 0 0; width: var(--pct);
+  background: linear-gradient(180deg, var(--boss-glow), var(--boss-accent) 55%, var(--boss-frame));
+  box-shadow: 0 0 10px var(--boss-shadow);
+  transition: width 0.25s ease-out;
+}
+.boss-bar-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--boss-ink); box-shadow: 0 0 0 1px var(--boss-line-strong); }
+.boss-bar.defeated { opacity: 0.6; filter: grayscale(0.7); }
+.boss-bar-hidden { font-size: 0.7rem; color: var(--boss-muted); margin-left: 0.4rem; }
+
+/* HUD dei boss nel combattimento: in alto al centro, nel flusso (non copre controlli); resta in vista
+   scorrendo solo sugli schermi grandi, dove griglia e schede hanno spazio. */
+.boss-hud { position: relative; z-index: 15; display: grid; gap: 0.35rem; width: min(760px, 100%); margin: 0 auto 0.6rem; }
+@media (min-width: 1200px) and (min-height: 760px) { .boss-hud { position: sticky; top: 0; } }
+.boss-hud-more { justify-self: center; }
+.boss-hud-more > summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
+.boss-hud-more[open] { display: grid; gap: 0.35rem; width: 100%; }
+
+/* Vignettatura ai lati dello schermo: sopra il canvas, sotto i pannelli, non intercetta i clic. */
+.boss-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: calc(var(--level, 0.35) * 0.85);
+  background: radial-gradient(ellipse at center, transparent 58%, var(--boss-shadow) 100%);
+  box-shadow: inset 0 0 70px var(--boss-shadow);
+  transition: opacity 0.8s ease;
+}
+.boss-vignette.fading { opacity: 0; transition: opacity 1.6s ease; }
+
+/* Banner di fase e di sconfitta, lampo e tremolio. */
+.boss-banner {
+  position: fixed;
+  left: 50%;
+  top: 22%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  pointer-events: none;
+  padding: 0.8rem 2.4rem;
+  background: linear-gradient(90deg, transparent, rgba(8, 2, 2, 0.92) 15%, rgba(8, 2, 2, 0.92) 85%, transparent);
+  border-top: 1px solid var(--boss-accent);
+  border-bottom: 1px solid var(--boss-accent);
+  color: var(--boss-text);
+  text-align: center;
+  width: max-content;
+  max-width: 92vw;
+  animation: boss-banner 3s ease forwards;
+}
+.boss-banner b { display: block; font-size: clamp(1.2rem, 3vw, 2rem); letter-spacing: 0.3em; text-transform: uppercase; text-shadow: 0 0 16px var(--boss-glow); }
+.boss-banner span { font-size: 0.85rem; color: var(--boss-muted); letter-spacing: 0.12em; }
+@keyframes boss-banner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); letter-spacing: 0.6em; }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.boss-flash {
+  position: fixed; inset: 0; z-index: 59; pointer-events: none;
+  background: radial-gradient(circle, var(--boss-glow), var(--boss-shadow) 70%);
+  animation: boss-flash 0.6s ease-out forwards;
+}
+@keyframes boss-flash { 0% { opacity: 0.75; } 100% { opacity: 0; } }
+.boss-shake { animation: boss-shake 0.5s ease; }
+@keyframes boss-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, -1px); }
+  80% { transform: translate(2px, 1px); }
+}
+
+/* Evocazione: lampo rosso, tremolio, nome con effetto di impatto. Un clic la salta. */
+.boss-summon {
+  position: fixed; inset: 0; z-index: 70;
+  display: grid; place-items: center;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.92));
+  cursor: pointer;
+  animation: boss-summon-out 0.5s ease 2.6s forwards;
+}
+.boss-summon::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle, var(--boss-glow), var(--boss-shadow) 60%, transparent 80%);
+  animation: boss-flash 0.9s ease-out forwards;
+}
+.boss-summon-name { position: relative; text-align: center; color: var(--boss-text); animation: boss-impact 0.7s cubic-bezier(.2, 1.6, .4, 1) 0.15s both; }
+.boss-summon-name b { display: block; font-size: clamp(2rem, 7vw, 4.5rem); letter-spacing: 0.25em; text-transform: uppercase; text-shadow: 0 0 30px var(--boss-glow), 0 0 4px #000; }
+.boss-summon-name span { letter-spacing: 0.3em; text-transform: uppercase; color: var(--boss-muted); }
+.boss-summon-skip { position: absolute; bottom: 1.5rem; color: var(--boss-muted); font-size: 0.8rem; }
+@keyframes boss-impact {
+  0% { opacity: 0; transform: scale(2.6); filter: blur(8px); }
+  60% { opacity: 1; transform: scale(0.94); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes boss-summon-out { to { opacity: 0; visibility: hidden; } }
+
+/* Tag "Boss" negli elenchi del combattimento. */
+.tag.boss-tag { background: #5a1410; color: #ffe9e4; }
+.boss-box { border-top: 1px dashed var(--border); margin-top: 0.4rem; padding-top: 0.4rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+
+/* Riduci animazioni: tutto resta statico e leggibile. Effetti boss disattivati: niente HUD né ombra. */
+html[data-reduce-motion] .boss-title { animation: none; }
+html[data-reduce-motion] .boss-banner { animation: none; }
+html[data-reduce-motion] .boss-bar-lag, html[data-reduce-motion] .boss-bar-fill, html[data-reduce-motion] .boss-vignette { transition: none; }
+html[data-reduce-motion] .boss-flash, html[data-reduce-motion] .boss-summon { display: none; }
+html[data-boss-effects="off"] .boss-hud, html[data-boss-effects="off"] .boss-vignette,
+html[data-boss-effects="off"] .boss-banner, html[data-boss-effects="off"] .boss-flash { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .boss-title, .boss-banner { animation: none; }
+}
+@media print { .boss-vignette, .boss-hud, .boss-banner, .boss-flash, .boss-summon, .boss-sword, .boss-runes { display: none !important; } }

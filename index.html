@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Forge</title>
+  <meta name="description" content="Prepara e gioca le tue sessioni di D&amp;D 5e">
+  <meta name="theme-color" content="#14161c">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!-- Tema, dimensione del testo e animazioni applicati prima del rendering (niente lampo di tema sbagliato). -->
+  <script src="js/impostazioni.js"></script>
+  <script>DnD.impostazioni.init();</script>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/boss.css">
+  <link rel="stylesheet" href="css/leggendario.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" aria-label="Navigazione">
+      <div class="brand">
+        <span class="brand-name"><span class="brand-icon" aria-hidden="true">⚔</span> <span class="nav-label" id="brand-name">Session Forge</span></span>
+        <button type="button" class="icon-btn sidebar-toggle" id="sidebar-toggle" aria-expanded="true" aria-controls="nav-list" title="Chiudi la barra (Ctrl+B)" aria-label="Chiudi la barra laterale">«</button>
+      </div>
+      <div class="session-picker" id="session-picker"></div>
+      <ul class="nav" id="nav-list" aria-label="Sezioni"></ul>
+      <div class="sidebar-footer" id="sidebar-footer"></div>
+    </nav>
+    <main id="main" class="main" tabindex="-1"></main>
+  </div>
+  <button type="button" id="dice-fab" class="dice-fab" aria-label="Apri i dadi" title="Dadi">🎲</button>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/dadi.js"></script>
+  <script src="js/regole.js"></script>
+  <script src="js/classi.js"></script>
+  <script src="js/magie.js"></script>
+  <script src="js/equipaggiamento.js"></script>
+  <script src="js/nomi.js"></script>
+  <script src="js/colori.js"></script>
+  <script src="js/libreria-icone.js"></script>
+  <script src="js/icone.js"></script>
+  <script src="js/immagini.js"></script>
+  <script src="js/tileset.js"></script>
+  <script src="js/tile.js"></script>
+  <script src="js/tilemap.js"></script>
+  <script src="js/collisioni.js"></script>
+  <script src="js/griglia.js"></script>
+  <script src="js/layout-combattimento.js"></script>
+  <script src="js/creature-dati.js"></script>
+  <script src="js/creature.js"></script>
+  <script src="js/boss.js"></script>
+  <script src="js/biomi.js"></script>
+  <script src="js/eventi.js"></script>
+  <script src="js/esplorazione.js"></script>
+  <script src="js/percorso.js"></script>
+  <script src="js/leggendario.js"></script>
+  <script src="js/attrezzatura.js"></script>
+  <script src="js/oggetti-mappa.js"></script>
+  <script src="js/ia-dati.js"></script>
+  <script src="js/ia.js"></script>
+  <script src="js/note.js"></script>
+  <script src="js/validazione.js"></script>
+  <script src="js/dati.js"></script>
+  <script src="js/sessioni.js"></script>
+  <script src="js/generatore.js"></script>
+  <script src="js/ui-comune.js"></script>
+  <script src="js/ui-icone.js"></script>
+  <script src="js/ui-razze.js"></script>
+  <script src="js/ui-magie.js"></script>
+  <script src="js/ui-incantesimi.js"></script>
+  <script src="js/ui-asset.js"></script>
+  <script src="js/ui-oggetti-mappa.js"></script>
+  <script src="js/ui-ia.js"></script>
+  <script src="js/ui-creature.js"></script>
+  <script src="js/ui-mostri.js"></script>
+  <script src="js/ui-boss.js"></script>
+  <script src="js/ui-percorso.js"></script>
+  <script src="js/ui-leggendario.js"></script>
+  <script src="js/ui-generatore.js"></script>
+  <script src="js/ui-tileset.js"></script>
+  <script src="js/ui-tile.js"></script>
+  <script src="js/ui-strutture.js"></script>
+  <script src="js/ui-attrezzatura.js"></script>
+  <script src="js/ui-biomi.js"></script>
+  <script src="js/ui-eventi.js"></script>
+  <script src="js/note-editor.js"></script>
+  <script src="js/ui-note.js"></script>
+  <script src="js/ui-dadi.js"></script>
+  <script src="js/ui-griglia.js"></script>
+  <script src="js/ui-pannello-tile.js"></script>
+  <script src="js/ui-mappa-esplorazione.js"></script>
+  <script src="js/ui-editor-griglie.js"></script>
+  <script src="js/ui-combattimento.js"></script>
+  <script src="js/ui-esplorazione.js"></script>
+  <script src="js/ui-sessioni.js"></script>
+  <script src="js/ui-impostazioni.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
