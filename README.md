@@ -174,7 +174,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
   - Elenco con ricerca, badge del tipo, duplica, elimina, **esporta/importa JSON** di una singola creatura.
 - **Giocatori** – stessa scheda dei nemici Standard, con il nome del giocatore reale e l'**Inventario**:
   oggetti del catalogo con quantità e casella *equipaggiato*, monete (mr, ma, me, mo, mp) e peso totale
-  (50 monete = 0,5 kg).
+  (50 monete = 0,5 kg). Due schede: **Standard** e **✦ Leggendari** (livelli 20-40, vedi
+  [Personaggi leggendari](#personaggi-leggendari)).
 - **Magie** – libreria degli incantesimi (come prima).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
@@ -294,6 +295,84 @@ multiattacco se ci sono più armi); l'originale resta invariato.
   `--boss-frame`, `--boss-bg`): la funzione è pensata per crescere.
 - **Esempio**: *Skarnoth, La Fornace che Cammina* (originale, GS 12, tema Infernale): 3 fasi con cambio di
   temperamento e un'azione sbloccata nell'ultima, azioni leggendarie, Resistenza leggendaria e tana.
+
+## Personaggi leggendari
+
+Giocatori oltre il ventesimo livello, nella scheda **Giocatori › ✦ Leggendari**. Un leggendario è un giocatore
+completo (razza, classe, caratteristiche, PF, CA, tiri salvezza, armi, inventario, incantesimi, controllo
+manuale o IA) con in più il **Percorso leggendario** e le **Trasformazioni**. Si crea da **✦ Nuovo leggendario**
+oppure con **✦ Eleva a leggendario** dalla scheda Standard (serve il livello 20). **Declassa** lo riporta a
+giocatore standard (livello massimo 20) dopo una conferma, conservando percorso e trasformazioni per una nuova
+promozione. Condivisione tra sessioni, duplicazione ed esporta/importa come gli altri giocatori. Salvando un
+leggendario nuovo parte l'**Ascensione** (colonna di luce, ali, comparsa del nome), saltabile con un clic o Esc.
+
+- **Livelli 20-40**: rango leggendario = livello − 20. Bonus di competenza = 1 + ⌈livello/4⌉ (+6 al 20, fino a +11
+  dal 37), sovrascrivibile. Punti caratteristica: 2 a ogni livello multiplo di 4, fino a 20 al livello 40. Tetto
+  delle caratteristiche 30 (modificabile, con «ignora limite»). PF: dado vita della classe per ogni livello oltre
+  il 20, con le solite regole. Slot: tabella del livello 20, più gli slot dei nodi e la sovrascrittura a mano.
+- **Scheda**: riepilogo con caratteristiche, CA, PF, competenza, CD e slot, abilità con competenza o maestria,
+  Percezione passiva, sensi, magie «N al giorno» con gli usi rimasti e l'elenco degli effetti con «da: nodo».
+
+### Percorso leggendario
+
+Una mappa di nodi collegati (albero di abilità a grafo) con al centro il **Nucleo**, sempre sbloccato.
+**Punti percorso**: 1 per rango leggendario (massimo 20) più i bonus del master.
+
+- **Nodo**: nome, icona e colore, descrizione, costo (1-5 punti), rango minimo, categoria, «esclusivo con» un
+  altro nodo (scelta tra due rami) e uno o più **effetti**: bonus a una caratteristica (tetto 30); competenza in
+  un tiro salvezza, in un'abilità (anche maestria) o in strumenti/armi/armature (testo); bonus numerici (PF
+  massimi, CA, velocità, iniziativa, attacco e danno, CD e attacco degli incantesimi, competenza, resistenze,
+  immunità, sensi); nuove magie dalla libreria (anche fuori dalla lista di classe: sempre preparate o «N al
+  giorno») e slot extra; **privilegi creati dall'utente** (passivo, azione, azione bonus, reazione, con usi e lo
+  stesso editor meccanico delle azioni delle creature); «Sblocca trasformazione»; solo testo.
+- **Gli effetti entrano nei calcoli** in automatico e si tolgono al rimborso: caratteristiche (con i PF che
+  seguono il modificatore di COS: +1 PF per livello per ogni punto), CA, PF, tiri salvezza, competenza, CD,
+  slot, difese, attacco e danno delle armi, velocità e iniziativa nel combattimento. Le **abilità** con
+  competenza (×1) o maestria (×2) valgono nelle prove degli eventi dell'esplorazione e nella Percezione passiva. Le
+  magie **«N al giorno»** si lanciano senza slot (anche da chi non ha una classe da incantatore: con la migliore
+  tra INT, SAG e CAR); gli usi spesi restano sulla scheda e tornano con il riposo lungo (le opzioni del master
+  hanno *Riposo breve* e *Riposo lungo*). I **sensi** compaiono nella scheda e nel combattimento: l'app non ha regole
+  di luce e vista a cui applicarli. Le competenze in strumenti, armi e armature sono testo (non c'è un calcolo
+  che le usi).
+- **Modalità Sblocca** (gioco): i nodi raggiungibili e acquistabili pulsano, quelli bloccati sono spenti, quelli
+  acquisiti sono illuminati con le linee attive. Clic su un nodo = dettagli e «Sblocca» con conferma e una luce
+  che corre lungo la linea. **Rimodella** ripristina i punti (il master può bloccarla).
+- **Modalità Modifica** (editor su canvas): zoom e pan, nodi trascinabili, aggiungi, collega trascinando,
+  scollega, elimina, duplica, Maiusc+trascina per selezionare più nodi, griglia, **raggiera** automatica attorno
+  al Nucleo (ogni ramo nel suo spicchio), ricerca, annulla/ripeti (50 azioni) e pannello del nodo con l'editor
+  degli effetti. Avvisi per nodi irraggiungibili e cicli di esclusività.
+- **Modelli di percorso** (libreria comune a tutte le sessioni): salva, carica su un altro leggendario, elimina;
+  esporta e importa il JSON di un singolo percorso. Esempio originale: **Ascesa dell'Eterno** (13 nodi).
+- Riferimenti mancanti (incantesimo o trasformazione eliminati): avviso e effetto disattivato, senza errori.
+
+### Trasformazioni
+
+Una forma da **creatura boss** (angelica, demoniaca, draconica…) in cui il giocatore entra in combattimento.
+
+- **Campi**: nome, epiteto, scheda boss completa (stesso editor di Creature e Boss, con «Parti da una creatura
+  esistente»), **regole di fusione** (FOR, DES, COS dalla forma e INT, SAG, CAR dal personaggio; mantiene o perde
+  competenze, incantesimi, equipaggiamento, privilegi e difese), **PF** che sostituiscono quelli del personaggio
+  (al ritorno il danno in eccesso passa al personaggio) o PF temporanei, usi per riposo breve o lungo, durata in
+  round o minuti, azione o azione bonus, fine anticipata, rango minimo o nodo del percorso che la sblocca, icona e
+  dimensione sulla griglia, testi di entrata e uscita, **tema** della forma (quello del personaggio, uno dei temi
+  ✦ o un tema del Boss). Aggiungi, duplica, ordina, elimina.
+- **In combattimento**: **🜂 Trasformati** (se disponibile; gli usi si scalano e finiscono nel log) e **↩ Torna
+  normale**, con annulla. In forma la scheda è quella del boss (azioni a pulsanti, multiattacco, ricarica, azioni
+  leggendarie, fasi sotto le soglie di PF), con **barra in alto** (nome del giocatore + forma), vignettatura ed
+  effetti di fase come per i boss. Fine automatica a fine durata o a 0 PF della forma, con riepilogo nel log.
+
+### Grafica divina
+
+Lo stesso sistema a temi del Boss (le palette stanno in `PALETTES` di `js/leggendario.js`, usate da
+`js/ui-boss.js` con la chiave `lg:<id>`), con cinque temi: **Divino** (oro e luce, raggi), **Angelico** (bianco e
+azzurro, nuvole e piume), **Abissale** (viola e nero, vortice), **Draconico** (oro e rosso, braci e scaglie),
+**Cosmico** (indaco, stelle e nebulosa). Area sempre scura con vignettatura dorata e bianca, raggi di luce, polvere
+luminosa, sigilli con rune, ali e aureola in SVG, **lance di luce** al posto delle spade, cornici con filigrana e
+angoli luminosi, divisori sacri, percorso su sfondo cosmico con nodi a gemma e il Nucleo come sole. Nel
+combattimento la scheda del leggendario ha una cornice più ricca (angoli dorati, aureola sopra il bordo) e la
+pedina ha alone e aureola; in forma valgono il tema della trasformazione e due ali ai lati della pedina. Colori
+solo da variabili CSS (`--lg-*`), contrasto buono in entrambi i temi dell'app; con *Riduci animazioni* tutto resta
+fermo e leggibile (niente Ascensione né lampo), con *Effetti boss* spenti niente lampo di trasformazione.
 
 ## Esplorazione
 
@@ -434,7 +513,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 10)
+### Modello dati (versione 11)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -444,7 +523,14 @@ npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
            saves, skills: { abilità: 1|2 }, vulnerabilities, resistances, immunities, conditionImmunities, senses, cr,
            traits, actions, bonusActions, reactions, legendary, lair: [{ id, name, desc, customText, freq, cost, mech }],
            legendaryResistance, legendaryPoints, innate, icon, gridSize }]
-players: [{ …scheda…, inventory: [{ equipmentId, qty, equipped }], coins: { mr, ma, me, mo, mp } }]
+players: [{ …scheda…, inventory: [{ equipmentId, qty, equipped }], coins: { mr, ma, me, mo, mp } }
+         | { …scheda…, type: 'leggendario', level: 20-40, abilityCap, legend: { title, theme, pointsBonus, allowRespec,
+             path: { name, nodes: [{ id, name, icon, color, description, cost, minRank, category, exclusiveWith,
+             requires, requireAll, core, x, y, effects }], links: [[idA, idB]] }, unlocked: [idNodo],
+             transformations: [{ id, name, epithet, creature, fusion, hpMode, uses, duration, activation, canEndEarly,
+             minRank, requireNode, icon, gridSize, theme, enterText, exitText }], uses, featureUses, spellUses } }]
+           (i giocatori standard non hanno «type»; un declassato conserva il percorso in «legendArchive»)
+pathTemplates: [{ id, name, description, path }]   modelli di percorso, comuni a tutte le sessioni
 equipment: [{ id, name, category, description, weight, cost: { amount, unit }, rarity, attunement, icon, tags, weapon, armor }]
 mapObjects: [{ id, name, otype, icon, mode, tiles, container, interactive, hidden, blocks, state, lock, trap, contents, coins }]
 griglia: { w, h, feetPerCell, background: { kind, color, imageId, fit, x, y, scale, opacity, pxPerCell },
@@ -460,9 +546,13 @@ sessione.exploration: { gridId, stack: [{ gridId, parties }], parties: [{ id, na
            time: { day, hour, total }, weather, pace, mode, supplies, members: { id: { hp, maxHp, exhaustion, conditions, xp } },
            variables, log, queue, pending (combattimento in attesa), seed }
 combattente: { …, w, h, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
-               boss: { …campi del boss, phase, revealed, defeated } }
+               boss: { …campi del boss, phase, revealed, defeated },
+               legend: { theme, rank, transformations, uses, senses, texts, passive, form: { id, name, hpMode, theme, roundsLeft, prev } } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
 ```
+
+**Migrazione dalla versione 10** (`migrateV11`): i giocatori esistenti restano standard (nessun campo cambia);
+gli archivi ricevono la libreria dei modelli di percorso con l'esempio *Ascesa dell'Eterno*.
 
 **Migrazione dalla versione 9** (`migrateV10`): le griglie esistenti diventano di tipo *Battaglia* senza
 biomi, eventi né nebbia (nulla cambia); gli archivi ricevono i biomi e gli eventi d'esempio.
@@ -641,6 +731,17 @@ serrature, trappole e oggetti a terra; migrazione dalla versione 7 (nemici, ogge
 pedine); esportazione e importazione con creature, attrezzatura, oggetti di mappa e sfondi, anche di file di
 sessione precedenti; validazione; errore di quota simulato con messaggio chiaro.
 
+Per i **personaggi leggendari**: bonus di competenza e punti caratteristica ai livelli 20-40, tetto 30, PF oltre il
+20, punti percorso per rango; sblocco solo se collegato, con punti e rango, nodo esclusivo, prerequisiti multipli,
+rimodella; effetti numerici e competenze applicati ai calcoli e tolti al rimborso, PF che seguono la COS, nuove magie
+e slot extra, incantesimo eliminato; competenze e maestrie nelle prove dell'esplorazione, Percezione passiva, sensi,
+magie «N al giorno» senza slot (anche per chi non è incantatore) con usi e riposo; privilegio creato dall'utente con
+usi per riposo come azione nel combattimento; grafo (collega, scollega, elimina con collegamenti, irraggiungibili,
+cicli, duplicazione, raggiera, cronologia), modelli; trasformazione con regole di fusione, PF che passano al
+personaggio con il danno in eccesso, PF temporanei, usi e durata, fine anticipata, fasi del boss e barra in alto,
+tema della forma; promozione e declassamento, migrazione, esportazione e importazione; temi unificati con il Boss,
+scheda del combattente a tema ed effetti fermi con *Riduci animazioni*.
+
 ## Struttura
 
 ```
@@ -649,6 +750,7 @@ test.html             pagina dei test
 manifest.json, sw.js  PWA (installazione e uso offline)
 css/style.css         temi chiaro/scuro con variabili CSS e layout responsive
 css/boss.css          area dei boss, cornice con spade, barra, vignettatura ed effetti (variabili del tema)
+css/leggendario.css   grafica divina dei leggendari: temi e motivi, ali, sigilli, lance, percorso, animazioni
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale e parser delle espressioni di dadi
@@ -676,11 +778,13 @@ js/ui-esplorazione.js schermata Esplorazione: gruppo, mappa, tempo e registro, f
 js/layout-combattimento.js  layout del combattimento: larghezze, colonne aperte/chiuse, schede su schermi stretti
 js/creature-dati.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi
 js/creature.js        logica pura delle creature: calcoli, testo delle azioni, difese, combattimento, stima del CS
-js/boss.js            logica pura dei boss: temi, fasi, promozione, azioni per fase, stato nel combattimento
+js/boss.js            logica pura dei boss: temi (anche quelli dei leggendari, «lg:<id>»), fasi, promozione, stato nel combattimento
+js/percorso.js        logica pura del Percorso leggendario: nodi, effetti, sblocco, grafo, raggiera, modelli, esempio
+js/leggendario.js     logica pura dei leggendari: livelli, punti, effetti nei calcoli, abilità, magie al giorno, trasformazioni, palette
 js/attrezzatura.js    catalogo dell'Attrezzatura: armi e armature base, bonus, danno, CA, inventario
 js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trappole, contenuto
 js/validazione.js     validazione dei form con messaggi in italiano
-js/dati.js            modello dati, migrazioni (fino alla versione 8), salvataggio (IndexedDB), import/export
+js/dati.js            modello dati, migrazioni (fino alla versione 11), salvataggio (IndexedDB), import/export
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
 js/ui-tileset.js      disegno delle tilemap, vista con zoom/pan, anteprime, importazione immagini
 js/ui-tile.js         componente «Taglia immagine in tile» (strutture, oggetti di mappa, pannello Tile)
@@ -689,6 +793,8 @@ js/ui-asset.js        sezione Asset con le schede Strutture e Oggetti
 js/ui-attrezzatura.js, js/ui-oggetti-mappa.js  catalogo dell'Attrezzatura, oggetti di mappa e pannello di interazione
 js/ui-mostri.js       Nemici › Creature: elenco, form (riusato dai boss), scheda stampabile, stima del CS
 js/ui-boss.js         Nemici › Boss (forgia, anteprima, evocazione) e boss nel combattimento (barre, ombra, effetti)
+js/ui-percorso.js     editor della mappa a nodi del Percorso e modalità Sblocca (canvas)
+js/ui-leggendario.js  Giocatori › Leggendari: elenco, scheda, trasformazioni, opzioni del master, Ascensione, combattimento
 js/ia-dati.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»

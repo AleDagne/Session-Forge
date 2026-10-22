@@ -152,14 +152,11 @@
   const isVisible = (inst) => inst.event.visibility.kind === 'visibile' || inst.state.discovered;
 
   // ---------- Membri del gruppo e prove ----------
-  // Bonus di un giocatore a una caratteristica, abilità (competenza non registrata: solo il modificatore) o
-  // tiro salvezza (dalle schede: caratteristiche finali e competenze della classe).
+  // Bonus di un giocatore a una caratteristica, abilità o tiro salvezza (dalle schede: caratteristiche finali e
+  // competenze della classe). I leggendari aggiungono gli effetti del Percorso (caratteristiche, competenze e
+  // maestrie nelle abilità); per gli standard la competenza nelle abilità non è registrata: solo il modificatore.
   function memberBonus(player, what, save, st) {
-    const race = (st.races || []).find((r) => r.id === player.raceId) || null;
-    const d = DnD.regole.derivedStats(player, race, st.equipment);
-    const ab = AB().includes(what) ? what : SKILLS()[what] || 'SAG';
-    if (save && AB().includes(what)) return d.saveTotals[what];
-    return DnD.regole.modifier(d.abilities[ab]);
+    return DnD.leggendario.checkBonus(player, what, save, st);
   }
 
   // Prova: { results: [{ id, name, total, success }], success } secondo "chi tira".

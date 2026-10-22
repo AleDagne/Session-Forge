@@ -3064,6 +3064,42 @@
     ok(LG().effects(mage, st).missing.some((m) => /incantesimo eliminato/.test(m)), 'riferimento mancante');
   });
 
+  test('Percorso: competenze nelle abilità nelle prove, Percezione passiva, sensi, magie «N al giorno» con usi', () => {
+    const st = DnD.dati.emptyState();
+    // Guerriero 30 (competenza +9, DES 14: +2, SAG 12: +1); il nodo C dà maestria in Furtività.
+    const c = legendaryOf(30);
+    c.legend.path.nodes.push(PT().normalizeNode({ id: 'v', cost: 1, effects: [{ kind: 'competenza', target: 'abilita', skill: 'Percezione' }, { kind: 'bonus', stat: 'senso', sense: 'vista cieca', value: 9 }] }));
+    c.legend.path.links.push(['nucleo', 'v']);
+    eq([LG().checkBonus(c, 'Furtività', false, st), LG().checkBonus(c, 'Percezione', false, st), LG().derived(c, st).passive], [2, 1, 11], 'senza nodi: solo il modificatore');
+    c.legend.unlocked = ['nucleo', 'c', 'v', 'a'];
+    eq([LG().checkBonus(c, 'Furtività', false, st), LG().checkBonus(c, 'Percezione', false, st), LG().checkBonus(c, 'Atletica', false, st), LG().checkBonus(c, 'FOR', true, st)],
+      [2 + 18, 1 + 9, 7, 7 + 9], 'maestria ×2, competenza ×1; FOR 24 dal nodo A anche nelle prove');
+    const d = LG().derived(c, st);
+    eq([d.passive, d.skills.map((k) => k.skill + ':' + k.bonus)], [20, ['Furtività:20', 'Percezione:10']]);
+    // Prova di un evento d'esplorazione: usa il bonus del leggendario.
+    const ctx = { members: () => [c], st, rng: seq(10), ex: { rotation: 0 }, log() {} };
+    eq(DnD.eventi.resolveCheck({ what: 'Furtività', dc: 30, who: 'migliore', mode: 'normale' }, ctx).results[0].total, 30, 'd20 (10) + 20');
+    // Combattente: sensi e Percezione passiva.
+    let x = R().createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
+    eq([x.legend.senses['vista cieca'], x.legend.passive, DnD.dati.normalizeCombatant(x).legend.passive], [9, 20, 20]);
+    // Magia 2 volte al giorno per un guerriero (non incantatore): si lancia senza slot, con la migliore tra INT, SAG, CAR.
+    const spell = st.spells.find((s) => s.level > 0);
+    c.legend.path.nodes.push(PT().normalizeNode({ id: 'g', cost: 1, effects: [{ kind: 'magia', spellId: spell.id, freq: 'giorno', uses: 2 }] }));
+    c.legend.path.links.push(['nucleo', 'g']);
+    c.legend.unlocked.push('g');
+    c.legend.spellUses[spell.id] = 1;
+    x = R().createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
+    eq([x.spellcasting.ability, x.spellcasting.dc, x.spellcasting.spells.some((s) => s.id === spell.id), x.spellcasting.innate[spell.id]], ['SAG', 8 + 9 + 1, true, { freq: 'giorno', left: 1 }], 'un uso già speso oggi');
+    eq(LG().derived(c, st).daily, [{ spellId: spell.id, n: 2, left: 1 }]);
+    LG().rest(c, false);
+    eq(c.legend.spellUses[spell.id], 1, 'il riposo breve non le ripristina');
+    LG().rest(c, true);
+    eq([c.legend.spellUses, LG().derived(c, st).daily[0].left], [{}, 2], 'riposo lungo');
+    // Data anche come «sempre preparata»: resta un incantesimo normale (niente usi senza slot).
+    c.legend.path.nodes.find((n) => n.id === 'g').effects.push({ id: 'g2', kind: 'magia', spellId: spell.id, freq: 'sempre', uses: 1 });
+    eq(LG().dailySpells(c, st), {});
+  });
+
   test('Percorso: privilegio creato dall\'utente con usi per riposo, come azione nel combattimento', () => {
     const st = DnD.dati.emptyState();
     const c = legendaryOf(24);

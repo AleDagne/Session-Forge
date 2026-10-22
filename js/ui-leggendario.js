@@ -343,6 +343,14 @@
         el('div', { class: 'stat-line' }, DnD.regole.ABILITIES.map((ab) => el('span', { class: 'stat' }, el('b', { text: ab }), ' ' + s.abilities[ab] + ' (' + DnD.regole.formatModifier(DnD.regole.modifier(s.abilities[ab])) + ')'))),
         el('p', {}, 'CA ', el('b', { text: String(s.ac.total) }), ' · PF ', el('b', { text: String(d.effective.maxHp) }), ' · competenza ', el('b', { text: DnD.regole.formatModifier(s.profBonus) }),
           s.spell ? ' · CD incantesimi ' + s.spell.dc + ' · slot ' + s.spell.slotsTotal.map((n, i) => (n ? (i + 1) + '°×' + n : '')).filter(Boolean).join(' ') : ''),
+        // Abilità del Percorso (competenza o maestria), Percezione passiva, sensi e magie «N al giorno».
+        el('p', {}, d.skills.map((k) => el('span', { class: 'stat' }, el('b', { text: k.skill }), ' ' + DnD.regole.formatModifier(k.bonus) + (k.level === 2 ? ' (maestria)' : '') + ' · ')),
+          'Percezione passiva ', el('b', { text: String(d.passive) }),
+          Object.keys(fx.senses).length ? ' · Sensi: ' + Object.entries(fx.senses).map(([k, v]) => k + ' ' + String(v).replace('.', ',') + ' m').join(', ') : ''),
+        d.daily.length ? el('p', {}, 'Magie al giorno: ', d.daily.map((x, i) => {
+          const sp = st().spells.find((y) => y.id === x.spellId);
+          return el('span', { class: x.left ? '' : 'muted' }, (i ? ' · ' : '') + (sp ? sp.name : '?') + ' ' + x.left + '/' + x.n);
+        }), el('span', { class: 'muted small', text: ' (tornano con il riposo lungo)' })) : null,
         fx.sources.length ? el('ul', { class: 'legend-sources' }, fx.sources.map((x) => el('li', {}, x.label, el('span', { class: 'muted small', text: ' — da: ' + x.from })))) : el('p', { class: 'muted small', text: 'Nessun effetto: sblocca nodi nel Percorso.' }),
         fx.features.length ? el('div', {}, el('b', { text: 'Privilegi leggendari' }), el('ul', {}, fx.features.map((x) => el('li', {}, el('b', { text: x.name }), ' (' + P.FEATURE_TYPE_NAMES[x.type] + ', ' + (x.uses.kind === 'volonta' ? 'a volontà' : x.uses.n + ' ' + P.USES_NAMES[x.uses.kind]) + ')' + (x.desc ? ': ' + x.desc : ''))))) : null,
         fx.texts.length ? el('ul', {}, fx.texts.map((x) => el('li', { text: x.text + ' (da: ' + x.from + ')' }))) : null,
@@ -562,6 +570,9 @@
     };
     return el('div', { class: 'legend-box' },
       el('span', { class: 'tag legend-tag', text: '✦ Leggendario · rango ' + x.legend.rank }),
+      x.legend.passive !== null || Object.keys(x.legend.senses).length ? el('span', { class: 'muted small', text: [
+        x.legend.passive !== null ? 'Percezione passiva ' + x.legend.passive : '',
+        Object.entries(x.legend.senses).map(([k, v]) => k + ' ' + String(v).replace('.', ',') + ' m').join(', ')].filter(Boolean).join(' · ') }) : null,
       f ? el('span', { class: 'small', text: '🜂 ' + f.name + ' · ' + f.roundsLeft + ' round' }) : null,
       !f ? forms.map((t) => {
         const left = x.legend.uses[t.id] === undefined ? t.uses.n : x.legend.uses[t.id];

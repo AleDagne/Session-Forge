@@ -703,11 +703,18 @@
   // Tiro salvezza: d20 + totale della caratteristica, con vantaggio/svantaggio e CD opzionale.
   // ---------- Incantesimi ----------
   function slotsIndicator(sc) {
-    if (sc.innate) {
-      return el('div', { class: 'slots-indicator', title: 'Incantesimi innati' }, el('span', { text: '✨ Innati · CD ' + sc.dc + ' · ' + R.formatModifier(sc.attack) }),
-        sc.spells.map((sp) => { const inn = sc.innate[sp.id]; return el('span', { class: inn && inn.freq === 'giorno' && !inn.left ? 'empty-slot' : '', text: sp.name + (inn && inn.freq === 'giorno' ? ' ' + inn.left : '') }); }));
-    }
     const levels = sc.slotsTotal.map((n, i) => [i + 1, n]).filter(([, n]) => n > 0);
+    const innate = (list) => list.map((sp) => { const inn = sc.innate[sp.id]; return el('span', { class: inn && inn.freq === 'giorno' && !inn.left ? 'empty-slot' : '', text: sp.name + (inn && inn.freq === 'giorno' ? ' ' + inn.left : '') }); });
+    if (sc.innate && !levels.length) {
+      return el('div', { class: 'slots-indicator', title: 'Incantesimi innati' }, el('span', { text: '✨ Innati · CD ' + sc.dc + ' · ' + R.formatModifier(sc.attack) }), innate(sc.spells));
+    }
+    // Incantatori con anche magie senza slot (le magie «N al giorno» dei leggendari): slot e usi rimasti.
+    if (sc.innate) {
+      return el('div', { class: 'slots-indicator', title: 'Slot incantesimo e magie senza slot rimasti' },
+        el('span', { text: '✨ CD ' + sc.dc + ' · ' + R.formatModifier(sc.attack) }),
+        levels.map(([l, n]) => { const left = DnD.magie.slotsLeft(sc.slotsTotal, sc.slotsUsed, l); return el('span', { class: left ? '' : 'empty-slot', text: l + '°: ' + left + '/' + n }); }),
+        innate(sc.spells.filter((sp) => sc.innate[sp.id])));
+    }
     return el('div', { class: 'slots-indicator', title: 'Slot incantesimo rimasti' },
       el('span', { text: '✨ CD ' + sc.dc + ' · ' + R.formatModifier(sc.attack) }),
       levels.length
@@ -833,6 +840,9 @@
       const inn = innateOf(sc, sp);
       if (inn) {
         if (inn.freq === 'giorno') inn.left = Math.max(0, inn.left - 1);
+        // Leggendari: la magia «N al giorno» del Percorso resta spesa anche nella scheda (fino al riposo lungo).
+        const source = a.kind === 'player' && a.legend ? st.players.find((p) => p.id === a.sourceId) : null;
+        if (source && source.legend && inn.freq === 'giorno') source.legend.spellUses[sp.id] = (source.legend.spellUses[sp.id] || 0) + 1;
       } else if (sp.level > 0) {
         sc.slotsUsed = DnD.magie.consumeSlot(sc.slotsUsed, sc.slotsTotal, slotLevel);
         // Per i giocatori lo slot consumato resta anche nella scheda, oltre il combattimento.

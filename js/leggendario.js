@@ -86,6 +86,7 @@
       transformations: arr(l.transformations).slice(0, 20).map(normalizeTransformation),
       uses: usesOf(l.uses),            // usi rimasti delle trasformazioni (per riposo)
       featureUses: usesOf(l.featureUses),
+      spellUses: usesOf(l.spellUses),  // magie «N al giorno» del Percorso: usi spesi (fino al riposo lungo)
     };
   }
 
@@ -177,13 +178,46 @@
     return e;
   }
 
-  // Valori derivati con il riepilogo degli effetti (per la scheda).
+  // Valori derivati con il riepilogo degli effetti (per la scheda): abilità con competenza o maestria dei nodi,
+  // Percezione passiva, sensi e magie «N al giorno» con gli usi rimasti.
   function derived(c, st) {
     const race = st && st.races ? st.races.find((r) => r.id === c.raceId) || null : null;
     const e = effectivePlayer(c, st);
     const stats = R().derivedStats(e, race, st && st.equipment);
     const fx = effects(c, st);
-    return { stats, effective: e, fx, points: isLegendary(c) ? points(c) : null };
+    const skillOf = (skill) => R().modifier(stats.abilities[SKILL_ABILITY()[skill] || 'SAG']) + (fx.skills[skill] || 0) * stats.profBonus;
+    const daily = dailySpells(c, st);
+    return {
+      stats, effective: e, fx, points: isLegendary(c) ? points(c) : null,
+      skills: Object.keys(fx.skills).sort((a, b) => a.localeCompare(b, 'it')).map((k) => ({ skill: k, level: fx.skills[k], bonus: skillOf(k) })),
+      passive: 10 + skillOf('Percezione'),
+      daily: Object.entries(daily).map(([spellId, n]) => ({ spellId, n, left: Math.max(0, n - ((c.legend && c.legend.spellUses[spellId]) || 0)) })),
+    };
+  }
+
+  // Abilità → caratteristica (Atletica → FOR, Percezione → SAG…).
+  const SKILL_ABILITY = () => DnD.creatureDati.SKILLS;
+  // Grado di competenza in un'abilità dato dai nodi: 0 nessuno, 1 competenza, 2 maestria.
+  const skillLevel = (c, skill, st) => effects(c, st).skills[skill] || 0;
+  // Bonus di un personaggio (standard o leggendario) a una prova di caratteristica o di abilità, o a un tiro
+  // salvezza: caratteristiche finali con gli effetti dei nodi e competenze/maestrie del Percorso.
+  function checkBonus(c, what, save, st) {
+    const race = st && st.races ? st.races.find((r) => r.id === c.raceId) || null : null;
+    const d = R().derivedStats(effectivePlayer(c, st), race, st && st.equipment);
+    const isAbility = R().ABILITIES.includes(what);
+    if (save && isAbility) return d.saveTotals[what];
+    const ab = isAbility ? what : SKILL_ABILITY()[what] || 'SAG';
+    return R().modifier(d.abilities[ab]) + (isAbility ? 0 : skillLevel(c, what, st) * d.profBonus);
+  }
+
+  // Magie «N al giorno» del Percorso: { spellId: usi al giorno } (più nodi sullo stesso incantesimo si sommano).
+  // Un incantesimo dato anche come «sempre preparato» resta normale (si lancia con gli slot).
+  function dailySpells(c, st) {
+    const fx = effects(c, st);
+    const always = new Set(fx.spells.filter((x) => x.freq !== 'giorno').map((x) => x.spellId));
+    const out = {};
+    for (const x of fx.spells) if (x.freq === 'giorno' && !always.has(x.spellId)) out[x.spellId] = (out[x.spellId] || 0) + x.uses;
+    return out;
   }
 
   // PF dei livelli leggendari: dado vita della classe per ogni livello oltre il 20 (stesse regole di calcolo).
@@ -224,10 +258,30 @@
       const pseudo = DnD.creature.normalizeMonster(Object.assign({ abilities: x.abilities, cr: '0', legendaryPoints: 1 }, acts));
       x.creature = DnD.creature.combatState(Object.assign(pseudo, { name: x.name }));
     }
+    // Magie del Percorso: quelle «N al giorno» si lanciano senza slot con gli usi rimasti (come gli incantesimi
+    // innati delle creature). Chi non ha una classe da incantatore le lancia con la migliore tra INT, SAG e CAR.
+    const daily = dailySpells(c, st);
+    const nodeSpells = fx.spells.map((s) => (st.spells || []).find((x) => x.id === s.spellId)).filter(Boolean);
+    if (!x.spellcasting && nodeSpells.length) {
+      const ability = ['INT', 'SAG', 'CAR'].reduce((a, b) => (x.abilities[b] > x.abilities[a] ? b : a));
+      const mod = R().modifier(x.abilities[ability]);
+      x.spellcasting = {
+        attack: DnD.magie.spellAttackBonus(prof, mod), dc: DnD.magie.spellSaveDc(prof, mod), ability, mod, pact: false,
+        slotsTotal: Array(9).fill(0), slotsUsed: Array(9).fill(0), spells: [],
+      };
+    }
+    if (x.spellcasting) {
+      const sc = x.spellcasting;
+      for (const sp of nodeSpells) if (!sc.spells.some((y) => y.id === sp.id)) sc.spells.push(clone(sp));
+      sc.innate = Object.assign({}, sc.innate || {});
+      for (const [id, n] of Object.entries(daily)) sc.innate[id] = { freq: 'giorno', left: Math.max(0, n - (c.legend.spellUses[id] || 0)) };
+      if (!Object.keys(sc.innate).length) delete sc.innate;
+    }
     x.legend = {
       theme: c.legend.theme, rank: rank(c),
       transformations: available(c, st).map((t) => t.id),
       uses: clone(c.legend.uses), form: null, senses: fx.senses, texts: fx.texts.map((t) => t.text),
+      passive: derived(c, st).passive,
     };
     return x;
   }
@@ -352,11 +406,12 @@
   function rest(c, long) {
     for (const t of c.legend.transformations) if (long || t.uses.per === 'breve') delete c.legend.uses[t.id];
     for (const n of c.legend.path.nodes) for (const e of n.effects) if (e.kind === 'privilegio' && (long || e.uses.kind === 'breve')) delete c.legend.featureUses[e.id];
+    if (long) c.legend.spellUses = {};
   }
 
   DnD.leggendario = {
     MIN_LEVEL, MAX_LEVEL, THEMES, THEME_NAMES, PALETTES, themeKey, formTheme, PHYSICAL, FORM_KEYS,
     normalizeLegend, normalizeTransformation, isLegendary, rank, points, effects, effectivePlayer, derived, hpParams, featureActions,
-    applyToCombatant, available, usesLeft, fusedAbilities, transform, revert, damage, tick, promote, demote, rest,
+    applyToCombatant, available, usesLeft, skillLevel, checkBonus, dailySpells, fusedAbilities, transform, revert, damage, tick, promote, demote, rest,
   };
 })(globalThis.DnD = globalThis.DnD || {});

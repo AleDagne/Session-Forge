@@ -17,8 +17,8 @@ Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
 - Dal 22 ottobre 2026 (sessione sul PC desktop) la cartella **è un repository git**: la cronologia parte dal commit
   «Stato iniziale». Claude Code avvia il server da `.claude/launch.json` sulla porta **5617** (la 8080 era occupata).
 - L'app parte e tutti gli script si caricano senza errori di sintassi.
-- `test.html`: **tutti i 177 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
-- Versione dei dati: **11** (cache del service worker: `session-forge-v19`).
+- `test.html`: **tutti i 178 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
+- Versione dei dati: **11** (cache del service worker: `session-forge-v20`).
 
 ## Prova a mano dell'interfaccia (22 ottobre 2026, PC desktop)
 
@@ -108,31 +108,46 @@ Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo
 - `css/leggendario.css`: **versione di base** (temi con variabili `--lg-*`, raggi, polvere, editor del percorso,
   animazioni, «Riduci animazioni»).
 
+## Effetti dei nodi e README — FATTI (22 ottobre 2026)
+
+- **Abilità**: competenza (×1) e maestria (×2) dei nodi valgono nelle prove degli eventi dell'esplorazione
+  (`leggendario.checkBonus`, usato da `eventi.memberBonus`, che ora usa anche le caratteristiche date dai nodi) e
+  nella Percezione passiva. La scheda le mostra con il bonus.
+- **Sensi**: nella scheda e nel riquadro del combattente, con la Percezione passiva (salvata nel combattente).
+  L'app non ha regole di luce/vista in cui usarli (l'esplorazione lavora in km): restano informativi.
+- **Magie «N al giorno»**: nel combattimento diventano incantesimi senza slot (come gli innati delle creature),
+  con gli usi rimasti; il lancio scala `legend.spellUses` sulla scheda, il riposo lungo li ripristina. Chi non ha
+  una classe da incantatore le lancia con la migliore tra INT, SAG e CAR. Se lo stesso incantesimo è dato anche
+  «sempre preparato», resta normale (con gli slot). L'indicatore sulla scheda mostra slot e usi insieme.
+- Competenze in strumenti/armi/armature: restano testo (nessun calcolo dell'app le usa).
+- **README**: sezione «Personaggi leggendari» (livelli, Percorso, Trasformazioni, grafica), modello dati v11 con
+  la migrazione, test e struttura.
+
 ## Da fare
 
-1. **FATTO (vedi «Prova a mano» sopra)**. Restano da provare a mano: «Eleva a leggendario» e Declassa, modelli
-   di percorso ed esporta/importa JSON, «Torna normale» e annulla/ripeti nel combattimento, fine a durata. Elenco
-   originale:
-   - Giocatori › Leggendari: elenco, «+ Nuovo leggendario» (form + animazione di Ascensione), «Eleva a
-     leggendario» da Standard, Declassa.
-   - Percorso: modalità Modifica (tutti gli strumenti, pannello del nodo, «Applica», annulla/ripeti) e Sblocca
-     (punti, conferma, animazione, Rimodella bloccabile dal master).
-   - Trasformazioni: aggiungi (anche «Parti da una creatura esistente»), modifica regole e scheda boss, salva,
-     duplica, ordina, elimina.
-   - Combattimento con un leggendario: privilegi come pulsanti, «Trasformati», barra boss in alto con
-     nome + forma, fasi, ritorno a 0 PF con danno in eccesso, fine a durata, «Torna normale», annulla/ripeti.
-   - Attenzione: nella scheda della forma `monsterForm` con `extra: bossFields` modifica il tema della «forgia»
-     del boss: verificare che non rompa la grafica divina.
-2. **FATTO** (vedi «Grafica divina completa» sopra).
-3. **Effetti dei nodi nei calcoli ancora mancanti**: competenze in abilità/strumenti non entrano in alcun calcolo
-   della scheda (i giocatori non hanno abilità calcolate: per ora sono solo nel riepilogo); i sensi sono solo
-   mostrati; le magie «N al giorno» si aggiungono agli incantesimi conosciuti ma senza contare gli usi.
-4. **Test da aggiungere in `test.html`** (alcuni ci sono già, vedi sotto): editor del grafo dell'interfaccia,
-   sblocco dall'interfaccia, trasformazione dall'interfaccia del combattimento con annulla/ripeti.
-5. **README.md**: aggiungere la sezione «Personaggi leggendari» (livelli 20-40, Percorso, Trasformazioni, grafica),
-   la riga della migrazione v11, i nuovi file nella «Struttura» e i test.
-6. **Service worker**: ora `session-forge-v19`; aumentarlo di nuovo dopo le
-   prossime modifiche.
+1. **Prove a mano** (le fa l'utente), con l'app servita in locale e Ctrl+F5 dopo l'aggiornamento:
+   - Giocatori › Standard: un giocatore di livello 20 → «✦ Eleva a leggendario» (Ascensione), poi Declassa e
+     di nuovo Eleva: il percorso e le trasformazioni devono tornare.
+   - Percorso › Sblocca: sblocco con conferma, linea che si illumina, punti; Opzioni del master → togli
+     «Permetti di rimodellare» e verifica che Rimodella sia bloccato; poi Rimodella con il permesso.
+   - Percorso › Modifica: Collega, Scollega, Elimina (anche con Canc), Duplica di uno e di più nodi
+     (Maiusc+trascina), Griglia, Raggiera, ricerca, Ctrl+Z / Ctrl+Y; nodo esclusivo e «Servono tutti i
+     prerequisiti»; avviso per un nodo scollegato.
+   - Modelli: Salva come modello, Carica modello su un altro leggendario, elimina modello; Esporta JSON e
+     Importa JSON del percorso.
+   - Effetti dei nodi: un nodo con competenza in Percezione e uno con «Nuova magia 2/giorno» → la scheda
+     mostra bonus, Percezione passiva e «Magie al giorno 2/2»; in combattimento la magia si lancia senza slot
+     (anche con un guerriero), gli usi scendono e restano dopo il combattimento; Riposo lungo li ripristina.
+     Un evento d'esplorazione con prova di Percezione deve usare il bonus del leggendario.
+   - Combattimento: «Trasformati» con un privilegio a pulsanti; fasi del boss in forma; «Torna normale» e il
+     pulsante ↶ (annulla) / ↷; fine a durata (10 round con «Prossimo turno»); forma con PF temporanei.
+   - Grafica: i 5 temi nelle Opzioni del master; tema della forma diverso da quello del personaggio (barra,
+     vignettatura, scheda e pedina cambiano); tema chiaro dell'app; Impostazioni › «Riduci animazioni» (tutto
+     fermo, niente Ascensione) ed «Effetti boss» spenti (niente lampo né barra).
+   - Esporta/Importa: archivio completo e singola sessione con un leggendario; Duplica sessione.
+   - Installata come app (PWA): dopo l'aggiornamento parte la nuova versione (cache `session-forge-v20`).
+2. Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app).
+3. **Service worker**: ora `session-forge-v20`; aumentarlo di nuovo dopo le prossime modifiche.
 
 ## Test già presenti per questa fase (in `js/test.js`, tutti passano)
 

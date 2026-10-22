@@ -663,6 +663,7 @@
       uses: Object.fromEntries(Object.entries(obj(l.uses)).slice(0, 50).map(([k, v]) => [str(k, 64), int(v, 0, 0, 99)])),
       senses: Object.fromEntries(Object.entries(obj(l.senses)).slice(0, 10).map(([k, v]) => [str(k, 40), int(v, 0, 0, 1000)])),
       texts: arr(l.texts).filter((x) => typeof x === 'string').slice(0, 50).map((x) => x.slice(0, 2000)),
+      passive: l.passive === null || l.passive === undefined ? null : int(l.passive, 10, 0, 60),
       form: f ? {
         id: str(f.id, 64), name: str(f.name, 60), hpMode: f.hpMode === 'temporanei' ? 'temporanei' : 'sostituisce', theme: str(f.theme, 20),
         roundsLeft: int(f.roundsLeft, 1, 0, 100000), canEndEarly: f.canEndEarly !== false, exitText: str(f.exitText, 2000),
