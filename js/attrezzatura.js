@@ -57,6 +57,8 @@
       attunement: Boolean(e.attunement),
       icon: DnD.icone.normalizeIcon(e.icon, true),
       tags: [...new Set(arr(e.tags).map((t) => str(t, 30).trim()).filter(Boolean))].slice(0, 20),
+      // Bonus (o malus) alla velocità in metri quando l'oggetto è equipaggiato (es. stivali, armatura pesante).
+      speedBonus: num(e.speedBonus, 0, -30, 30),
       weapon: category === 'armi' ? {
         cat: w.cat === 'guerra' ? 'guerra' : 'semplice',
         kind: w.kind === 'distanza' ? 'distanza' : 'mischia',
@@ -158,6 +160,17 @@
     return Math.round((kg + n * COIN_WEIGHT) * 100) / 100;
   }
 
+  // Somma dei bonus di velocità (m) degli oggetti equipaggiati.
+  function speedBonus(inventory, catalog) {
+    let m = 0;
+    for (const x of inventory || []) {
+      if (!x.equipped) continue;
+      const e = (catalog || []).find((c) => c.id === x.equipmentId);
+      if (e && e.speedBonus) m += e.speedBonus;
+    }
+    return m;
+  }
+
   // Aggiunge qty di un oggetto all'inventario (somma alla riga esistente non equipaggiata). Modifica inventory.
   function addToInventory(inventory, equipmentId, qty) {
     const row = inventory.find((x) => x.equipmentId === equipmentId && !x.equipped);
@@ -176,6 +189,10 @@
 
   // Breve riepilogo dell'oggetto (elenchi e schede).
   function summary(e) {
+    const speed = e.speedBonus ? 'velocità ' + (e.speedBonus > 0 ? '+' : '') + String(e.speedBonus).replace('.', ',') + ' m' : '';
+    return [baseSummary(e), speed].filter(Boolean).join(' · ');
+  }
+  function baseSummary(e) {
     if (e.weapon) {
       const w = e.weapon;
       return [w.dice + ' ' + w.damageType, w.versatile ? 'versatile ' + w.versatile : '', w.props.filter((p) => p !== 'versatile').join(', '),
@@ -267,6 +284,6 @@
     CATEGORIES, CATEGORY_NAMES, CURRENCIES, CURRENCY_NAMES, CURRENCY_VALUE, RARITIES, WEAPON_PROPS, ARMOR_TYPES, ARMOR_TYPE_NAMES,
     DEX_RULES, DEX_RULE_NAMES, COIN_WEIGHT, LEGACY_TYPES,
     normalizeEquipment, normalizeInventory, normalizeCoins, weaponAbility, weaponStats, resolveWeapon, armorAc,
-    inventoryWeight, addToInventory, addCoins, formatCost, formatWeight, formatCoins, summary, defaults, slug,
+    inventoryWeight, speedBonus, addToInventory, addCoins, formatCost, formatWeight, formatCoins, summary, defaults, slug,
   };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -448,7 +448,7 @@
     const imod = mod(c, c.innate.ability);
     return Object.assign({
       id: DnD.dadi.uid(), sourceId: c.id, kind: 'npc', name, copy, maxHp: hp, hp, ac: c.ac, dexMod, saves: saveTotals(c),
-      w: dims.w, h: dims.h, speed: c.speed.walk, icon: Object.assign({}, c.icon), pos: null, weapons: [],
+      w: dims.w, h: dims.h, speeds: DnD.movimento.speedsFromCreature(c.speed), icon: Object.assign({}, c.icon), pos: null, weapons: [],
       defenses: { vuln: c.vulnerabilities.slice(), res: c.resistances.slice(), imm: c.immunities.slice() },
       creature: combatState(c),
       control: 'ia', faction: 'nemici', behavior: DnD.ia.normalizeBehavior(c.behavior), abilities: Object.assign({}, c.abilities),

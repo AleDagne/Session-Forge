@@ -430,6 +430,8 @@
       fog: doc.grid.fog || null,
       positions: Object.fromEntries(doc.combatants.map((c) => [c.id, c.pos])),
       tokenDims: Object.fromEntries(doc.combatants.map((c) => [c.id, tokenDims(c)])),
+      // Movimento del turno (residuo): annulla/ripeti di uno spostamento restituisce anche il movimento.
+      movement: Object.fromEntries(doc.combatants.filter((c) => c.movement).map((c) => [c.id, c.movement])),
     });
   }
 
@@ -445,6 +447,7 @@
     for (const c of doc.combatants) {
       c.pos = snap.positions[c.id] ? Object.assign({}, snap.positions[c.id]) : null;
       if (snap.tokenDims && snap.tokenDims[c.id]) Object.assign(c, snap.tokenDims[c.id]);
+      if (snap.movement && snap.movement[c.id]) c.movement = clone(snap.movement[c.id]);
     }
   }
 

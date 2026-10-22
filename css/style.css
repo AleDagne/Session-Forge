@@ -565,6 +565,12 @@ body:has(.combat-screen) .dice-fab { display: none; }
 .spell-stat-line { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; align-items: end; }
 .spell-stat-line .field { min-width: 11rem; }
 .slots-indicator { display: flex; flex-wrap: wrap; gap: 0.3rem; font-size: 0.78rem; }
+.move-box { display: flex; flex-direction: column; gap: 0.3rem; border-top: 1px dashed var(--border); padding-top: 0.4rem; }
+.move-box.empty > .small { color: var(--muted); }
+.cond-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.tag.cond-tag { background: rgba(232, 131, 42, 0.2); }
+.turn-move { margin: 0.2rem 0 0.4rem; }
+.log li.log-movimento { border-left-color: var(--player); }
 .slots-indicator span { padding: 0.05rem 0.4rem; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--border); }
 .slots-indicator span.empty-slot { opacity: 0.45; }
 .target-checks { display: flex; flex-direction: column; gap: 0.2rem; max-height: 12rem; overflow-y: auto; }

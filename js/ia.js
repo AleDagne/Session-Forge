@@ -6,7 +6,8 @@
 //   Furbo = il più debole).
 // - Percorso minimo (Dijkstra/A* senza euristica: serve il costo verso tutti i bersagli) con l'ingombro w×h
 //   delle pedine, terreno difficile a costo 2, celle bloccate come isCellBlocked (porte chiuse comprese),
-//   diagonali a costo 1 come il misuratore, niente angoli tagliati.
+//   diagonali con la regola del misuratore, niente angoli tagliati (movimento.js). Budget = movimento residuo
+//   del turno (velocità in piedi / piedi per cella, condizioni comprese); con lo Scatto si aggiunge la velocità.
 // - Visibilità: linea di vista tra le celle, esclusi i combattenti nascosti e quelli a 0 PF.
 // - Tetto di tempo con ripiego, casualità riproducibile con il seed del combattimento.
 (function (DnD) {
@@ -283,91 +284,11 @@
   }
 
   // ---------- Percorso minimo ----------
-  // Coda con priorità (heap binario) per Dijkstra.
-  function heap() {
-    const a = [];
-    return {
-      push(item, pr) {
-        a.push([pr, item]);
-        for (let i = a.length - 1; i > 0;) { const p = (i - 1) >> 1; if (a[p][0] <= a[i][0]) break; [a[p], a[i]] = [a[i], a[p]]; i = p; }
-      },
-      pop() {
-        const top = a[0];
-        const last = a.pop();
-        if (a.length) {
-          a[0] = last;
-          for (let i = 0; ;) {
-            const l = 2 * i + 1;
-            const r = l + 1;
-            let m = i;
-            if (l < a.length && a[l][0] < a[m][0]) m = l;
-            if (r < a.length && a[r][0] < a[m][0]) m = r;
-            if (m === i) break;
-            [a[m], a[i]] = [a[i], a[m]];
-            i = m;
-          }
-        }
-        return top;
-      },
-      size: () => a.length,
-    };
-  }
-
-  // Costo minimo da chi si muove verso ogni posizione (angolo in alto a sinistra) raggiungibile. Le pedine ostili
-  // bloccano, quelle alleate (o a terra) si attraversano ma non ci si ferma sopra. opts: { deadline, now, maxCost }.
-  function paths(map, state, mover, opts) {
-    const o = opts || {};
-    const d = G().tokenDims(mover);
-    const hostileCells = new Set();
-    const otherCells = new Set();
-    for (const t of state.combatants) {
-      if (t.id === mover.id || !t.pos) continue;
-      for (const k of G().tokenCells(t)) { otherCells.add(k); if (alive(t) && isHostile(mover, t)) hostileCells.add(k); }
-    }
-    const passable = (x, y) => {
-      if (x < 0 || y < 0 || x + d.w > map.w || y + d.h > map.h) return false;
-      for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) { const k = G().key(x + i, y + j); if (map.blocked.has(k) || hostileCells.has(k)) return false; }
-      return true;
-    };
-    const canEnd = (x, y) => {
-      for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) if (otherCells.has(G().key(x + i, y + j))) return false;
-      return true;
-    };
-    const enter = (x, y) => { let c = 1; for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) c = Math.max(c, cellCost(map, x + i, y + j)); return c; };
-    const start = G().key(mover.pos.x, mover.pos.y);
-    const dist = new Map([[start, 0]]);
-    const prev = new Map();
-    const q = heap();
-    q.push(start, 0);
-    let n = 0;
-    let aborted = false;
-    while (q.size()) {
-      const [cost, k] = q.pop();
-      if (cost > dist.get(k)) continue;
-      if (o.maxCost !== undefined && cost > o.maxCost) continue;
-      if (++n > K().PLANNER.maxNodes || (n % 256 === 0 && o.deadline && o.now() > o.deadline)) { aborted = true; break; }
-      const x = G().keyX(k);
-      const y = G().keyY(k);
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (!passable(nx, ny)) continue;
-          if (dx && dy && (!passable(x + dx, y) || !passable(x, y + dy))) continue; // niente angoli tagliati
-          const nk = G().key(nx, ny);
-          const nc = cost + enter(nx, ny);
-          if (nc < (dist.has(nk) ? dist.get(nk) : Infinity)) { dist.set(nk, nc); prev.set(nk, k); q.push(nk, nc); }
-        }
-      }
-    }
-    return { dist, prev, canEnd, passable, aborted, start, dims: d };
-  }
-  function pathTo(P, k) {
-    const out = [];
-    for (let c = k; c !== undefined; c = P.prev.get(c)) { out.push({ x: G().keyX(c), y: G().keyY(c) }); if (c === P.start) break; }
-    return out.reverse();
-  }
+  // Dijkstra con l'ingombro w×h, terreno difficile, strisciare e modalità di movimento del combattente e la
+  // regola delle diagonali (state.rules): vedi movimento.js. Le pedine ostili bloccano, quelle alleate (o a
+  // terra) si attraversano ma non ci si ferma sopra. opts: { deadline, now, maxCost }.
+  const paths = (map, state, mover, opts) => DnD.movimento.reach(map, state, mover, Object.assign({ rules: state.rules, hostile: (a, b) => alive(b) && isHostile(a, b) }, opts));
+  const pathTo = (P, k) => P.path(k);
   // Tronca un percorso al budget di movimento, fermandosi sull'ultima cella dove si può stare.
   function truncate(P, path, budget) {
     let best = 0;
@@ -382,7 +303,9 @@
 
   // ---------- Pianificazione ----------
   const tempName = (b) => K().TEMPERAMENT_NAMES[b.temperament].toLowerCase();
-  const speedCells = (c) => Math.max(0, Math.floor((Number(c.speed) || 0) / 1.5 + 1e-9));
+  // Velocità piena e residuo del turno in celle (piedi / piedi per cella della griglia, condizioni comprese).
+  const speedCells = (c, state) => DnD.movimento.speedCells(c, state && state.rules, state && state.grid && state.grid.feetPerCell);
+  const moveLeft = (c, state) => DnD.movimento.left(c, state && state.rules, state && state.grid && state.grid.feetPerCell);
 
   // state: { combatants, grid, catalog, tilesets, round, seed }; opts: { forceTargetId, now, timeLimit }.
   function pianificaTurno(state, mover, opts) {
@@ -403,7 +326,9 @@
     const allies = others.filter((c) => alive(c) && c.pos && isAlly(mover, c));
     if (!hostiles.length) return Object.assign(plan, { reason: header + ': nessun avversario rimasto.' });
     const rng = rngFor(state.seed || 0, state.round || 1, mover.id);
-    const budget = speedCells(mover);
+    // Movimento: il residuo del turno; con lo Scatto si aggiunge la velocità piena.
+    const budget = moveLeft(mover, state);
+    const dashCap = budget + speedCells(mover, state);
     const P = paths(map, state, mover, { deadline, now });
     const opts2 = allOptions(mover, state.catalog);
     const attacks = attackOptions(opts2);
@@ -440,7 +365,7 @@
       : { x: pick(list, (x) => (x.path === Infinity ? 1000 + x.line : x.path), false), why: 'bersaglio più vicino' });
 
     // Fuga: solo i Furbi con la soglia attiva.
-    if (b.fleeAt > 0 && b.temperament === 'furbo' && hpPct * 100 < b.fleeAt) return flee(P, mover, hostiles, plan, header, budget);
+    if (b.fleeAt > 0 && b.temperament === 'furbo' && hpPct * 100 < b.fleeAt) return flee(P, mover, hostiles, plan, header, budget, '', dashCap);
 
     if (o.forceTargetId) {
       const f = info.find((x) => x.t.id === o.forceTargetId) || (hostiles.find((t) => t.id === o.forceTargetId) && { t: hostiles.find((t) => t.id === o.forceTargetId) });
@@ -525,9 +450,9 @@
             if (dd < bd) { bd = dd; key = k; }
           }
         }
-        const path = truncate(P, pathTo(P, key), budget * 2);
+        const path = truncate(P, pathTo(P, key), dashCap);
         Object.assign(plan, { path, moveCost: P.dist.get(G().key(path[path.length - 1].x, path[path.length - 1].y)), dash: true, action: { kind: 'scatto', targetIds: [target.id] } });
-        plan.reason = header + ': ' + moveText(plan) + ' (Scatto) verso ' + target.name + ', ' + why + '; non arriva ad attaccare in questo turno.';
+        plan.reason = header + ': ' + moveText(plan).replace(/ e $/, '') + ' (Scatto) verso ' + target.name + ', ' + why + '; non arriva ad attaccare in questo turno.';
         addReminders(plan.path);
         return plan;
       }
@@ -666,15 +591,15 @@
         const p = attackPlan(choice.x.t, choice.why + ', nient\'altro di utile da fare', true);
         if (p.action.kind !== 'scatto') return p;
       }
-      return flee(P, mover, hostiles, plan, header, budget, 'si ritira: nessuna cura, supporto o attacco a distanza utile');
+      return flee(P, mover, hostiles, plan, header, budget, 'si ritira: nessuna cura, supporto o attacco a distanza utile', dashCap);
     }
   }
 
   // Fuga: la posizione raggiungibile (con Scatto) più lontana dai nemici.
-  function flee(P, mover, hostiles, plan, header, budget, why) {
+  function flee(P, mover, hostiles, plan, header, budget, why, dashCap) {
     let best = null;
     for (const [k, cost] of P.dist) {
-      if (cost > budget * 2) continue;
+      if (cost > dashCap) continue;
       const x = G().keyX(k);
       const y = G().keyY(k);
       if (k !== P.start && !P.canEnd(x, y)) continue;
@@ -697,7 +622,7 @@
   // Ripiego (tempo scaduto): avvicinati in linea retta al più vicino e attacca se arrivi.
   function fallback(state, map, mover, hostiles, plan, header, attacks) {
     const target = hostiles.slice().sort((a, c) => G().tokenDistance(mover, a) - G().tokenDistance(mover, c))[0];
-    const budget = speedCells(mover);
+    const budget = moveLeft(mover, state);
     const P = paths(map, state, mover, { maxCost: budget });
     let path = [Object.assign({}, mover.pos)];
     let cur = mover.pos;
@@ -759,7 +684,7 @@
   DnD.ia = {
     turnHistory, normalizeBehavior, defaultControl, defaultFaction, isHostile, isAlly, side,
     weaponOptions, creatureOptions, spellOptions, allOptions, expectedDamage, weaponAbility, archetypeOf,
-    weakness, threat, damagePerRound, makeRng, rngFor, buildMap, lineOfSight, visible, paths, pathTo, truncate, speedCells,
+    weakness, threat, damagePerRound, makeRng, rngFor, buildMap, lineOfSight, visible, paths, pathTo, truncate, speedCells, moveLeft,
     pianificaTurno, whyText, describe,
   };
 })(globalThis.DnD = globalThis.DnD || {});

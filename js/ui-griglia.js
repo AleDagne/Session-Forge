@@ -26,6 +26,8 @@
         label: v('--grid-label'), labelBg: v('--grid-label-bg'), text: v('--text'), current: v('--accent'), selected: v('--selection'),
         missing: v('--grid-missing'), missingText: v('--grid-missing-text'),
         ok: 'rgba(63,174,99,0.45)', bad: 'rgba(212,69,58,0.5)',
+        // Movimento: celle raggiungibili (1×) e con lo Scatto (2×), percorso.
+        reach: 'rgba(63,174,99,0.18)', reachDash: 'rgba(232,131,42,0.16)', path: v('--accent'),
         hp: { alto: v('--hp-high'), medio: v('--hp-mid'), basso: v('--hp-low') }, hpTrack: v('--hp-track'),
         zone: { giocatori: rgb('--zone-players'), nemici: rgb('--zone-enemies') },
       };
@@ -81,6 +83,10 @@
   //   overlay(ctx, view, s): disegno aggiuntivo sopra le pedine (anteprima del piano dell'IA)
   //   underlay(ctx, view, s): disegno aggiuntivo sotto le pedine (biomi ed eventi dell'esplorazione)
   //   undo(), redo(), canUndo(), canRedo(): annulla/ripeti gestiti da chi usa la griglia (esplorazione)
+  //   movement: { begin(combatantId) -> null (movimento libero) | { route(target) -> { path, cost, end, stopped,
+  //     label }, normal: Set, dash: Set (chiavi delle celle raggiungibili) }, apply(doc, combatantId, route) }
+  //     limiti di velocità nel combattimento (movimento.js): anteprima, costo e fermata all'ultima cella raggiungibile
+  //   turnInfo(combattente): testo della barra del turno (velocità e movimento residuo)
   // }
   function create(opts) {
     const onSelect = opts.onSelect || (() => {});
@@ -105,6 +111,8 @@
       return G.boardOf(d.grid, d.combatants, DnD.tilemap.tilesetIndex(DnD.store.state.tilesets));
     };
     const feet = () => (doc() ? doc().grid.feetPerCell || 5 : 5);
+    // Misuratore con la regola delle diagonali (le mappe di esplorazione restano con la loro scala).
+    const measureCells = (a, b) => (doc().grid.kind === 'esplorazione' ? G.cellDistance(a, b) : DnD.movimento.distance(a, b, DnD.impostazioni.movementRules()));
     const dims = () => G.dims(doc() && doc().grid);
     const painting = () => Boolean(opts.painter && opts.painter.active());
 
@@ -681,6 +689,48 @@
       ctx.fillRect(0, 0, MARGIN, MARGIN);
     }
 
+    // Movimento: celle dove ci si può fermare con il residuo (verde) e con lo Scatto (arancio).
+    function drawReach(ctx, mv, s) {
+      ctx.save();
+      for (const [set, col] of [[mv.normal, colors().reach], [mv.dash, colors().reachDash]]) {
+        ctx.fillStyle = col;
+        for (const k of set) ctx.fillRect(view.panX + G.keyX(k) * s, view.panY + G.keyY(k) * s, s, s);
+      }
+      ctx.restore();
+    }
+    // Percorso tratteggiato fino alla cella d'arrivo, pedina fantasma (rossa oltre il residuo) e costo sul cursore.
+    function drawRoute(ctx, dr, s) {
+      const r = dr.route;
+      const fp = dr.footprint;
+      if (r && r.end) {
+        const ctr = (p) => [view.panX + (p.x + fp.w / 2) * s, view.panY + (p.y + fp.h / 2) * s];
+        ctx.save();
+        ctx.strokeStyle = colors().path;
+        ctx.lineWidth = Math.max(2, s * 0.08);
+        ctx.setLineDash([s * 0.25, s * 0.18]);
+        ctx.beginPath();
+        r.path.forEach((p, i) => { const [x, y] = ctr(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        ctx.stroke();
+        ctx.restore();
+        drawShape(ctx, fp, colors().ok, r.end.x, r.end.y, s, 1);
+      }
+      if (!r || !r.end || r.stopped) drawShape(ctx, fp, colors().bad, dr.target.x, dr.target.y, s, 0.6);
+      if (r && r.label && dr.cursor) {
+        ctx.save();
+        ctx.font = 'bold 12px system-ui, sans-serif';
+        const tw = ctx.measureText(r.label).width + 12;
+        ctx.fillStyle = colors().labelBg;
+        // A sinistra del cursore se a destra non c'è spazio.
+        const lx = dr.cursor.sx + 14 + tw > wrap.clientWidth ? dr.cursor.sx - 14 - tw : dr.cursor.sx + 14;
+        ctx.fillRect(lx, dr.cursor.sy + 8, tw, 20);
+        ctx.fillStyle = r.stopped || !r.end ? '#d4453a' : colors().current;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(r.label, lx + 6, dr.cursor.sy + 18);
+        ctx.restore();
+      }
+    }
+
     function draw() {
       const d = doc();
       if (!d || !canvas.isConnected) return;
@@ -763,6 +813,7 @@
 
       for (const l of d.grid.labels) drawLabel(ctx, l, s);
       if (opts.underlay) opts.underlay(ctx, view, s, W, H);
+      if (drag && drag.type === 'move' && drag.moved && drag.mv) drawReach(ctx, drag.mv, s);
 
       // Pedine: prima quelle a terra, per ultima quella di turno.
       const tokens = d.combatants.filter((t) => t.pos)
@@ -787,7 +838,8 @@
 
       // Anteprime: trascinamento (verde = valida, rosso = bloccata), inserimento e rettangoli.
       const ghost = drag && drag.target && (drag.type === 'palette' || (drag.type === 'move' && drag.moved)) ? drag : null;
-      if (ghost) drawShape(ctx, ghost.footprint, ghost.valid ? colors().ok : colors().bad, ghost.target.x, ghost.target.y, s, 1);
+      if (ghost && ghost.mv) drawRoute(ctx, ghost, s);
+      else if (ghost) drawShape(ctx, ghost.footprint, ghost.valid ? colors().ok : colors().bad, ghost.target.x, ghost.target.y, s, 1);
       if (hover && !drag) drawShape(ctx, hover.footprint, hover.valid ? colors().ok : colors().bad, hover.x, hover.y, s, 0.8);
       if (drag && drag.type === 'rect' && drag.b) {
         const r = G.rectBetween(drag.a, drag.b, d.grid);
@@ -812,7 +864,7 @@
         ctx.stroke();
         ctx.setLineDash([]);
         for (const [x, y] of [[ax, ay], [bx, by]]) { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
-        const label = G.formatDistance(G.cellDistance(measure.a, measure.b), feet());
+        const label = doc().grid.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(measure.a, measure.b), doc().grid.scale) : G.formatDistance(measureCells(measure.a, measure.b), feet());
         ctx.font = 'bold 12px system-ui, sans-serif';
         const tw = ctx.measureText(label).width + 12;
         ctx.fillStyle = colors().labelBg;
@@ -880,7 +932,8 @@
         const hit = hitTest(cell);
         if (hit) {
           const at = entityPos(hit);
-          drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false };
+          drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p,
+            mv: hit.kind === 'token' && opts.movement ? opts.movement.begin(hit.id) : null };
         } else {
           drag = { type: 'pan', p0: p, view0: view, moved: false };
         }
@@ -929,7 +982,14 @@
         drag.moved = true;
         canvas.style.cursor = 'grabbing';
         drag.target = { x: cell.x - drag.off.x, y: cell.y - drag.off.y };
-        drag.valid = isValidAt(drag.hit, drag.target.x, drag.target.y);
+        drag.cursor = p;
+        if (drag.mv) {
+          // Movimento limitato: percorso minimo fino al residuo (la pedina si ferma all'ultima cella raggiungibile).
+          drag.route = drag.mv.route(drag.target);
+          drag.valid = Boolean(drag.route.end);
+        } else {
+          drag.valid = isValidAt(drag.hit, drag.target.x, drag.target.y);
+        }
       }
       requestDraw();
     });
@@ -944,7 +1004,15 @@
         return;
       }
       if (d.type === 'move') {
-        if (d.moved) {
+        if (d.moved && d.mv) {
+          const r = d.route;
+          if (!r || !r.end) toast('Non c\'è un percorso libero fin lì.', 'error');
+          else if (r.end.x !== d.start.x || r.end.y !== d.start.y) {
+            commit((dd) => opts.movement.apply(dd, d.hit.id, r));
+            if (r.stopped) toast('Movimento esaurito: la pedina si ferma all\'ultima cella raggiungibile.', 'error');
+          } else if (r.stopped) toast('Movimento esaurito: non può spostarsi oltre.', 'error');
+          select(d.hit);
+        } else if (d.moved) {
           const t = d.target;
           if (d.valid && (t.x !== d.start.x || t.y !== d.start.y)) {
             commit(() => {
@@ -1150,14 +1218,14 @@
         // Mappe di esplorazione: distanza nella scala della mappa (km, miglia…).
         const g = doc().grid;
         text = '📏 ' + G.cellLabel(measure.a.x, measure.a.y) + ' → ' + G.cellLabel(measure.b.x, measure.b.y) + ': ' +
-          (g.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(measure.a, measure.b), g.scale) : G.formatDistance(G.cellDistance(measure.a, measure.b), feet()));
+          (g.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(measure.a, measure.b), g.scale) : G.formatDistance(measureCells(measure.a, measure.b), feet()));
       } else if (painting()) {
         text = opts.painter.hint();
       } else if (tool !== 'seleziona') {
         const t = templateEntity();
         text = TOOL_HINTS[tool] + (t && (tool === 'struttura' || tool === 'oggetto' || tool === 'riempi') ? ' Scelto: ' + t.name + '.' : '');
       } else if (cur) {
-        text = 'Turno di ' + cur.name + ' · velocità ' + G.formatSpeed(cur.speed);
+        text = 'Turno di ' + cur.name + (opts.turnInfo ? ' · ' + opts.turnInfo(cur) : '');
       } else {
         const g = doc().grid;
         text = g.kind === 'esplorazione' ? 'Mappa di esplorazione ' + dims().w + '×' + dims().h + ' · ' + DnD.esplorazione.scaleLabel(g.scale)

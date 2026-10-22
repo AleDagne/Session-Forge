@@ -77,6 +77,7 @@
       rarity: el('select', {}, A.RARITIES.map((r) => el('option', { value: r, text: r, selected: r === e.rarity }))),
       attunement: el('input', { type: 'checkbox', checked: e.attunement }),
       tags: textInput(e.tags.join(', '), { placeholder: 'es. argento, elfico' }),
+      speedBonus: numberInput(e.speedBonus || '', { min: -30, max: 30, step: 1.5, placeholder: 'nessuno' }),
       wCat: el('select', {}, el('option', { value: 'semplice', text: 'Semplice', selected: w.cat === 'semplice' }), el('option', { value: 'guerra', text: 'Da guerra', selected: w.cat === 'guerra' })),
       wKind: el('select', {}, el('option', { value: 'mischia', text: 'Mischia', selected: w.kind === 'mischia' }), el('option', { value: 'distanza', text: 'Distanza', selected: w.kind === 'distanza' })),
       wDice: textInput(w.dice, { placeholder: '1d8' }),
@@ -119,6 +120,7 @@
       el('div', { class: 'grid-3' }, field('Peso (kg)', inp.weight, 'weight'),
         el('div', { class: 'field' }, el('label', { text: 'Costo' }), el('div', { class: 'input-row' }, inp.cost, inp.unit), el('div', { class: 'error', 'data-error': 'cost.amount' })),
         field('Tag (separati da virgole)', inp.tags)),
+      el('div', { class: 'grid-3' }, field('Bonus alla velocità (m)', inp.speedBonus, 'speedBonus', 'Quando è equipaggiato; negativo = malus')),
       el('label', { class: 'check' }, inp.attunement, ' Richiede sintonia'),
       weaponBox, armorBox, icon.node,
       el('div', { class: 'form-actions' },
@@ -134,6 +136,7 @@
         weight: readNumber(inp.weight) || 0, cost: { amount: readNumber(inp.cost) || 0, unit: inp.unit.value },
         rarity: inp.rarity.value, attunement: inp.attunement.checked, icon: iconResult.icon || e.icon,
         tags: inp.tags.value.split(',').map((t) => t.trim()).filter(Boolean),
+        speedBonus: readNumber(inp.speedBonus) || 0,
         weapon: cat === 'armi' ? {
           cat: inp.wCat.value, kind: inp.wKind.value, dice: inp.wDice.value.trim(), damageType: inp.wType.value, versatile: inp.wVers.value.trim(),
           props: A.WEAPON_PROPS.filter((p) => props[p].checked), rangeNormal: readNumber(inp.wNormal) || 0, rangeLong: readNumber(inp.wLong) || 0, magic: Number(inp.wMagic.value),

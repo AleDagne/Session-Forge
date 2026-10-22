@@ -247,7 +247,7 @@
   function applyToCombatant(x, c, st, rng) {
     const fx = effects(c, st);
     const s = fx.stats;
-    if (s.velocita) x.speed = Math.max(0, x.speed + s.velocita);
+    if (s.velocita) x.speeds = DnD.movimento.addFeet(x.speeds, DnD.movimento.feetFromMeters(Math.abs(s.velocita)) * Math.sign(s.velocita));
     if (s.iniziativa) x.initiative += s.iniziativa;
     if (s.attacco || s.danno) x.weapons = x.weapons.map((w) => Object.assign({}, w, { toHit: w.toHit + (s.attacco || 0), damageBonus: w.damageBonus + (s.danno || 0) }));
     x.defenses = { vuln: x.defenses.vuln, res: [...new Set(x.defenses.res.concat(fx.res))], imm: [...new Set(x.defenses.imm.concat(fx.imm))] };
@@ -295,7 +295,7 @@
   const usesLeft = (c, t) => (c.legend.uses[t.id] === undefined ? t.uses.n : c.legend.uses[t.id]);
 
   // ---------- Trasformazione nel combattimento ----------
-  const FORM_KEYS = ['maxHp', 'hp', 'ac', 'saves', 'abilities', 'weapons', 'spellcasting', 'creature', 'boss', 'w', 'h', 'icon', 'speed', 'defenses'];
+  const FORM_KEYS = ['maxHp', 'hp', 'ac', 'saves', 'abilities', 'weapons', 'spellcasting', 'creature', 'boss', 'w', 'h', 'icon', 'speeds', 'defenses'];
 
   // Caratteristiche fuse: FOR, DES, COS dalla forma (se previsto), INT, SAG, CAR dal personaggio.
   function fusedAbilities(t, playerAbilities) {
@@ -331,7 +331,7 @@
     x.w = dims.w;
     x.h = dims.h;
     x.icon = Object.assign({}, t.icon);
-    x.speed = m.speed.walk;
+    x.speeds = DnD.movimento.speedsFromCreature(m.speed);
     x.weapons = t.fusion.keepEquipment ? prev.weapons : [];
     x.spellcasting = t.fusion.keepSpells ? prev.spellcasting : null;
     x.defenses = {

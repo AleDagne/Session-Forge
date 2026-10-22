@@ -694,7 +694,14 @@
       initiativeRoll: int(c.initiativeRoll, 0, 0, 20),
       w: dims.w,
       h: dims.h,
-      speed: num(c.speed, 9, 0, 300),
+      // Movimento (movimento.js): velocità in piedi per modalità (i dati precedenti hanno «speed» in metri, a
+      // piedi), sovrascrittura a mano, modalità attiva, condizioni, residuo del turno e «Ignora velocità».
+      speeds: DnD.movimento.baseSpeeds(c),
+      speedOverride: DnD.movimento.normalizeOverride(c.speedOverride),
+      moveMode: DnD.movimento.MODES.includes(c.moveMode) ? c.moveMode : 'cammina',
+      conditions: [...new Set(arr(c.conditions).filter((x) => DnD.movimento.conditions().includes(x)))],
+      movement: DnD.movimento.normalizeMovement(c.movement),
+      ignoreSpeed: Boolean(c.ignoreSpeed),
       icon: DnD.icone.normalizeIcon(c.icon, false),
       pos: pos(c.pos),
       weapons: arr(c.weapons).slice(0, 50).map(normalizeWeapon),
@@ -733,6 +740,8 @@
       round: int(c.round, 1, 1, 100000),
       currentId: combatants.some((x) => x.id === c.currentId) ? c.currentId : null,
       combatants,
+      // Movimento libero (scelta del master): nessun limite di velocità per nessuno.
+      freeMovement: Boolean(c.freeMovement),
       grid: Object.assign(normalizeGridContent(grid), {
         ignoreCollisions: Boolean(grid.ignoreCollisions),
         sourceGridId: typeof grid.sourceGridId === 'string' ? grid.sourceGridId : null,
@@ -1136,7 +1145,7 @@
     VERSION, emptyState, defaultRaces, defaultStructures, defaultSpells, defaultMapObjects, defaultCreatures, makeBonuses,
     normalizeState, normalizeRace, normalizeCreature, normalizeWeapon, normalizeGridSize, normalizeStructure, normalizeEquipment, normalizeMapObject, normalizeSpell,
     normalizePlacedStructure, normalizePlacedItem, normalizeLabel, normalizeZone, normalizeBackground, normalizeGridContent, normalizeSavedGrid, normalizeGridDraft,
-    migrateV8, migrateV9, migrateV10, migrateV11, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant,
+    migrateV8, migrateV9, migrateV10, migrateV11, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
     normalizeSession, DEFAULT_SESSION_NAME, normalizeTileset, normalizeSource, normalizeTileProps, normalizeTiles,
     exportJSON, importJSON, parseSaved, openStore, saveErrorMessage, pushDiceHistory, pushLog,
   };

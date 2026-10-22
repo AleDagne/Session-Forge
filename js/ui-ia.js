@@ -102,5 +102,24 @@
     openDialog('Perché?', el('pre', { class: 'why-text', text }), [{ text: 'Chiudi' }]);
   }
 
-  DnD.uiIa = { behaviorEditor, drawPlan, whyDialog, clear };
+  // Etichetta sopra una pedina (es. movimento residuo del combattente di turno), con lo stile del misuratore.
+  function drawBadge(ctx, view, s, c, text) {
+    const d = DnD.griglia.tokenDims(c);
+    const cx = view.panX + (c.pos.x + d.w / 2) * s;
+    const top = view.panY + c.pos.y * s;
+    const cs = getComputedStyle(document.documentElement);
+    ctx.save();
+    ctx.font = 'bold ' + Math.max(10, Math.min(14, s * 0.36)) + 'px system-ui, sans-serif';
+    const w = ctx.measureText(text).width + 10;
+    const h = Math.max(14, Math.min(20, s * 0.5));
+    ctx.fillStyle = cs.getPropertyValue('--grid-label-bg').trim() || 'rgba(0,0,0,0.7)';
+    ctx.fillRect(cx - w / 2, top - h - 3, w, h);
+    ctx.fillStyle = cs.getPropertyValue('--accent').trim() || '#e8832a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, cx, top - h / 2 - 3);
+    ctx.restore();
+  }
+
+  DnD.uiIa = { behaviorEditor, drawPlan, drawBadge, whyDialog, clear };
 })(globalThis.DnD = globalThis.DnD || {});

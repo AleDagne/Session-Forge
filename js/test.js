@@ -659,13 +659,14 @@
   test('salvataggio e ripristino di tema e dimensione del testo', () => {
     const I = DnD.impostazioni;
     const st = fakeStorage();
-    eq(I.load(st), { theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true }, 'primo avvio');
+    eq(I.load(st), Object.assign({}, I.DEFAULTS), 'primo avvio');
+    eq([I.DEFAULTS.theme, I.DEFAULTS.reduceMotion, I.DEFAULTS.bossEffects, I.DEFAULTS.diagonals, I.DEFAULTS.diceSound], ['auto', false, true, 'sempre1', false], 'predefiniti: suoni spenti, diagonali come prima');
     eq([I.resolveTheme('auto', true), I.resolveTheme('auto', false)], ['dark', 'light'], 'auto segue il sistema');
     ok(I.save(st, { theme: 'chiaro', textSize: 'grande', reduceMotion: true }));
-    eq(I.load(st), { theme: 'chiaro', textSize: 'grande', reduceMotion: true, bossEffects: true });
+    eq(I.load(st), Object.assign({}, I.DEFAULTS, { theme: 'chiaro', textSize: 'grande', reduceMotion: true }));
     eq(I.resolveTheme(I.load(st).theme, true), 'light', 'la scelta salvata ha la precedenza sul sistema');
     st.setItem(I.KEY, '{"theme":"viola","textSize":7}');
-    eq(I.load(st), { theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true }, 'valori non validi');
+    eq(I.load(st), Object.assign({}, I.DEFAULTS), 'valori non validi');
     st.setItem(I.KEY, '{rotto');
     eq(I.load(st).theme, 'auto', 'JSON danneggiato');
     const root = { dataset: {} };
@@ -2296,6 +2297,161 @@
     DnD.creature.consume(d.creature, DnD.creature.allActions(d.creature).find((a) => a.name === 'Soffio di cenere'));
     const p2 = plan(aiState([d].concat(foes)), d.id);
     eq(p2.action.name, 'Multiattacco', 'soffio da ricaricare: multiattacco');
+  });
+
+  // ======================= Velocità e movimento (movimento.js) =======================
+  const MV = () => DnD.movimento;
+  const RULES1 = { diagonals: 'sempre1', missingMode: 'vietato' };
+  const RULES_ALT = { diagonals: 'alternata', missingMode: 'vietato' };
+  const openMap = (w, h, cost, blocked) => ({ w, h, blocked: new Set(blocked || []), cost: new Map(cost || []) });
+
+  test('Movimento: conversione piedi/celle con diverse scale e fonti della velocità', () => {
+    eq([MV().cellsOf(30, 5), MV().cellsOf(30, 10), MV().cellsOf(25, 5), MV().cellsOf(35, 10), MV().cellsOf(4, 5)], [6, 3, 5, 3, 0], 'per difetto');
+    eq([MV().feetFromMeters(9), MV().feetFromMeters(12), MV().feetFromMeters(1.5), MV().metersFromFeet(30)], [30, 40, 5, 9]);
+    // Razza (Umano 9 m) e oggetti equipaggiati (+3 m).
+    const st = DnD.dati.emptyState();
+    const human = st.races.find((r) => r.name === 'Umano');
+    const boots = DnD.attrezzatura.normalizeEquipment({ id: 'stivali', name: 'Stivali veloci', category: 'magici', speedBonus: 3 });
+    const hero = DnD.dati.normalizeCreature({ name: 'Kael', raceId: human.id, classId: 'guerriero', level: 3, inventory: [{ equipmentId: 'stivali', qty: 1, equipped: false }] }, true);
+    eq(R().createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 30, 'razza');
+    hero.inventory[0].equipped = true;
+    eq(R().createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 40, 'stivali equipaggiati +3 m = +10 ft');
+    // Creatura: tutte le modalità.
+    const harpy = DnD.creature.normalizeMonster({ name: 'Arpia', speed: { walk: 6, fly: 12, swim: 0 } });
+    eq(MV().speedsFromCreature(harpy.speed), { cammina: 20, scalare: 0, nuotare: 0, volare: 40, scavare: 0 });
+    // Bonus dei nodi del percorso (+3 m) e trasformazione attiva (velocità della forma).
+    const c = legendaryOf(25);
+    c.legend.path.nodes.push(PT().normalizeNode({ id: 'v', cost: 1, effects: [{ kind: 'bonus', stat: 'velocita', value: 3 }] }));
+    c.legend.path.links.push(['nucleo', 'v']);
+    c.legend.unlocked = ['nucleo', 'v'];
+    c.legend.transformations = [formOf({ creature: { name: 'Drago', speed: { walk: 12, fly: 24 }, abilities: { FOR: 20, DES: 10, COS: 20, INT: 8, SAG: 8, CAR: 8 } } })];
+    const x = R().createCombatants([c], [], [], () => 10, st.spells, st.equipment)[0];
+    eq(x.speeds.cammina, 40, 'nodo: +3 m = +10 ft');
+    LG().transform(x, c.legend.transformations[0]);
+    eq([x.speeds.cammina, x.speeds.volare], [40, 80], 'forma: velocità della creatura');
+    // Sovrascrittura a mano.
+    const o = mkC({ id: 'o', speedOverride: { cammina: 50 } });
+    eq([MV().speedState(o, RULES1, 5).feet, MV().speedState(o, RULES1, 10).cells], [50, 5]);
+  });
+
+  test('Movimento: residuo per turno, azzeramento, limite e fermata all\'ultima cella raggiungibile', () => {
+    const k = mkC({ id: 'k', pos: { x: 0, y: 0 } }); // 9 m = 30 ft = 6 celle
+    eq([MV().budget(k, RULES1, 5), MV().left(k, RULES1, 5)], [6, 6]);
+    const st = aiState([k]);
+    const P = MV().reach(openMap(20, 20), st, k, { rules: RULES1 });
+    const r = MV().routeTo(P, { x: 10, y: 0 }, MV().left(k, RULES1, 5));
+    eq([r.end, r.cost, r.full, r.stopped], [{ x: 6, y: 0 }, 6, 10, true], 'oltre il residuo: si ferma a 6');
+    MV().recordMove(k, r.end, r.cost);
+    eq([k.pos, MV().left(k, RULES1, 5), MV().movementOf(k).moves.length], [{ x: 6, y: 0 }, 0, 1]);
+    const r2 = MV().routeTo(MV().reach(openMap(20, 20), st, k, { rules: RULES1 }), { x: 8, y: 0 }, MV().left(k, RULES1, 5));
+    eq([r2.end, r2.stopped], [{ x: 6, y: 0 }, true], 'residuo finito: resta dov\'è');
+    MV().resetTurn(k);
+    eq([MV().left(k, RULES1, 5), MV().movementOf(k).start], [6, { x: 6, y: 0 }], 'nuovo turno: velocità piena');
+    // Scala diversa: 10 ft per cella = 3 celle.
+    eq(MV().left(k, RULES1, 10), 3);
+    const msg = MV().moveText(k, 4, 6, 2, 5);
+    eq(msg, 'Senza nome si muove di 4 caselle (costo 6), restano 2 caselle (10 ft).');
+  });
+
+  test('Movimento: costo con terreno difficile, diagonali (due regole), pedina 2×2 nello stretto', () => {
+    const m = mkC({ id: 'm', pos: { x: 0, y: 0 } });
+    const st = aiState([m]);
+    const mud = openMap(20, 20, Array.from({ length: 20 }, (_, y) => [G().key(2, y), 2])); // colonna di fango in x = 2
+    eq(MV().reach(mud, st, m, { rules: RULES1 }).dist.get(G().key(4, 0)), 4 + 1, 'attraversare il terreno difficile costa 2');
+    eq(MV().reach(openMap(20, 20, [[G().key(2, 0), 2]]), st, m, { rules: RULES1 }).dist.get(G().key(4, 0)), 4, 'una cella sola si aggira');
+    eq(MV().reach(openMap(20, 20), st, m, { rules: RULES1 }).dist.get(G().key(4, 4)), 4, 'diagonali sempre 1');
+    eq(MV().reach(openMap(20, 20), st, m, { rules: RULES_ALT }).dist.get(G().key(4, 4)), 6, 'diagonali alternate 1-2-1-2');
+    eq(MV().reach(openMap(20, 20), st, m, { rules: RULES_ALT }).dist.get(G().key(3, 3)), 4, '1 + 2 + 1');
+    eq([MV().distance({ x: 0, y: 0 }, { x: 4, y: 4 }, RULES1), MV().distance({ x: 0, y: 0 }, { x: 4, y: 4 }, RULES_ALT), MV().distance({ x: 0, y: 0 }, { x: 5, y: 2 }, RULES_ALT)], [4, 6, 6], 'stessa regola del misuratore');
+    const P = MV().reach(openMap(20, 20), st, m, { rules: RULES1 });
+    ok(P.path(G().key(6, 0)).every((p) => p.y === 0), 'a parità di costo, percorso dritto (niente zig-zag)');
+    // Muro con un varco largo 1: la 2×2 non passa, la 1×1 sì.
+    const wall = [];
+    for (let x = 0; x < 20; x++) if (x !== 9) wall.push(G().key(x, 5));
+    const one = mkC({ id: 'o', pos: { x: 9, y: 2 } });
+    const big = mkC({ id: 'b', w: 2, h: 2, pos: { x: 8, y: 1 } });
+    ok(MV().reach(openMap(20, 20, [], wall), aiState([one]), one, { rules: RULES1 }).dist.has(G().key(9, 7)), '1×1 nel varco');
+    ok(!MV().reach(openMap(20, 20, [], wall), aiState([big]), big, { rules: RULES1 }).dist.has(G().key(8, 7)), '2×2: tutto l\'ingombro, non passa');
+    // Pedine ostili bloccano, alleate si attraversano ma non ci si ferma sopra.
+    const foe = mkHero({ id: 'f', pos: { x: 1, y: 0 } });
+    const ally = mkC({ id: 'a', pos: { x: 0, y: 1 } });
+    const P2 = MV().reach(openMap(3, 3), aiState([m, foe, ally]), m, { rules: RULES1 });
+    eq([P2.dist.has(G().key(1, 0)), P2.dist.has(G().key(0, 1)), P2.canEnd(0, 1)], [false, true, false]);
+  });
+
+  test('Movimento: Scatto, Rialzarsi, annulla spostamento; condizioni afferrato, prono, rallentato', () => {
+    const k = mkC({ id: 'k', name: 'Kael', pos: { x: 0, y: 0 } });
+    MV().resetTurn(k);
+    MV().recordMove(k, { x: 3, y: 0 }, 3);
+    MV().dash(k);
+    eq([MV().budget(k, RULES1, 5), MV().left(k, RULES1, 5)], [12, 9], 'Scatto: +6');
+    const u = MV().undoMoves(k);
+    eq([u.ok, u.refunded, k.pos, MV().left(k, RULES1, 5), MV().movementOf(k).dashes], [true, 3, { x: 0, y: 0 }, 12, 1], 'annulla: torna e restituisce, lo Scatto resta');
+    eq(MV().undoMoves(k).ok, false, 'niente da annullare');
+    // Prono: strisciare costa il doppio; Rialzarsi costa metà velocità e toglie la condizione.
+    k.conditions = ['prono'];
+    eq(MV().speedState(k, RULES1, 5).extra, 1);
+    eq(MV().reach(openMap(20, 20), aiState([k]), k, { rules: RULES1 }).dist.get(G().key(3, 0)), 6, 'striscia: 3 celle costano 6');
+    const sUp = MV().standUp(k, RULES1, 5);
+    eq([sUp.ok, sUp.cost, k.conditions, MV().left(k, RULES1, 5), MV().speedState(k, RULES1, 5).extra], [true, 3, [], 9, 0]);
+    const tired = mkC({ id: 't', conditions: ['prono'], movement: { used: 5 } });
+    eq(MV().standUp(tired, RULES1, 5).ok, false, 'serve metà velocità di residuo');
+    // Afferrato, trattenuto, paralizzato: 0 con il motivo; rallentato: metà.
+    for (const cond of ['afferrato', 'trattenuto', 'paralizzato']) {
+      const st = MV().speedState(mkC({ id: 'x', conditions: [cond] }), RULES1, 5);
+      eq([st.cells, st.zero, st.reasons], [0, true, [cond + ': velocità 0']], cond);
+    }
+    const slow = MV().speedState(mkC({ id: 's', conditions: ['rallentato'] }), RULES1, 5);
+    eq([slow.feet, slow.cells, slow.reasons], [15, 3, ['rallentato: metà velocità']]);
+    // Le condizioni si salvano (anche «rallentato», che non è del manuale); quelle sconosciute si scartano.
+    eq(DnD.dati.normalizeCombatant({ conditions: ['prono', 'rallentato', 'boh'] }).conditions, ['prono', 'rallentato']);
+  });
+
+  test('Movimento: modalità (camminare, volare, nuotare…) e velocità mancante vietata o doppia', () => {
+    const harpy = mkC({ id: 'h', speeds: { cammina: 20, volare: 40 }, pos: { x: 0, y: 0 } });
+    harpy.moveMode = 'volare';
+    const sf = MV().speedState(harpy, RULES1, 5);
+    eq([sf.feet, sf.cells, sf.extra], [40, 8, 0]);
+    const mud = openMap(20, 20, [[G().key(1, 0), 2], [G().key(2, 0), 2]]);
+    eq(MV().reach(mud, aiState([harpy]), harpy, { rules: RULES1 }).dist.get(G().key(3, 0)), 3, 'volando il terreno difficile non conta');
+    harpy.moveMode = 'nuotare';
+    const ban = MV().speedState(harpy, RULES1, 5);
+    eq([ban.usable, ban.cells, ban.reasons], [false, 0, ['non può nuotare']], 'senza velocità: vietato');
+    const dbl = MV().speedState(harpy, { diagonals: 'sempre1', missingMode: 'doppio' }, 5);
+    eq([dbl.usable, dbl.cells, dbl.extra], [true, 4, 1], 'oppure a costo doppio con la velocità a piedi');
+  });
+
+  test('Movimento: anteprima delle celle raggiungibili (1× e con lo Scatto), IA con il residuo', () => {
+    const k = mkC({ id: 'k', speed: 1.5, pos: { x: 5, y: 5 } }); // 5 ft = 1 cella
+    const P = MV().reach(openMap(11, 11), aiState([k]), k, { rules: RULES1 });
+    const sets = MV().reachable(P, 1, 2);
+    eq([sets.normal.size, sets.dash.size], [8, 16], 'anello a 1 e anello a 2 con lo Scatto');
+    ok(!sets.normal.has(G().key(5, 5)), 'la cella di partenza non conta');
+    // L'IA usa il residuo e il costo reale.
+    const orc = mkC({ id: 'o', name: 'Orco', pos: { x: 0, y: 0 }, movement: { used: 4 } }); // 6 celle, ne restano 2
+    const far = mkHero({ id: 'h', name: 'Lontano', pos: { x: 6, y: 0 } });
+    const p = plan(aiState([orc, far]), 'o');
+    ok(p.moveCost <= 2 + 6 && (p.dash ? p.path.length - 1 <= 8 : p.path.length - 1 <= 2), 'residuo 2 (+6 con lo Scatto): ' + p.reason);
+    const fresh = mkC({ id: 'o', name: 'Orco', pos: { x: 0, y: 0 } });
+    eq(plan(aiState([fresh, far]), 'o').action.kind, 'arma', 'con il turno pieno arriva e attacca');
+  });
+
+  test('Movimento: salvataggio e migrazione dei combattenti, movimento libero e «Ignora velocità»', () => {
+    const old = DnD.dati.normalizeCombatant({ name: 'Vecchio', speed: 12 });
+    eq([old.speeds.cammina, old.moveMode, old.movement.used, old.ignoreSpeed, old.conditions], [40, 'cammina', 0, false, []], 'dati precedenti: velocità della razza o creatura');
+    const back = DnD.dati.normalizeCombatant(JSON.parse(JSON.stringify(Object.assign({}, old, {
+      speeds: { cammina: 30, volare: 60 }, speedOverride: { cammina: 45 }, moveMode: 'volare', ignoreSpeed: true,
+      movement: { used: 3, dashes: 1, start: { x: 1, y: 1 }, moves: [{ from: { x: 1, y: 1 }, to: { x: 2, y: 2 }, cost: 1 }] },
+    }))));
+    eq([back.speeds.volare, back.speedOverride, back.moveMode, back.ignoreSpeed, back.movement.dashes, back.movement.moves.length], [60, { cammina: 45 }, 'volare', true, 1, 1]);
+    const combat = DnD.dati.normalizeCombat({ combatants: [old], freeMovement: true });
+    eq(combat.freeMovement, true, 'movimento libero salvato con il combattimento');
+    // Annulla/ripeti della griglia: anche il residuo torna indietro.
+    const doc = { grid: { structures: [], items: [], labels: [], zones: [] }, combatants: [Object.assign(mkC({ id: 'k', pos: { x: 0, y: 0 } }), { movement: MV().normalizeMovement({}) })] };
+    const snap = G().gridSnapshot(doc);
+    MV().recordMove(doc.combatants[0], { x: 3, y: 0 }, 3);
+    G().restoreSnapshot(doc, snap);
+    eq([doc.combatants[0].pos, doc.combatants[0].movement.used], [{ x: 0, y: 0 }, 0]);
   });
 
   test('IA: fuga sotto la soglia (Furbo) e Aggressivo che non fugge mai', () => {

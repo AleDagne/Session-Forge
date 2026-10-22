@@ -162,6 +162,7 @@
     if (!DnD.attrezzatura.CATEGORIES.includes(e.category)) errors.category = 'Scegli una categoria.';
     if (!Number.isFinite(e.weight) || e.weight < 0 || e.weight > 100000) errors.weight = 'Inserisci un peso (kg) tra 0 e 100000.';
     if (!Number.isFinite(e.cost.amount) || e.cost.amount < 0) errors['cost.amount'] = 'Inserisci un costo positivo o zero.';
+    if (e.speedBonus !== undefined && (!Number.isFinite(e.speedBonus) || Math.abs(e.speedBonus) > 30)) errors.speedBonus = 'Inserisci un bonus tra -30 e 30 metri.';
     if (e.weapon) {
       const p = DnD.dadi.parseExpr(e.weapon.dice);
       if (!p || p.count < 1 || p.modifier) errors['weapon.dice'] = 'Usa il formato NdM, ad esempio 1d8.';

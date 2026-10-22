@@ -5,7 +5,7 @@ const FILES = [
   './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './icons/icon.svg', './js/impostazioni.js',
   './js/config.js', './js/dadi.js', './js/regole.js', './js/classi.js', './js/magie.js', './js/equipaggiamento.js', './js/nomi.js', './js/colori.js',
   './js/libreria-icone.js', './js/icone.js', './js/immagini.js', './js/tileset.js', './js/tile.js', './js/tilemap.js', './js/collisioni.js',
-  './js/griglia.js', './js/layout-combattimento.js', './js/creature-dati.js', './js/creature.js', './js/boss.js', './js/biomi.js', './js/eventi.js',
+  './js/griglia.js', './js/movimento.js', './js/layout-combattimento.js', './js/creature-dati.js', './js/creature.js', './js/boss.js', './js/biomi.js', './js/eventi.js',
   './js/esplorazione.js', './js/percorso.js', './js/leggendario.js', './js/attrezzatura.js', './js/oggetti-mappa.js', './js/ia-dati.js',
   './js/ia.js', './js/note.js', './js/validazione.js', './js/dati.js', './js/sessioni.js', './js/generatore.js', './js/ui-comune.js',
   './js/ui-icone.js', './js/ui-razze.js', './js/ui-magie.js', './js/ui-incantesimi.js', './js/ui-asset.js', './js/ui-oggetti-mappa.js',

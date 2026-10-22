@@ -311,6 +311,7 @@
       const sorted = R.sortByInitiative(combat.combatants);
       combat.phase = 'attivo';
       combat.currentId = R.firstTurn(sorted);
+      for (const x of combat.combatants) DnD.movimento.resetTurn(x);
       DnD.dati.pushLog(combat, 'sistema', 'Inizia il combattimento (dall\'esplorazione). Ordine: ' + sorted.map((x) => x.name + ' (' + x.initiative + ')').join(', ') + '.');
     }
     return combat;

@@ -24,6 +24,109 @@
   const order = () => R.sortByInitiative(combat().combatants);
   const byId = (id) => combat().combatants.find((c) => c.id === id);
 
+  // ---------- Movimento (movimento.js) ----------
+  // Regole dalle impostazioni (diagonali, modalità senza velocità), piedi per cella della griglia del combattimento.
+  // I limiti valgono nel combattimento attivo, salvo «Movimento libero» (master) e «Ignora velocità» (combattente).
+  const Mv = DnD.movimento;
+  const rules = () => DnD.impostazioni.movementRules();
+  const fpc = () => (combat() && combat().grid.feetPerCell) || 5;
+  const limited = (x) => { const c = combat(); return Boolean(c && c.phase === 'attivo' && !c.freeMovement && !x.ignoreSpeed); };
+  const cellsText = (n) => n + (n === 1 ? ' casella' : ' caselle');
+  const condsOf = (x) => x.conditions || []; // i combattenti appena creati non hanno ancora il campo
+  // Velocità e residuo: «🚶 30 ft (6 caselle) · restano 4 (prono: striscia…)».
+  function speedText(x, short) {
+    const st = Mv.speedState(x, rules(), fpc());
+    const head = Mv.MODE_ICONS[st.mode] + ' ' + (short ? '' : Mv.MODE_NAMES[st.mode] + ' ') + st.feet + ' ft (' + cellsText(st.cells) + ')';
+    const rest = !limited(x) ? ' · movimento libero' : ' · restano ' + Mv.left(x, rules(), fpc()) + '/' + Mv.budget(x, rules(), fpc());
+    return head + rest + (st.reasons.length ? ' — ' + st.reasons.join('; ') : '');
+  }
+  // Anteprima del trascinamento: percorso minimo e celle raggiungibili (1× e con lo Scatto).
+  function movementBegin(id) {
+    const x = byId(id);
+    if (!x || !x.pos || !limited(x)) return null;
+    const st = aiState();
+    const P = IA.paths(IA.buildMap(st), st, x);
+    const left = Mv.left(x, rules(), fpc());
+    const full = Mv.speedCells(x, rules(), fpc());
+    const sets = Mv.reachable(P, left, left + full);
+    return {
+      normal: sets.normal, dash: sets.dash,
+      route: (target) => {
+        const r = Mv.routeTo(P, target, left);
+        r.label = !r.end ? 'non raggiungibile' : r.stopped
+          ? 'oltre il residuo (' + (r.full === null ? '?' : r.full) + ' > ' + left + '): si ferma dopo ' + r.cost
+          : 'costo ' + r.cost + ' · restano ' + (left - r.cost);
+        return r;
+      },
+    };
+  }
+  // Applica lo spostamento trascinato (dentro l'annulla/ripeti della griglia).
+  function movementApply(c, id, r) {
+    const t = c.combatants.find((y) => y.id === id);
+    if (!t) return;
+    Mv.recordMove(t, r.end, r.cost);
+    log(c, 'movimento', Mv.moveText(t, r.path.length - 1, r.cost, Mv.left(t, rules(), fpc()), fpc()) + (r.stopped ? ' Movimento esaurito.' : ''));
+  }
+  // Azioni di movimento: Scatto, Disimpegno, Rialzarsi, Annulla spostamento.
+  function moveAction(id, kind) {
+    const x = byId(id);
+    if (!x) return;
+    if (kind === 'rialzati') {
+      const probe = clone(x);
+      const r = Mv.standUp(probe, rules(), fpc());
+      if (!r.ok) { toast('Non può rialzarsi: ' + r.reason + '.', 'error'); return; }
+    }
+    if (kind === 'annulla' && !Mv.movementOf(x).moves.length) { toast(x.name + ' non si è ancora spostato in questo turno.'); return; }
+    mutate((c) => {
+      const t = c.combatants.find((y) => y.id === id);
+      if (kind === 'scatto') { Mv.dash(t); log(c, 'movimento', t.name + ' usa Scatto (azione): +' + cellsText(Mv.speedCells(t, rules(), fpc())) + ', restano ' + cellsText(Mv.left(t, rules(), fpc())) + '.'); }
+      else if (kind === 'disimpegno') { Mv.disengage(t); log(c, 'movimento', t.name + ' usa Disimpegno (azione): il suo movimento non provoca attacchi di opportunità in questo turno.'); }
+      else if (kind === 'rialzati') { const r = Mv.standUp(t, rules(), fpc()); log(c, 'movimento', t.name + ' si rialza (costa ' + cellsText(r.cost) + '), restano ' + cellsText(Mv.left(t, rules(), fpc())) + '.'); }
+      else if (kind === 'annulla') { const r = Mv.undoMoves(t); log(c, 'movimento', t.name + ' annulla lo spostamento: torna in ' + G.cellLabel(r.to.x, r.to.y) + ', restituite ' + cellsText(r.refunded) + '.'); }
+    });
+  }
+  function setMode(id, mode) {
+    mutate((c) => {
+      const t = c.combatants.find((y) => y.id === id);
+      t.moveMode = mode;
+      aiPlan = null;
+      log(c, 'movimento', t.name + ': modalità di movimento ' + Mv.MODE_NAMES[mode].toLowerCase() + ' (' + Mv.feetIn(t, mode) + ' ft).');
+    });
+  }
+  function toggleCondition(id, cond) {
+    mutate((c) => {
+      const t = c.combatants.find((y) => y.id === id);
+      const on = !condsOf(t).includes(cond);
+      t.conditions = on ? condsOf(t).concat(cond) : condsOf(t).filter((x) => x !== cond);
+      aiPlan = null;
+      log(c, 'sistema', t.name + (on ? ' è ' + cond : ' non è più ' + cond) + '.');
+    });
+  }
+  // Condizioni (anche «rallentato»): quelle che cambiano la velocità sono indicate.
+  function conditionsDialog(x) {
+    const speedy = new Set(Mv.STOP.concat('prono', 'rallentato'));
+    const body = el('div', { class: 'check-row' }, Mv.conditions().map((k) => el('label', { class: 'check small' },
+      el('input', { type: 'checkbox', checked: condsOf(x).includes(k), onchange: () => toggleCondition(x.id, k) }), ' ' + k + (speedy.has(k) ? ' 🦶' : ''))));
+    openDialog('Condizioni di ' + x.name, el('div', { class: 'form' }, body,
+      el('p', { class: 'muted small', text: '🦶 = cambia la velocità: afferrato, trattenuto, paralizzato, pietrificato e privo di sensi = 0; prono = striscia (costo doppio; Rialzarsi costa metà velocità); rallentato = metà velocità.' })), [{ text: 'Chiudi' }]);
+  }
+  // Riquadro del movimento nella scheda: velocità e residuo con il motivo, condizioni, azioni.
+  function movementBox(x) {
+    const m = Mv.movementOf(x);
+    const prone = condsOf(x).includes('prono');
+    return el('div', { class: 'move-box' + (limited(x) && !Mv.left(x, rules(), fpc()) ? ' empty' : '') },
+      el('span', { class: 'small', text: speedText(x) }),
+      condsOf(x).length ? el('div', { class: 'cond-chips' }, condsOf(x).map((k) => el('span', { class: 'tag cond-tag', text: k }))) : null,
+      el('div', { class: 'head-actions' },
+        el('button', { type: 'button', class: 'btn small', text: '🏃 Scatto', title: 'Aggiunge la velocità al residuo (usa l\'azione)', disabled: R.isDown(x), onclick: () => moveAction(x.id, 'scatto') }),
+        el('button', { type: 'button', class: 'btn small', text: '↩ Disimpegno', title: 'Promemoria: niente attacchi di opportunità (usa l\'azione)', disabled: R.isDown(x) || m.disengaged, onclick: () => moveAction(x.id, 'disimpegno') }),
+        prone ? el('button', { type: 'button', class: 'btn small', text: '⤒ Rialzati', title: 'Costa metà della velocità', onclick: () => moveAction(x.id, 'rialzati') }) : null,
+        m.moves.length ? el('button', { type: 'button', class: 'btn small', text: '↶ Annulla spostamento', title: 'Torna alla posizione d\'inizio turno e restituisce il movimento', onclick: () => moveAction(x.id, 'annulla') }) : null,
+        el('button', { type: 'button', class: 'btn small', text: 'Condizioni…', onclick: () => conditionsDialog(byId(x.id)) })));
+  }
+  // Interruttore del master: nessun limite di velocità.
+  const freeBox = el('input', { type: 'checkbox', onchange: (e) => mutate((c) => { c.freeMovement = e.target.checked; log(c, 'sistema', 'Movimento libero ' + (c.freeMovement ? 'attivo: nessun limite di velocità.' : 'disattivato.')); }) });
+
   // ---------- Combattimento simulato (IA) ----------
   const IA = DnD.ia;
   const KI = DnD.iaDati;
@@ -37,10 +140,10 @@
   function aiState() {
     const st = DnD.store.state;
     const c = combat();
-    return { combatants: c.combatants, grid: c.grid, catalog: st.equipment, tilesets: DnD.tilemap.tilesetIndex(st.tilesets), round: c.round, seed: c.ai.seed };
+    return { combatants: c.combatants, grid: c.grid, catalog: st.equipment, tilesets: DnD.tilemap.tilesetIndex(st.tilesets), round: c.round, seed: c.ai.seed, rules: rules() };
   }
   // Impronta di ciò che cambia il piano: posizioni, PF, ingombri, controllo, fazioni e oggetti della griglia.
-  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden]),
+  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.freeMovement, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden, x.movement, x.conditions, x.moveMode]),
     c.grid.items.map((it) => [it.id, it.x, it.y, it.state]), c.grid.structures.length, c.grid.ignoreCollisions]);
   // Piano del combattente di turno, se è controllato dall'IA: si ricalcola quando cambia il turno o la griglia,
   // o su richiesta (Ricalcola, Cambia bersaglio: il bersaglio scelto resta finché non si ricalcola).
@@ -82,9 +185,17 @@
       }
       mutate((c) => {
         const m = c.combatants.find((y) => y.id === plan.combatantId);
-        if (end) m.pos = { x: end.x, y: end.y };
+        if (end && plan.dash && limited(m)) Mv.dash(m);
+        let moveLine = '';
+        if (end && (end.x !== m.pos.x || end.y !== m.pos.y)) {
+          if (limited(m)) {
+            Mv.recordMove(m, end, plan.moveCost);
+            moveLine = Mv.moveText(m, plan.path.length - 1, plan.moveCost, Mv.left(m, rules(), fpc()), fpc());
+          } else m.pos = { x: end.x, y: end.y };
+        }
         DnD.dati.pushLog(c, 'ia', '🤖 ' + plan.reason);
         c.log[c.log.length - 1].why = IA.whyText(plan);
+        if (moveLine) log(c, 'movimento', moveLine);
         for (const r of plan.reminders) log(c, 'sistema', r);
         const a = plan.action;
         if (a.kind === 'schivare') log(c, 'sistema', m.name + ' usa Schivare: gli attacchi contro di lui hanno svantaggio fino al suo prossimo turno.');
@@ -235,9 +346,13 @@
         showCombatants: true,
         onSelect: (id) => selectCombatant(id, 'grid'),
         tokenActions,
-        // Anteprima del piano dell'IA: percorso tratteggiato e bersagli evidenziati.
+        movement: { begin: movementBegin, apply: movementApply },
+        turnInfo: (x) => speedText(x, true),
+        // Residuo sopra la pedina di turno; anteprima del piano dell'IA: percorso tratteggiato e bersagli evidenziati.
         overlay: (ctx, view, s) => {
           const c = combat();
+          const cur = c && c.currentId ? byId(c.currentId) : null;
+          if (cur && cur.pos && limited(cur)) DnD.uiIa.drawBadge(ctx, view, s, cur, '🦶 ' + Mv.left(cur, rules(), fpc()));
           if (!c || !aiOn() || !aiPlan || aiPlan.forId !== c.currentId) return;
           const col = DnD.uiTileset.colors();
           DnD.uiIa.drawPlan(ctx, view, s, aiPlan.plan, c.combatants, { current: col.accent, bad: '#d4453a' });
@@ -263,10 +378,12 @@
           el('button', { type: 'button', class: 'btn small', text: '💾 Salva come nuova griglia', onclick: saveAsNewGrid }),
           updateOriginalBtn,
           el('button', { type: 'button', class: 'btn small', text: 'Carica griglia…', onclick: () => DnD.uiGriglia.savedGridsDialog(loadGrid) }),
+          el('label', { class: 'check small', title: 'Nessun limite di velocità (eventi, teletrasporti)' }, freeBox, ' Movimento libero'),
         ],
       });
     }
     updateOriginalBtn.hidden = !originalGrid();
+    freeBox.checked = Boolean(combat() && combat().freeMovement);
     return grid;
   }
 
@@ -292,6 +409,21 @@
       x.spellcasting ? { text: '✨ Lancia incantesimo', disabled: R.isDown(x) || !x.spellcasting.spells.length, onclick: () => castDialog(byId(id)) } : null,
       { text: '✎ Modifica', onclick: () => editDialog(byId(id)) },
       { text: '↔ Dimensione sulla griglia…', onclick: () => resizeDialog(byId(id)) },
+      ...Mv.MODES.filter((mode) => mode !== Mv.modeOf(x)).map((mode) => {
+        const ft = Mv.feetIn(x, mode);
+        const banned = ft <= 0 && mode !== 'cammina' && rules().missingMode === 'vietato';
+        return { text: Mv.MODE_ICONS[mode] + ' Modalità: ' + Mv.MODE_NAMES[mode].toLowerCase() + (ft > 0 ? ' (' + ft + ' ft)' : mode === 'cammina' ? '' : banned ? ' (nessuna velocità)' : ' (costo doppio)'),
+          disabled: banned, onclick: () => setMode(id, mode) };
+      }),
+      { text: '🏃 Scatto', disabled: R.isDown(x), onclick: () => moveAction(id, 'scatto') },
+      condsOf(x).includes('prono') ? { text: '⤒ Rialzati (metà velocità)', onclick: () => moveAction(id, 'rialzati') } : null,
+      Mv.movementOf(x).moves.length ? { text: '↶ Annulla spostamento', onclick: () => moveAction(id, 'annulla') } : null,
+      { text: '⚕ Condizioni…', onclick: () => conditionsDialog(byId(id)) },
+      { text: x.ignoreSpeed ? '🦶 Rispetta la velocità' : '🦶 Ignora velocità', onclick: () => mutate((c) => {
+        const t = c.combatants.find((y) => y.id === id);
+        t.ignoreSpeed = !t.ignoreSpeed;
+        log(c, 'sistema', t.name + ': ' + (t.ignoreSpeed ? 'ignora la velocità (movimento libero).' : 'rispetta di nuovo la velocità.'));
+      }) },
       { text: x.control === 'ia' ? '👤 Controllo: passa a Manuale' : '🤖 Controllo: passa all\'IA', onclick: () => mutate((c) => {
         const t = c.combatants.find((y) => y.id === id);
         t.control = t.control === 'ia' ? 'manuale' : 'ia';
@@ -535,6 +667,7 @@
         c.phase = 'attivo';
         c.round = 1;
         c.currentId = R.firstTurn(sorted);
+        for (const x of c.combatants) Mv.resetTurn(x);
         log(c, 'sistema', 'Inizia il combattimento. Ordine: ' + sorted.map((x) => x.name + ' (' + x.initiative + ')').join(', ') + '.');
         if (c.currentId) startTurnOf(c, sorted, null, c.currentId, true);
       });
@@ -576,6 +709,7 @@
       toast('Iniziativa 20: azioni di tana disponibili.');
     }
     const cur = byId(nextId);
+    Mv.resetTurn(cur);
     log(c, 'turno', 'Turno di ' + cur.name + '.');
     // Trasformazione leggendaria: la durata scende all'inizio del turno.
     for (const line of DnD.leggendario.tick(cur)) log(c, 'sistema', line);
@@ -974,11 +1108,17 @@
       ac: numberInput(target.ac, { min: 1, max: 40 }),
       initiative: numberInput(target.initiative),
     };
-    const body = el('div', { class: 'form grid-2' },
+    // Velocità per modalità: vuoto = quella della razza o della creatura (con bonus e forma), in piedi.
+    const base = Mv.baseSpeeds(target);
+    const over = Mv.normalizeOverride(target.speedOverride);
+    const speedInp = Object.fromEntries(Mv.MODES.map((m) => [m, numberInput(over[m] === undefined ? '' : over[m], { min: 0, max: Mv.MAX_FEET, step: 5, placeholder: String(base[m]) })]));
+    const body = el('div', { class: 'form' }, el('div', { class: 'grid-2' },
       field('PF attuali', inp.hp, 'hp'),
       field('PF massimi', inp.maxHp, 'maxHp'),
       field('Classe Armatura', inp.ac, 'ac'),
-      field('Iniziativa', inp.initiative, 'initiative'));
+      field('Iniziativa', inp.initiative, 'initiative')),
+      el('fieldset', {}, el('legend', { text: 'Velocità (ft) — vuoto = dalla scheda' }),
+        el('div', { class: 'grid-3 tight' }, Mv.MODES.map((m) => field(Mv.MODE_ICONS[m] + ' ' + Mv.MODE_NAMES[m], speedInp[m], 'speed.' + m)))));
     openDialog('Modifica ' + target.name, body, [
       { text: 'Annulla' },
       { text: 'Salva', class: 'primary', onclick: () => {
@@ -988,6 +1128,13 @@
         DnD.validazione.intInRange(errors, 'hp', v.hp, 0, Number.isInteger(v.maxHp) ? v.maxHp : 9999);
         DnD.validazione.intInRange(errors, 'ac', v.ac, 1, 40);
         DnD.validazione.intInRange(errors, 'initiative', v.initiative, -20, 60);
+        const newOver = {};
+        for (const m of Mv.MODES) {
+          if (speedInp[m].value.trim() === '') continue;
+          const n = readNumber(speedInp[m]);
+          DnD.validazione.intInRange(errors, 'speed.' + m, n, 0, Mv.MAX_FEET);
+          newOver[m] = n;
+        }
         if (!showErrors(body, errors)) return false;
         mutate((c) => {
           const t = byId(target.id);
@@ -996,6 +1143,10 @@
           if (t.hp !== v.hp || t.maxHp !== v.maxHp) changes.push('PF ' + t.hp + '/' + t.maxHp + ' → ' + v.hp + '/' + v.maxHp);
           if (t.ac !== v.ac) changes.push('CA ' + t.ac + ' → ' + v.ac);
           if (t.initiative !== v.initiative) changes.push('iniziativa ' + t.initiative + ' → ' + v.initiative);
+          if (JSON.stringify(Mv.normalizeOverride(t.speedOverride)) !== JSON.stringify(Mv.normalizeOverride(newOver))) {
+            changes.push('velocità ' + (Object.keys(newOver).length ? Object.entries(newOver).map(([m, n]) => Mv.MODE_NAMES[m].toLowerCase() + ' ' + n + ' ft').join(', ') : 'dalla scheda'));
+            t.speedOverride = newOver;
+          }
           if (!changes.length) return;
           const wasUp = t.hp > 0;
           Object.assign(t, v);
@@ -1224,6 +1375,7 @@
         x.defenses.vuln.length ? 'Vulnerabile: ' + M.defensesText(x.defenses.vuln) : '', x.defenses.res.length ? 'Resiste: ' + M.defensesText(x.defenses.res) : '',
         x.defenses.imm.length ? 'Immune: ' + M.defensesText(x.defenses.imm) : ''].filter(Boolean).join(' · ') }) : null,
       x.spellcasting ? slotsIndicator(x.spellcasting) : null,
+      x.pos || combat().phase === 'attivo' ? movementBox(x) : null,
       // Leggendari: Trasformati / Torna normale, rango e forma attiva.
       x.legend && DnD.uiLeggendario ? DnD.uiLeggendario.combatBox(x, { mutate, log, byId, render }) : null,
       creatureBox(x),
@@ -1346,6 +1498,7 @@
           el('section', { class: 'panel turn-panel' },
             el('div', { class: 'round' }, 'Round ', el('b', { text: String(c.round) })),
             el('div', { class: 'muted', text: current ? 'Turno di ' + current.name : anyUp ? 'Nessun turno attivo' : 'Tutti i combattenti sono a terra' }),
+            current ? el('div', { class: 'small turn-move', text: speedText(current, true) }) : null,
             el('button', { class: 'btn primary wide', text: 'Prossimo turno ▶', onclick: nextTurn, disabled: !anyUp }),
             el('ol', { class: 'turn-order' }, list.map((x) => el('li', {
               class: (x.id === c.currentId ? 'current ' : '') + (R.isDown(x) ? 'down ' : '') + x.kind,

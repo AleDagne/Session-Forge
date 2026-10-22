@@ -343,7 +343,8 @@
       saves: stats.saveTotals,
       w: dims.w,
       h: dims.h,
-      speed: race ? race.speed : 9,
+      // Velocità in piedi per modalità (movimento.js): razza più gli oggetti equipaggiati.
+      speeds: DnD.movimento.addFeet(DnD.movimento.speedsFromRace(race), DnD.movimento.feetFromMeters(DnD.attrezzatura.speedBonus(source.inventory, list))),
       icon: Object.assign({}, source.icon),
       pos: null,
       weapons: stats.weapons.map((w) => Object.assign({}, w, { magical: magicOf(w) })),

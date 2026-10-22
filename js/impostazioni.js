@@ -1,4 +1,5 @@
-// Impostazioni di visualizzazione: tema, dimensione del testo, animazioni ridotte, effetti dei boss.
+// Impostazioni di visualizzazione: tema, dimensione del testo, animazioni ridotte, effetti dei boss, regole del
+// movimento (diagonali, modalità senza velocità) e dadi animati (interruttori, velocità, colore, suoni).
 // Caricato in <head> per applicare il tema prima del primo rendering (niente lampo di tema sbagliato).
 (function (DnD) {
   'use strict';
@@ -6,7 +7,14 @@
   const KEY = 'dnd-battaglie:impostazioni';
   const THEMES = ['chiaro', 'scuro', 'auto'];
   const TEXT_SIZES = ['piccolo', 'normale', 'grande'];
-  const DEFAULTS = { theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true };
+  const DIAGONALS = ['sempre1', 'alternata'];
+  const MISSING_MODES = ['vietato', 'doppio'];
+  const DICE_SPEEDS = ['lenta', 'normale', 'veloce', 'istantanea'];
+  const DEFAULTS = {
+    theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true,
+    diagonals: 'sempre1', missingMode: 'vietato',
+    diceAnim: true, diceMenu: true, diceCombat: true, diceExploration: true, diceSpeed: 'normale', diceColor: 'rosso', diceSound: false, diceVolume: 50,
+  };
   const DARK_QUERY = '(prefers-color-scheme: dark)';
 
   function normalize(raw) {
@@ -17,6 +25,18 @@
       reduceMotion: Boolean(raw.reduceMotion),
       // Effetti dei boss nel combattimento (barra in alto, vignettatura, animazioni): attivi di base.
       bossEffects: raw.bossEffects !== false,
+      // Movimento: diagonali sempre a 1 casella (come prima) o alternate 1-2-1; modalità senza velocità vietata o doppia.
+      diagonals: DIAGONALS.includes(raw.diagonals) ? raw.diagonals : DEFAULTS.diagonals,
+      missingMode: MISSING_MODES.includes(raw.missingMode) ? raw.missingMode : DEFAULTS.missingMode,
+      // Dadi animati: interruttore generale e per categoria, velocità, colore (chiave della palette), suoni (spenti).
+      diceAnim: raw.diceAnim !== false,
+      diceMenu: raw.diceMenu !== false,
+      diceCombat: raw.diceCombat !== false,
+      diceExploration: raw.diceExploration !== false,
+      diceSpeed: DICE_SPEEDS.includes(raw.diceSpeed) ? raw.diceSpeed : DEFAULTS.diceSpeed,
+      diceColor: typeof raw.diceColor === 'string' && /^[a-z]{2,20}$/.test(raw.diceColor) ? raw.diceColor : DEFAULTS.diceColor,
+      diceSound: Boolean(raw.diceSound),
+      diceVolume: Number.isFinite(Number(raw.diceVolume)) && raw.diceVolume !== null && raw.diceVolume !== '' ? Math.max(0, Math.min(100, Math.round(Number(raw.diceVolume)))) : DEFAULTS.diceVolume,
     };
   }
 
@@ -81,10 +101,13 @@
   }
 
   DnD.impostazioni = {
-    KEY, THEMES, TEXT_SIZES, DEFAULTS, normalize, load, save, resolveTheme, apply, init, set,
+    KEY, THEMES, TEXT_SIZES, DIAGONALS, MISSING_MODES, DICE_SPEEDS, DEFAULTS, normalize, load, save, resolveTheme, apply, init, set,
     get: () => current,
     isDark: () => document.documentElement.dataset.theme === 'dark',
     reduceMotion: () => Boolean(current && current.reduceMotion),
     bossEffects: () => !current || current.bossEffects !== false,
+    // Regole del movimento per movimento.js (di base quelle predefinite, anche prima di init).
+    movementRules: () => ({ diagonals: (current || DEFAULTS).diagonals, missingMode: (current || DEFAULTS).missingMode }),
+    dice: () => normalize(current || DEFAULTS),
   };
 })(globalThis.DnD = globalThis.DnD || {});
