@@ -13,7 +13,11 @@
       else if (k === 'value' || k === 'checked' || k === 'selected') node[k] = v;
       else node.setAttribute(k, v === true ? '' : v);
     }
-    for (const c of children.flat()) {
+    return addChildren(node, children);
+  }
+  // Figli come in el(): elenchi spianati, null/undefined/false saltati, testi e numeri come nodi di testo.
+  function addChildren(node, children) {
+    for (const c of children.flat(Infinity)) {
       if (c === null || c === undefined || c === false) continue;
       node.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
     }
@@ -24,6 +28,8 @@
     while (node.firstChild) node.removeChild(node.firstChild);
     return node;
   }
+  // Svuota il nodo e aggiunge i figli con le regole di el() (l'append nativo scriverebbe «null» e gli elenchi come testo).
+  const fill = (node, ...children) => addChildren(clear(node), children);
 
   let fieldSeq = 0;
 
@@ -202,5 +208,5 @@
     return Boolean(t && t.nodeType === 1 && (t.isContentEditable || (t.closest && t.closest('[contenteditable="true"]'))));
   }
 
-  DnD.ui = { shortcutsBlocked, el, clear, field, numberInput, textInput, readNumber, showErrors, toast, openDialog, promptText, openMenu, closeMenu, persistentToggle, scrollBehavior, svgIcon, emptyState, raceName };
+  DnD.ui = { shortcutsBlocked, el, clear, fill, field, numberInput, textInput, readNumber, showErrors, toast, openDialog, promptText, openMenu, closeMenu, persistentToggle, scrollBehavior, svgIcon, emptyState, raceName };
 })(globalThis.DnD = globalThis.DnD || {});

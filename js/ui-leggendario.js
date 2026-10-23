@@ -294,6 +294,7 @@
               DnD.store.update((s) => { s.players.push(copy); });
               render();
             } }),
+            el('button', { class: 'btn', text: '🛏 Risorse…', title: 'Dadi vita, slot, usi, PF temporanei, sfinimento e riposi', onclick: () => DnD.uiRiposi.playerDialog(c.id, render) }),
             el('button', { class: 'btn', text: 'Declassa', onclick: () => demote(c) }),
             el('button', { class: 'btn danger', text: 'Elimina', onclick: () => { if (confirm('Eliminare «' + c.name + '»?')) { DnD.store.update((s) => { s.players = s.players.filter((x) => x.id !== c.id); }); render(); } } })));
         return card;

@@ -15,6 +15,7 @@
     theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true,
     diagonals: 'sempre1', missingMode: 'vietato',
     deathSaves: true, enemiesDie: true,
+    restHeroic: false, restShort8: false, restLong7: false,
     diceAnim: true, diceMenu: true, diceCombat: true, diceExploration: true, diceSpeed: 'normale', diceColor: 'rosso',
   };
   const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -33,6 +34,10 @@
       // Combattimento: tiri contro la morte per i giocatori a 0 PF e nemici che a 0 PF muoiono (attivi di base).
       deathSaves: raw.deathSaves !== false,
       enemiesDie: raw.enemiesDie !== false,
+      // Riposi (varianti del master): eroico = tutti i dadi vita; gritty = riposo breve di 8 ore, lungo di 7 giorni.
+      restHeroic: Boolean(raw.restHeroic),
+      restShort8: Boolean(raw.restShort8),
+      restLong7: Boolean(raw.restLong7),
       // Dadi animati: interruttore generale e per categoria, velocità, colore (chiave della palette).
       diceAnim: raw.diceAnim !== false,
       diceMenu: raw.diceMenu !== false,
@@ -113,6 +118,7 @@
     movementRules: () => ({ diagonals: (current || DEFAULTS).diagonals, missingMode: (current || DEFAULTS).missingMode }),
     dice: () => normalize(current || DEFAULTS),
     // Regole dei 0 PF per condizioni.js (tiri contro la morte, nemici che muoiono).
+    restOptions: () => ({ heroic: Boolean((current || DEFAULTS).restHeroic), gritty8: Boolean((current || DEFAULTS).restShort8), gritty7: Boolean((current || DEFAULTS).restLong7) }),
     combatRules: () => ({ deathSaves: (current || DEFAULTS).deathSaves !== false, enemiesDie: (current || DEFAULTS).enemiesDie !== false }),
   };
 })(globalThis.DnD = globalThis.DnD || {});

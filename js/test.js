@@ -4647,6 +4647,190 @@
     eq(DnD.dati.normalizeState({ version: 12, races: [], npcs: [], players: [] }).customConditions, [], 'v12 → v13');
   });
 
+  // ======================= Riposi e risorse =======================
+  const RP = () => DnD.riposi;
+  // Personaggio di prova: guerriero di livello 5 (d10), COS 14 (+2), 44 PF.
+  const restHero = (o) => DnD.dati.normalizeCreature(Object.assign({ id: 'h', name: 'Mira', classId: 'guerriero', level: 5, maxHp: 44,
+    abilities: { FOR: 14, DES: 12, COS: 14, INT: 10, SAG: 10, CAR: 10 } }, o), true);
+
+  test('Riposi: dadi vita dalla classe e dal livello, riposo breve con mod. COS e massimo dei PF', () => {
+    const st = DnD.dati.emptyState();
+    const p = restHero({ status: { hp: 20 } });
+    const s = RP().fromSheet(p, st);
+    eq([s.hd.die, s.hd.total, s.hd.used, s.conMod, s.getHp(), s.maxHp], [10, 5, 0, 2, 20, 44]);
+    const r = RP().shortRest(s, { rolls: [6, 9] });
+    eq([r.healed, r.spent, s.getHp(), p.status.hitDiceUsed, r.restored], [19, 2, 39, 2, []], '(6+2) + (9+2)');
+    const r2 = RP().shortRest(s, { rolls: [10, 10, 10, 10] });
+    eq([r2.spent, s.getHp(), p.status.hp, p.status.hitDiceUsed], [3, 44, null, 5], 'non oltre il massimo; solo i dadi rimasti');
+    eq(RP().rollHitDice(s, 3, seq()).length, 0, 'nessun dado vita rimasto');
+    const weak = RP().fromSheet(restHero({ id: 'w', classId: 'mago', level: 3, maxHp: 14, abilities: { FOR: 8, DES: 14, COS: 8, INT: 16, SAG: 10, CAR: 10 }, status: { hp: 5 } }), st);
+    eq([weak.hd.die, weak.conMod, RP().shortRest(weak, { rolls: [1] }).healed], [6, -1, 0], 'mago d6, COS 8: minimo 0');
+    eq(RP().rollHitDice(weak, 2, seq(4, 2)), [4, 2], 'tiri in anticipo per l\'anteprima');
+    ok(/Riposo breve: Mira recupera 19 PF, spende 2 dadi vita \[6, 9\]/.test(RP().summaryText(r)), RP().summaryText(r));
+  });
+
+  test('Riposi: riposo lungo (PF, metà dei dadi vita con minimo 1, PF temporanei, sfinimento) ed eroico', () => {
+    const st = DnD.dati.emptyState();
+    const p = restHero({ status: { hp: 10, tempHp: 7, hitDiceUsed: 5, exhaustion: 2 } });
+    const s = RP().fromSheet(p, st);
+    const r = RP().longRest(s, {});
+    eq([s.getHp(), p.status.tempHp, p.status.hitDiceUsed, p.status.exhaustion, r.healed, r.regained, r.exhaustion], [44, 0, 3, 1, 34, 2, -1], 'livello 5: +2 dadi vita');
+    ok(/Riposo lungo: Mira recupera 34 PF, 2 dadi vita, sfinimento -1/.test(RP().summaryText(r)), RP().summaryText(r));
+    const one = restHero({ id: 'u', level: 1, status: { hitDiceUsed: 1 } });
+    RP().longRest(RP().fromSheet(one, st), {});
+    eq(one.status.hitDiceUsed, 0, 'livello 1: almeno 1 dado vita');
+    const hero = restHero({ id: 'e', status: { hitDiceUsed: 5 } });
+    RP().longRest(RP().fromSheet(hero, st), { opts: { heroic: true } });
+    eq(hero.status.hitDiceUsed, 0, 'eroico: tutti i dadi vita');
+    const hungry = restHero({ id: 'f', status: { exhaustion: 2 } });
+    RP().longRest(RP().fromSheet(hungry, st), { suppliesOk: false });
+    eq(hungry.status.exhaustion, 2, 'senza cibo e acqua lo sfinimento non scende');
+  });
+
+  test('Riposi: slot e risorse per tipo di riposo (breve, lungo, alba, mai, manuale) e Warlock', () => {
+    const st = DnD.dati.emptyState();
+    const cust = [['Ispirazione', 'breve'], ['Furia', 'lungo'], ['Benedizione', 'alba'], ['Reliquia', 'mai'], ['Segno', 'manuale']].map(([label, reset]) => ({ id: 'r-' + reset, label, max: 2, value: 0, reset }));
+    const wiz = restHero({ id: 'm', classId: 'mago', level: 3, maxHp: 16, spellcasting: { slotsUsed: [3, 2, 0, 0, 0, 0, 0, 0, 0] }, status: { resources: cust } });
+    const s = RP().fromSheet(wiz, st);
+    eq(RP().resources(s).filter((r) => r.kind === 'slot').map((r) => [r.label, r.value, r.max, r.reset]), [['Slot 1° livello', 1, 4, 'lungo'], ['Slot 2° livello', 0, 2, 'lungo']]);
+    const val = () => wiz.status.resources.map((r) => r.value);
+    const short = RP().shortRest(s, { rolls: [] });
+    eq([wiz.spellcasting.slotsUsed.slice(0, 2), val(), short.restored], [[3, 2], [2, 0, 0, 0, 0], ['Ispirazione']], 'breve: solo le «riposo breve»');
+    eq([RP().dawn(s), val()], [['Benedizione'], [2, 0, 2, 0, 0]], 'all\'alba');
+    wiz.status.resources[2].value = 0;
+    const long = RP().longRest(s, {});
+    eq([wiz.spellcasting.slotsUsed.slice(0, 2), val(), long.slotsAll], [[0, 0], [2, 2, 2, 0, 0], true], 'lungo: slot, lungo e alba; mai e manuale restano');
+    ok(/tutti gli slot/.test(RP().summaryText(long)), RP().summaryText(long));
+    // Warlock: la magia del patto torna con il riposo breve.
+    const wl = restHero({ id: 'k', classId: 'warlock', level: 3, maxHp: 20, spellcasting: { slotsUsed: [0, 2, 0, 0, 0, 0, 0, 0, 0] } });
+    const ws = RP().fromSheet(wl, st);
+    eq(RP().resources(ws).filter((r) => r.kind === 'slot').map((r) => [r.max, r.reset]), [[2, 'breve']]);
+    RP().shortRest(ws, { rolls: [] });
+    eq(wl.spellcasting.slotsUsed[1], 0, 'riposo breve del Warlock');
+    // − e +: limiti e PF temporanei senza massimo.
+    eq([RP().adjust(s, 'cust-r-mai', 5), RP().adjust(s, 'cust-r-mai', -9), RP().adjust(s, 'pf-temp', 3), RP().adjust(s, 'dadi-vita', -1), wiz.status.hitDiceUsed, RP().adjust(s, 'boh', 1)], [2, 0, 3, 2, 1, null]);
+  });
+
+  test('Riposi: regola delle 24 ore, riposo interrotto, varianti gritty, ripristina tutto', () => {
+    const st = DnD.dati.emptyState();
+    const p = restHero({ status: { hp: 4, resources: [{ id: 'r-b', label: 'Breve', max: 1, value: 0, reset: 'breve' }] } });
+    const s = RP().fromSheet(p, st);
+    eq(RP().canLongRest(s, 5), { ok: true, wait: 0 }, 'mai riposato');
+    s.markLongRest(10);
+    eq([RP().canLongRest(s, 20), RP().canLongRest(s, 34).ok], [{ ok: false, wait: 14 }, true]);
+    const none = RP().longRest(s, { interruptedAfter: 0.5 });
+    eq([none.interrupted, none.restored, s.getHp()], [true, [], 4], 'interrotto subito: nessun beneficio');
+    const part = RP().longRest(s, { interruptedAfter: 2 });
+    eq([part.restored, s.getHp(), p.status.resources[0].value], [['Breve'], 4, 1], 'dopo almeno 1 ora: i benefici del riposo breve, non quelli del lungo');
+    ok(/interrotto dopo 2 ore/.test(RP().summaryText(part)));
+    eq([RP().hoursOf('breve', {}), RP().hoursOf('lungo', {}), RP().hoursOf('breve', { gritty8: true }), RP().hoursOf('lungo', { gritty7: true })], [1, 8, 8, 168]);
+    eq([DnD.impostazioni.normalize({}).restHeroic, DnD.impostazioni.normalize({ restLong7: true }).restLong7], [false, true], 'opzioni del master spente di base');
+    Object.assign(p.status, { hitDiceUsed: 3, tempHp: 4, exhaustion: 3 });
+    RP().restoreAll(RP().fromSheet(p, st));
+    eq([p.status.hp, p.status.hitDiceUsed, p.status.tempHp, p.status.exhaustion], [null, 0, 0, 0], 'ripristina tutto (master)');
+  });
+
+  test('Riposi nell\'esplorazione: tempo e scorte, 24 ore, incontro che interrompe, guardie, alba, evento Riposo', () => {
+    const w = exploreWorld();
+    const p1 = w.st.players[0];
+    p1.abilities.COS = 14;
+    w.ex.members.p1.hp = 5;
+    const food = w.ex.supplies.food;
+    const t0 = w.ex.time.total;
+    const r = XP().rest(w, 'lungo', { guards: ['p1', 'p2'] });
+    eq([r.ok, r.hours, r.interrupted, w.ex.time.total - t0, w.ex.members.p1.hp, p1.status.lastLongRest], [true, 8, null, 8, 20, w.ex.time.total]);
+    ok(w.ex.supplies.food < food, 'scorte consumate');
+    ok(w.ex.log.some((l) => /Turni di guardia: Aria 0h–4h, Brun 4h–8h/.test(l.text)) && w.ex.log.some((l) => /Riposo lungo: Aria recupera 15 PF/.test(l.text)), 'guardie e riepilogo nel registro');
+    const again = XP().rest(w, 'lungo', {});
+    ok(!again.ok && /24 ore/.test(again.reason), again.reason);
+    w.ex.members.p1.hp = 10;
+    const sh = XP().rest(w, 'breve', { rolls: { p1: [5] } });
+    eq([sh.ok, w.ex.members.p1.hp, w.ex.time.total - t0], [true, 17, 9], 'riposo breve: 5 + 2 COS, 1 ora');
+    // Incontro notturno: il riposo si ferma alla prima ora e non dà i benefici del riposo lungo.
+    const plain = w.st.biomes.find((b) => b.id === 'bioma-pianura');
+    Object.assign(plain, { encounterChance: 100, encounterPer: 'ora', encounters: [BI().normalizeBiome({ encounters: [{ kind: 'creatura', refId: w.st.npcs[0].id, qty: '1', weight: 1 }] }).encounters[0]] });
+    w.ex.members.p1.hp = 3;
+    const cut = XP().rest(w, 'lungo', { force: true, guards: ['p2'] });
+    eq([cut.interrupted, cut.hours, w.ex.members.p1.hp, cut.results[0].interrupted], ['incontro', 1, 3, true]);
+    ok(w.ex.queue.some((q) => q.kind === 'incontro') && w.ex.log.some((l) => /interrotto da un incontro dopo 1h: era di guardia Brun/.test(l.text)), 'incontro in coda');
+    plain.encounterChance = 0;
+    w.ex.queue = [];
+    // Senza scorte: lo sfinimento sale invece di scendere.
+    w.ex.supplies.food = 0;
+    w.ex.members.p1.exhaustion = 1;
+    XP().rest(w, 'lungo', { force: true });
+    eq(w.ex.members.p1.exhaustion, 2, 'senza cibo: +1 sfinimento');
+    // Alba: le risorse «all'alba» tornano quando il tempo attraversa le 6.
+    w.ex.time.hour = 4;
+    p1.status.resources = [RP().normalizeResource({ id: 'r-a', label: 'Preghiera', max: 1, value: 0, reset: 'alba' })];
+    XP().advanceTime(w, 3);
+    eq(p1.status.resources[0].value, 1);
+    ok(w.ex.log.some((l) => /Alba: Aria recupera Preghiera/.test(l.text)));
+    // L'azione «Riposo» degli eventi usa lo stesso riposo.
+    w.ex.supplies.food = 20;
+    w.ex.members.p2.hp = 1;
+    XP().fireEvent(w, { event: EV().normalizeEvent({ id: 'campo', name: 'Accampamento', actions: [{ kind: 'riposo', long: true }] }) }, {});
+    eq(w.ex.members.p2.hp, 20, 'evento: riposo lungo');
+  });
+
+  test('Riposi nel combattimento: stato dalla scheda e ritorno, PF temporanei, riposo di un nemico', () => {
+    const st = DnD.dati.emptyState();
+    const p = restHero({ status: { hp: 12, tempHp: 5, hitDiceUsed: 1, exhaustion: 2, resources: [{ id: 'r1', label: 'Furia', max: 3, value: 1, reset: 'lungo' }] } });
+    const [x] = R().createCombatants([p], [], st.races, () => 10);
+    eq([x.hp, x.tempHp, x.hitDice, DnD.condizioni.exhaustion(x), x.resources[0].value], [12, 5, { die: 10, total: 5, used: 1 }, 2, 1], 'dalla scheda');
+    eq([RP().absorbTemp(x, 8), x.tempHp], [{ rest: 3, absorbed: 5 }, 0], 'i PF temporanei assorbono per primi');
+    Object.assign(x, { hp: 7 });
+    x.hitDice.used = 3;
+    DnD.condizioni.apply(x, { type: 'sfinimento', level: 3 });
+    RP().syncBack(x, p);
+    eq([p.status.hp, p.status.tempHp, p.status.hitDiceUsed, p.status.exhaustion], [7, 0, 3, 3], 'tornano sulla scheda');
+    x.hp = x.maxHp;
+    eq(RP().syncBack(x, p).status.hp, null, 'al massimo = null');
+    // Nemico (creatura): usi giornalieri, per riposo, ricarica, azioni e Resistenza leggendarie.
+    const m = DnD.creature.normalizeMonster({ name: 'Drago', size: 'Grande', hitDice: 8, legendaryPoints: 3, legendaryResistance: 2,
+      actions: [{ id: 'soffio', name: 'Soffio', freq: { kind: 'ricarica', recharge: 5 }, mech: { kind: 'testo' } }, { id: 'urlo', name: 'Urlo', freq: { kind: 'giorno', uses: 2 }, mech: { kind: 'testo' } },
+        { id: 'scaglie', name: 'Scaglie', freq: { kind: 'riposo-breve' }, mech: { kind: 'testo' } }],
+      legendary: [{ id: 'coda', name: 'Coda', mech: { kind: 'testo' } }] });
+    m.type = 'creatura';
+    const d = RP().seedCombatant(DnD.creature.toCombatant(m, 'Drago', 0, () => 10, []), m);
+    eq(d.hitDice, { die: 10, total: 8, used: 0 }, 'dadi vita della creatura (Grande = d10)');
+    Object.assign(d.creature, { uses: { urlo: 0, scaglie: 0 }, recharge: { soffio: false } });
+    d.creature.legendaryPoints.left = 0;
+    d.creature.legendaryResistance.left = 0;
+    d.hp = 10;
+    const ds = RP().fromCombatant(d);
+    RP().shortRest(ds, { rolls: [10] });
+    eq([d.creature.uses.scaglie, d.creature.uses.urlo, d.creature.recharge.soffio, d.creature.legendaryPoints.left, d.creature.legendaryResistance.left, d.hitDice.used, d.hp], [1, 0, true, 3, 0, 1, 20], 'breve');
+    DnD.condizioni.apply(d, { type: 'avvelenato', duration: { kind: 'riposo' } });
+    d.deathSaves = { active: true, successes: 1, failures: 1 };
+    RP().longRest(ds, {});
+    eq([d.creature.uses.urlo, d.creature.legendaryResistance.left, d.hp, DnD.condizioni.has(d, 'avvelenato'), d.deathSaves.active], [2, 2, d.maxHp, false, false], 'lungo: usi, resistenza, «fino al riposo», tiri contro la morte');
+    ok(RP().resources(ds).some((r) => r.id === 'leggendarie') && RP().resources(ds).some((r) => r.id === 'uso-urlo'), 'nell\'elenco «Risorse»');
+  });
+
+  test('Riposi: dati nuovi, migrazione v13 → v14, salvataggio ed esportazione', () => {
+    const old = DnD.dati.normalizeCreature({ name: 'Vecchio', level: 4, classId: 'ladro' }, true);
+    eq(old.status, { hp: null, tempHp: 0, hitDiceUsed: 0, exhaustion: 0, lastLongRest: null, resources: [] }, 'valori predefiniti');
+    eq(RP().fromSheet(old, DnD.dati.emptyState()).hd, RP().fromSheet(old, DnD.dati.emptyState()).hd);
+    eq([RP().fromSheet(old, DnD.dati.emptyState()).hd.die, RP().fromSheet(old, DnD.dati.emptyState()).hd.total], [8, 4], 'dadi vita dal livello');
+    const mon = DnD.dati.normalizeCreature({ name: 'Lupo', type: 'creatura' }, false);
+    eq(mon.status.hp, null, 'anche le creature');
+    const mig = DnD.dati.normalizeState({ version: 13, races: [], npcs: [], players: [{ id: 'z', name: 'Zed', level: 3 }] });
+    eq([mig.version, mig.players[0].status.hitDiceUsed, S().current(mig).restClock], [DnD.dati.VERSION, 0, 0]);
+    const st = DnD.dati.emptyState();
+    st.players.push(Object.assign(restHero({ status: { hp: 9, tempHp: 2, hitDiceUsed: 2, lastLongRest: 30, resources: [{ id: 'r1', label: 'Furia', max: 3, value: 1, reset: 'lungo' }] } }), { sessionId: S().current(st).id }));
+    S().current(st).restClock = 40;
+    const back = DnD.dati.importJSON(DnD.dati.exportJSON(st));
+    eq([back.players[0].status, S().current(back).restClock], [st.players[0].status, 40], 'archivio');
+    const file = JSON.parse(JSON.stringify(S().exportSession(st, S().current(st).id)));
+    const dst = DnD.dati.emptyState();
+    S().importSession(dst, file, DnD.dadi.uid);
+    eq(dst.players.find((x) => x.name === 'Mira').status.hitDiceUsed, 2, 'file di sessione');
+    const c = DnD.dati.normalizeCombatant({ name: 'X', tempHp: 4, hitDice: { die: 10, total: 5, used: 2 }, resources: [{ label: 'Furia', max: 2, value: 1 }], lastLongRest: 8 });
+    eq([c.tempHp, c.hitDice, c.resources[0].value, c.lastLongRest], [4, { die: 10, total: 5, used: 2 }, 1, 8], 'combattente');
+    eq(DnD.dati.normalizeCombatant({ name: 'Y' }).tempHp, 0, 'combattimenti salvati prima');
+  });
+
   async function runTests() {
     const results = [];
     for (const { name, fn } of tests) {

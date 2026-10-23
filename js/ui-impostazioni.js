@@ -127,6 +127,10 @@
     const combatGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Combattimento' }),
       check('deathSaves', 'Tiri contro la morte per i giocatori a 0 PF', 'A 0 PF il giocatore è privo di sensi e tira all\'inizio dei suoi turni'),
       check('enemiesDie', 'I nemici a 0 PF muoiono', 'Spento: restano a terra come prima'));
+    const restGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Riposi' }),
+      check('restHeroic', 'Riposo lungo eroico (tutti i dadi vita)'),
+      check('restShort8', 'Riposo breve di 8 ore (gritty)'),
+      check('restLong7', 'Riposo lungo di 7 giorni (gritty)'));
     const diceGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Dadi animati' }),
       check('diceAnim', 'Dadi animati'),
       el('div', { class: 'radio-row' }, check('diceMenu', 'Menù Dadi'), check('diceCombat', 'Combattimento'), check('diceExploration', 'Esplorazione')),
@@ -146,7 +150,7 @@
       radios('testo', 'Dimensione del testo', [['piccolo', 'Piccola'], ['normale', 'Normale'], ['grande', 'Grande']], 'textSize'),
       el('label', { class: 'check' }, reduce, ' Riduci animazioni'),
       el('label', { class: 'check', title: 'Barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel combattimento' }, bossFx, ' Effetti boss'),
-      movementGroup, combatGroup, diceGroup, soundGroup.node,
+      movementGroup, combatGroup, restGroup, diceGroup, soundGroup.node,
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Dati' }),
         el('div', { class: 'settings-actions' },

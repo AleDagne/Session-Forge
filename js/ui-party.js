@@ -76,6 +76,7 @@
       el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(p.icon, 36), el('h2', { text: p.name }), UM().factionBadge(p.factionId)),
       el('div', { class: 'head-actions' },
         el('button', { class: 'btn', text: '← Party', onclick: () => { viewing = null; render(); } }),
+        ...DnD.uiRiposi.groupButtons(m.list.map((x) => x.id), 'del party'),
         el('button', { class: 'btn', text: 'Modifica', onclick: () => { editing = p.id; render(); } }))),
     el('div', { class: 'grid-2' },
       el('section', { class: 'panel' }, el('h3', { text: 'Ordine di marcia' }),

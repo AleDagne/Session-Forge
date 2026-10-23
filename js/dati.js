@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 13;
+  const VERSION = 14;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -282,7 +282,7 @@
         // Comportamento nel combattimento simulato (IA): temperamento, archetipo, opzioni avanzate.
         behavior: DnD.ia.normalizeBehavior(c.behavior),
         notes: str(c.notes, 5000),
-      }, DnD.creature.normalizeMonster(c), boss, worldRefs(c), ownership(c));
+      }, DnD.creature.normalizeMonster(c), boss, worldRefs(c), restStatus(c), ownership(c));
     }
     const abilities = {};
     for (const ab of AB()) abilities[ab] = int(obj(c.abilities)[ab], 10, 1, 30);
@@ -361,13 +361,19 @@
         out.legendArchive = DnD.leggendario.normalizeLegend(c.legendArchive);
       }
     }
-    Object.assign(out, worldRefs(c), ownership(c));
+    Object.assign(out, worldRefs(c), restStatus(c), ownership(c));
     return out;
   }
 
   // Fazione (vuota = predefinita: Nemici, quella della città o del party) e città d'origine.
   const REF = /^[\w-]{1,64}$/;
   const refId = (v) => (typeof v === 'string' && REF.test(v) ? v : '');
+  // Riposi e risorse (riposi.js): PF attuali, PF temporanei, dadi vita spesi, sfinimento, ultimo riposo lungo, risorse
+  // personalizzate. I dati precedenti ricevono i valori di base (PF al massimo, nessun dado vita speso).
+  function restStatus(c) {
+    return { status: DnD.riposi.normalizeStatus(c.status) };
+  }
+
   function worldRefs(c) {
     return { factionId: refId(c.factionId), cityId: refId(c.cityId) };
   }
@@ -725,6 +731,11 @@
       deathSaves: DnD.condizioni.normalizeDeathSaves(c.deathSaves),
       dead: Boolean(c.dead),
       forceActions: Boolean(c.forceActions),
+      // Riposi e risorse: PF temporanei, dadi vita, risorse personalizzate, ultimo riposo lungo (giocatori).
+      tempHp: int(c.tempHp, 0, 0, 9999),
+      hitDice: DnD.riposi.normalizeHitDice(c.hitDice, c),
+      resources: arr(c.resources).slice(0, 30).map(DnD.riposi.normalizeResource),
+      lastLongRest: c.lastLongRest === null || c.lastLongRest === undefined ? null : int(c.lastLongRest, null, -1e9, 1e9),
       movement: DnD.movimento.normalizeMovement(c.movement),
       ignoreSpeed: Boolean(c.ignoreSpeed),
       icon: DnD.icone.normalizeIcon(c.icon, false),
@@ -857,6 +868,8 @@
       exploration: DnD.esplorazione.normalizeState(se.exploration),
       // Mondo: party attivo, matrice simmetrica, soglie, reputazioni personali e registro, diario delle quest.
       world: DnD.fazioni.normalizeWorld(se.world),
+      // Orologio dei riposi fuori dall'esplorazione (ore di gioco), per la regola delle 24 ore.
+      restClock: int(se.restClock, 0, 0, 1e9),
     };
   }
 

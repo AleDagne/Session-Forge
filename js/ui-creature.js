@@ -640,6 +640,14 @@
       render();
     }
 
+    // Giocatori che riposano insieme: i membri del party attivo, altrimenti tutti quelli della sessione.
+    const restParty = () => { const v = DnD.fazioni.view(DnD.store.state); const p = DnD.party.active(v.parties, v.world); return p && p.memberIds.length ? p : null; };
+    const allPlayers = () => DnD.sessioni.visible(DnD.store.state, 'players');
+    const restIds = () => (restParty() ? restParty().memberIds.filter((id) => allPlayers().some((x) => x.id === id)) : allPlayers().map((x) => x.id));
+    const restLabel = () => (restParty() ? 'di «' + restParty().name + '»' : 'di tutti');
+    // PF attuali dalla scheda (riposi: null = al massimo) e dadi vita rimasti.
+    const restHp = (c) => { const s = DnD.riposi.normalizeStatus(c.status); return (s.hp === null ? c.maxHp : Math.min(s.hp, c.maxHp)) + '/' + c.maxHp + (s.tempHp ? ' (+' + s.tempHp + ' temp.)' : '') + ' · dadi vita ' + Math.max(0, c.level - s.hitDiceUsed) + '/' + c.level + (s.exhaustion ? ' · sfinimento ' + s.exhaustion : ''); };
+
     function renderList() {
       const races = DnD.store.state.races;
       renderTabs();
@@ -661,6 +669,8 @@
               onSaved: (creatures, edit) => { editing = edit ? creatures[0].id : null; render(); },
             }) }),
             el('button', { class: 'btn primary', text: '+ Nuovo ' + cfg.singular.toLowerCase(), onclick: () => { editing = 'new'; render(); } }))),
+        // Riposi (riposi.js): il party attivo, altrimenti tutti i giocatori della sessione.
+        cfg.isPlayer && list().length ? el('div', { class: 'head-actions rest-actions' }, DnD.uiRiposi.groupButtons(restIds(), restLabel())) : '',
         shown.length
           ? el('div', { class: 'card-grid' }, shown.map((c) => {
             const stats = R.derivedStats(c, races.find((r) => r.id === c.raceId));
@@ -673,7 +683,7 @@
                 el('span', { class: 'ac-badge', title: 'Classe Armatura: ' + stats.ac.detail, text: 'CA ' + stats.ac.total })),
               el('p', { class: 'muted', text: [raceName(c.raceId), C.className(c.classId), 'liv. ' + c.level].filter(Boolean).join(' · ') }),
               cfg.isPlayer && c.playerName ? el('p', { class: 'small', text: 'Giocatore: ' + c.playerName }) : null,
-              el('p', { text: 'PF ' + c.maxHp }),
+              el('p', { text: 'PF ' + (cfg.isPlayer ? restHp(c) : c.maxHp) }),
               el('div', { class: 'stat-line' }, R.ABILITIES.map((ab) => el('span', { class: 'stat' },
                 el('b', { text: ab }), ' ' + fin[ab] + ' (' + R.formatModifier(R.modifier(fin[ab])) + ')'))),
               stats.saves.length ? el('p', { class: 'small muted', text: 'TS competenti: ' + stats.saves.map((ab) => ab + ' ' + R.formatModifier(stats.saveTotals[ab])).join(', ') }) : null,
@@ -687,6 +697,7 @@
               el('div', { class: 'card-actions' },
                 el('button', { class: 'btn', text: 'Modifica', onclick: () => { editing = c.id; render(); } }),
                 el('button', { class: 'btn', text: 'Duplica', onclick: () => duplicate(c) }),
+                cfg.isPlayer ? el('button', { class: 'btn', text: '🛏 Risorse…', title: 'Dadi vita, slot, usi, PF temporanei, sfinimento e riposi', onclick: () => DnD.uiRiposi.playerDialog(c.id, render) }) : null,
                 cfg.isPlayer ? el('button', { class: 'btn', text: '✦ Eleva a leggendario', disabled: c.level < 20, title: c.level < 20 ? 'Serve il livello 20' : 'Diventa un personaggio leggendario (livelli 20-40)',
                   onclick: () => { if (DnD.uiLeggendario.promote(c)) { tab = 'leggendari'; render(); } } }) : null,
                 cfg.isPlayer ? null : el('button', { class: 'btn', text: 'Esporta', onclick: () => exportOne(c) }),

@@ -618,6 +618,23 @@ body:has(.combat-screen) .dice-fab { display: none; }
 .cond-row .cond-chip { cursor: default; }
 .cond-preview { color: var(--accent); margin: 0; }
 .inflict-box { margin-top: 0.4rem; }
+/* Riposi e risorse (ui-riposi.js): elenco con − e +, riquadri della finestra del riposo, riepilogo. */
+.res-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
+.res-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.5rem; align-items: center; padding: 0.2rem 0.4rem; border-radius: var(--radius); background: var(--panel-2); }
+.res-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.res-box { display: grid; gap: 0.4rem; }
+.res-details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.res-details[open] { display: grid; gap: 0.4rem; }
+.rest-dialog { display: grid; gap: 0.5rem; }
+.rest-box { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.4rem 0.6rem; }
+.rest-box .qty { width: 4rem; }
+.rest-box .input-row { align-items: flex-end; flex-wrap: wrap; }
+.rest-dice { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; padding-bottom: 0.2rem; }
+.rest-dice .qty { width: 3.2rem; height: auto; }
+.rest-box .field .qty { height: auto; align-self: flex-start; }
+.rest-summary { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.3rem; }
+.rest-actions { margin: 0.3rem 0 0.6rem; }
 .turn-move { margin: 0.2rem 0 0.4rem; }
 .log li.log-movimento { border-left-color: var(--player); }
 .slots-indicator span { padding: 0.05rem 0.4rem; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--border); }

@@ -94,8 +94,9 @@ sempre lo stato; anche Alt+M).
   combattimento (attivi di base). Spenti, i boss funzionano comunque (fasi, log, azioni). Spengono anche i suoni
   di Boss e Leggendario.
 - **Movimento** (diagonali, modalità senza velocità), **Combattimento** (tiri contro la morte, nemici che a 0 PF
-  muoiono), **Dadi animati** e **Suoni**: gruppi a scomparsa, descritti in [Velocità e movimento](#velocità-e-movimento),
-  [Condizioni e concentrazione](#condizioni-e-concentrazione), [Dadi animati](#dadi-animati) ed [Effetti sonori](#effetti-sonori).
+  muoiono), **Riposi** (eroico, gritty), **Dadi animati** e **Suoni**: gruppi a scomparsa, descritti in
+  [Velocità e movimento](#velocità-e-movimento), [Condizioni e concentrazione](#condizioni-e-concentrazione),
+  [Riposi e risorse](#riposi-e-risorse), [Dadi animati](#dadi-animati) ed [Effetti sonori](#effetti-sonori).
 
 Tutti i colori dell'interfaccia sono variabili CSS (`:root` per il tema chiaro,
 `[data-theme="dark"]` per lo scuro), anche quelli della griglia, che si ridisegna al cambio tema.
@@ -186,7 +187,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
 - **Giocatori** – stessa scheda dei nemici Standard, con il nome del giocatore reale e l'**Inventario**:
   oggetti del catalogo con quantità e casella *equipaggiato*, monete (mr, ma, me, mo, mp) e peso totale
   (50 monete = 0,5 kg). Tre schede: **Standard**, **✦ Leggendari** (livelli 20-40, vedi
-  [Personaggi leggendari](#personaggi-leggendari)) e **⚑ Party** (vedi [Party](#party)).
+  [Personaggi leggendari](#personaggi-leggendari)) e **⚑ Party** (vedi [Party](#party)). Ogni scheda mostra PF attuali,
+  dadi vita e sfinimento, e ha **🛏 Risorse…** (vedi [Riposi e risorse](#riposi-e-risorse)).
 - **Magie** – libreria degli incantesimi (come prima).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
@@ -654,7 +656,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 13)
+### Modello dati (versione 14)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -712,10 +714,17 @@ combattente: { …, faction (qualsiasi fazione), hostileTo, npc: { npcId, itemId
                movement: { used, dashes, stood, disengaged, start, moves }, ignoreSpeed, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
                boss: { …campi del boss, phase, revealed, defeated },
                legend: { theme, rank, transformations, uses, senses, texts, passive, form: { id, name, hpMode, theme, roundsLeft, prev } } }
+giocatori e creature: { …, status: { hp (null = al massimo), tempHp, hitDiceUsed, exhaustion, lastLongRest (ore di gioco),
+           resources: [{ id, label, max, value, reset: breve|lungo|alba|mai|manuale }] } }
+combattente: { …, tempHp, hitDice: { die, total, used }, resources, lastLongRest }   sessione: { …, restClock (ore) }
 customConditions: [{ id, name, icon, color, description, effects }]   condizioni personalizzate (libreria globale)
 incantesimo e azione delle creature (Attacco, Tiro salvezza): { …, inflict: { type, customId, level, duration, save: { ability, dc } | null } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
 ```
+
+**Migrazione dalla versione 13**: giocatori e creature ricevono lo stato dei riposi con i valori di base (PF al
+massimo, nessun dado vita speso, dadi vita dal livello); i combattenti salvati ricevono PF temporanei 0 e i dadi vita
+dalla classe o dalla taglia; nulla viene perso.
 
 **Migrazione dalla versione 12**: le condizioni dei combattimenti salvati (elenco di nomi) diventano voci
 «fino a nuovo ordine» di origine manuale; schede e combattimenti senza condizioni restano validi; gli incantesimi e le
@@ -928,6 +937,70 @@ inflitta**: quale condizione, la durata e la salvezza che la evita.
   - un nemico invisibile viene attaccato solo se non c'è nessun altro;
   - i bersagli che danno vantaggio (prono vicino, paralizzato…) hanno un punteggio di debolezza più alto.
 
+## Riposi e risorse
+
+La logica è pura e testata (`js/riposi.js`); valori, durate e varianti sono in `js/riposi-dati.js` e l'interfaccia è
+in `js/ui-riposi.js`.
+
+### Risorse
+
+- **Stato sulla scheda** di giocatori e creature, che resta tra un combattimento e l'altro: PF attuali, PF
+  temporanei, dadi vita spesi, sfinimento, ultimo riposo lungo e **risorse personalizzate** (nome, massimo, valore e
+  regola di ripristino: riposo breve, riposo lungo, all'alba, mai, manuale).
+- **Elenco unico «Risorse»**, con − e +, che raccoglie quello che esiste già:
+  - dadi vita, uno per livello con il dado della classe (i leggendari: uno per livello);
+  - PF temporanei e sfinimento;
+  - slot incantesimo (quelli del Warlock tornano con il riposo breve);
+  - usi delle trasformazioni e delle magie «N al giorno» dei leggendari;
+  - nel combattimento: usi giornalieri e per riposo delle azioni delle creature, ricariche, azioni leggendarie,
+    Resistenza leggendaria e concentrazione;
+  - le risorse personalizzate.
+
+  Si apre da **🛏 Risorse…** sulla scheda del giocatore (Giocatori e Leggendari) e da **🎒 Risorse** sulla scheda del
+  combattente.
+- **Nel combattimento**:
+  - i combattenti partono con PF, PF temporanei, dadi vita, sfinimento e risorse della scheda;
+  - i **PF temporanei** assorbono i danni per primi;
+  - alla fine lo stato dei giocatori torna sulla scheda (per un leggendario ancora trasformato valgono i PF del
+    personaggio);
+  - si propone subito un **riposo breve**.
+
+### Riposo breve e riposo lungo
+
+- **Dove si avvia**: per un personaggio (finestra Risorse), per il party attivo o per tutti (Giocatori), per un
+  party (pagina del party, con un clic), per il gruppo dell'esplorazione, oppure per un combattente quando il
+  combattimento non è attivo. Il ripristino completo **⟲ Ripristina tutto** è riservato al master.
+- **Finestra**: un riquadro per personaggio. Nel riposo breve si sceglie quanti dadi vita spendere; i tiri (dado
+  + mod. COS, minimo 0) sono già fatti, si possono cambiare a mano e c'è l'anteprima dei PF, che non superano il
+  massimo.
+- **Riposo breve** (1 ora): dadi vita e risorse «riposo breve».
+- **Riposo lungo** (8 ore):
+  - tutti i PF;
+  - metà dei dadi vita totali, arrotondata per difetto e almeno 1;
+  - tutti gli slot e le risorse «riposo lungo», «riposo breve» e «all'alba»;
+  - PF temporanei e tiri contro la morte azzerati;
+  - sfinimento −1;
+  - finiscono le condizioni «fino al riposo».
+- **Un solo riposo lungo ogni 24 ore** di gioco: c'è un avviso, e il master può spuntare *Forza*. Fuori
+  dall'esplorazione conta l'orologio dei riposi della sessione.
+- **Riposo interrotto**: *Interrompi il riposo dopo N ore*, oppure un incontro nell'esplorazione. Non dà i benefici
+  del riposo lungo; con almeno 1 ora valgono quelli del riposo breve.
+- **Opzioni del master** (*Impostazioni › Riposi*): riposo lungo **eroico** (tutti i dadi vita), riposo breve di 8
+  ore e riposo lungo di 7 giorni (gritty).
+- **Riepilogo**: alla fine compare il riepilogo; nell'esplorazione va anche nel registro («Riposo lungo: Mira recupera
+  18 PF, 2 dadi vita, tutti gli slot»).
+- **Combattimento attivo**: i pulsanti di riposo sono disattivati.
+
+### Nell'esplorazione
+
+- **🛏 Riposo breve / lungo** nella colonna del tempo: il tempo passa ora per ora, con scorte, meteo, pericoli e
+  incontri casuali. Un incontro interrompe il riposo e va tra le finestre in attesa.
+- **Turni di guardia**: si spuntano i personaggi in ordine e le ore si dividono tra loro; se arriva un incontro, il
+  registro dice chi era di guardia.
+- **Senza cibo o acqua** il riposo lungo non toglie lo sfinimento, anzi lo aumenta di 1.
+- **All'alba** (alle 6) tornano le risorse «all'alba».
+- L'azione **Riposo** degli eventi usa lo stesso riposo.
+
 ## Dadi animati
 
 Il risultato si decide **prima**, con lo stesso generatore senza bias (`crypto.getRandomValues`): un
@@ -1129,6 +1202,16 @@ prove ed esiti; istanze indipendenti dello stesso NPC; città con fazione propag
 mancanti; migrazione v11 → v12 ed esempi validi; esportazione e importazione (archivio e sessione, anche precedente alla
 v12) e duplicazione con il Mondo; azioni evento Reputazione e Quest, obiettivo «completa un evento» e scadenza col tempo.
 
+Per **riposi e risorse**:
+- dadi vita dalla classe e dal livello;
+- riposo breve con mod. COS, minimo 0 e massimo dei PF;
+- riposo lungo con metà dei dadi vita (minimo 1), PF temporanei azzerati e sfinimento −1 (non senza cibo); eroico;
+- slot e risorse per tipo di riposo (breve, lungo, alba, mai, manuale) e Warlock;
+- − e +, regola delle 24 ore, riposo interrotto, varianti gritty, ripristina tutto;
+- esplorazione: tempo e scorte, 24 ore, incontro che interrompe, guardie, alba, evento Riposo;
+- combattimento: stato dalla scheda e ritorno, PF temporanei, riposo di un nemico (usi, ricariche, leggendarie);
+- migrazione, salvataggio ed esportazione.
+
 Per **condizioni e concentrazione**:
 - tabella ed effetti di tutte le condizioni;
 - attacchi con vantaggio e svantaggio da più fonti (anche insieme), prono vicino e a distanza, critico automatico solo
@@ -1173,6 +1256,8 @@ css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti d
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
+js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
+js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combattente), risorse, dadi vita, riposo breve e lungo
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
@@ -1210,6 +1295,7 @@ js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trap
 js/validazione.js     validazione dei form con messaggi in italiano
 js/dati.js            modello dati, migrazioni (fino alla versione 13), esempi, salvataggio (IndexedDB), import/export
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
+js/ui-riposi.js       riposi: elenco «Risorse», finestra del riposo, riposo delle schede e del party
 js/ui-condizioni.js   condizioni: simboli sulla scheda e sulla pedina, finestra, personalizzate, «Condizione inflitta»
 js/ui-tileset.js      disegno delle tilemap, vista con zoom/pan, anteprime, importazione immagini
 js/ui-tile.js         componente «Taglia immagine in tile» (strutture, oggetti di mappa, pannello Tile)

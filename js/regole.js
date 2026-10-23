@@ -385,9 +385,10 @@
     // Leggendari: la scheda con gli effetti del Percorso, poi privilegi, difese e trasformazioni (leggendario.js).
     const st = { spells: spells || [], equipment: catalog || [], races };
     const out = players.map((p) => {
-      if (p.type !== 'leggendario') return toCombatant(p, 'player', p.name, 0, raceOf(p), rng, spells, catalog);
+      // Stato della scheda (riposi.js): PF attuali, PF temporanei, dadi vita, sfinimento e risorse.
+      if (p.type !== 'leggendario') return DnD.riposi.seedCombatant(toCombatant(p, 'player', p.name, 0, raceOf(p), rng, spells, catalog), p);
       const x = toCombatant(DnD.leggendario.effectivePlayer(p, st), 'player', p.name, 0, raceOf(p), rng, spells, catalog);
-      return DnD.leggendario.applyToCombatant(x, p, st, rng);
+      return DnD.riposi.seedCombatant(DnD.leggendario.applyToCombatant(x, p, st, rng), p);
     });
     for (const { npc, quantity } of npcEntries) {
       for (let k = 1; k <= quantity; k++) {
@@ -400,8 +401,8 @@
             x.boss = DnD.boss.combatState(npc);
             x.maxHp = x.hp = Math.min(9999, DnD.boss.scaledHp(x.maxHp, players.length, x.boss.scaleByPlayers));
           }
-          out.push(x);
-        } else out.push(toCombatant(npc, 'npc', name, copy, raceOf(npc), rng, spells, catalog));
+          out.push(DnD.riposi.seedCombatant(x, npc));
+        } else out.push(DnD.riposi.seedCombatant(toCombatant(npc, 'npc', name, copy, raceOf(npc), rng, spells, catalog), npc));
       }
     }
     return out;

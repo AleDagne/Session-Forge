@@ -150,7 +150,8 @@
     const party = normalizeParty({ name: 'Gruppo', pos, memberIds: players.map((p) => p.id) });
     return normalizeState({
       gridId: grid.id, parties: [party], activeParty: party.id, seed,
-      members: Object.fromEntries(players.map((p) => [p.id, { hp: p.maxHp, maxHp: p.maxHp }])),
+      // PF e sfinimento dalla scheda (riposi.js: PF attuali salvati, null = al massimo).
+      members: Object.fromEntries(players.map((p) => { const s = DnD.riposi.normalizeStatus(p.status); return [p.id, { hp: s.hp === null ? p.maxHp : Math.min(s.hp, p.maxHp), maxHp: p.maxHp, exhaustion: s.exhaustion }]; })),
       supplies: { food: 5 * Math.max(1, players.length), water: 5 * Math.max(1, players.length) },
     });
   }
@@ -218,6 +219,8 @@
         return DnD.fazioni.changeReputation({ world: v.world, party: DnD.party.active(v.parties, v.world) }, factionId, delta, reason, 'evento');
       },
       quest: (op, questId, objectiveId, n) => questOp(w, op, questId, objectiveId, n),
+      // Riposo da un evento (riposi.js): l'evento decide, senza la regola delle 24 ore.
+      rest: (kind) => rest(w, kind, { force: true }),
     }, extra || {});
   }
 
@@ -251,11 +254,20 @@
     const party = activeParty(ex);
     const b = biomeAt(w, party.pos.x, party.pos.y);
     const startTotal = ex.time.total;
+    // Alba (riposi.js): le risorse «all'alba» dei personaggi tornano al massimo a ogni alba attraversata.
+    const absStart = ex.time.day * 24 + ex.time.hour;
+    const dawns = Math.floor((absStart + hours - DnD.riposiDati.DAWN_HOUR) / 24) - Math.floor((absStart - DnD.riposiDati.DAWN_HOUR) / 24);
     ex.time.total = round2(ex.time.total + hours);
     const h = ex.time.hour + hours;
     ex.time.day += Math.floor(h / 24);
     ex.time.hour = round2(h % 24);
     const people = ex.parties.reduce((n, p) => n + p.memberIds.length, 0);
+    if (dawns > 0) {
+      for (const p of ex.parties.flatMap((x) => partyMembers(w, x))) {
+        const back = DnD.riposi.dawn(DnD.riposi.fromSheet(p, w.st, memberState(ex, p.id, p)));
+        if (back.length) log(w, '🌅 Alba: ' + p.name + ' recupera ' + back.join(', ') + '.', 'tempo');
+      }
+    }
     // Quest con tempo limite: oltre la scadenza diventano Scadute.
     const v = worldOf(w);
     if (v) for (const q of DnD.quest.expire(v.world.quests, v.quests, ex.time.total)) log(w, '📜 Quest «' + q.title + '» scaduta.', 'quest');
@@ -296,6 +308,55 @@
     }
     return ex.time.total - startTotal;
   }
+
+  // ---------- Riposo ----------
+  // Riposo del gruppo attivo (riposi.js): il tempo passa ora per ora (scorte, meteo, pericoli, incontri: un
+  // incontro casuale lo interrompe), con i turni di guardia. opts: { rolls: { id: [dadi vita] } (riposo breve),
+  // guards: [id], force (regola delle 24 ore), interruptAfter (ore: il master lo interrompe), variants }.
+  // Restituisce { ok, reason, hours, interrupted, results }.
+  function rest(w, kind, opts) {
+    const o = opts || {};
+    const ex = w.ex;
+    const RP = DnD.riposi;
+    const members = partyMembers(w);
+    const subj = (m) => RP.fromSheet(m, w.st, memberState(ex, m.id, m));
+    if (!members.length) return { ok: false, reason: 'nessun personaggio nel gruppo' };
+    if (kind === 'lungo' && !o.force) {
+      const tired = members.map((m) => ({ m, c: RP.canLongRest(subj(m), ex.time.total) })).filter((x) => !x.c.ok);
+      if (tired.length) return { ok: false, reason: tired.map((x) => x.m.name).join(', ') + ': un solo riposo lungo ogni 24 ore (mancano ' + Math.max(...tired.map((x) => x.c.wait)) + ' ore)' };
+    }
+    const hours = RP.hoursOf(kind, o.variants);
+    const guards = (o.guards || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
+    const slice = guards.length ? hours / guards.length : hours;
+    log(w, '🛏 Inizia il riposo ' + kind + ' (' + hours + ' ore)' + (guards.length ? '. Turni di guardia: ' + guards.map((g, i) => g.name + ' ' + fmtHours(i * slice) + '–' + fmtHours((i + 1) * slice)).join(', ') : '') + '.', 'riposo');
+    const before = ex.queue.length;
+    const limit = o.interruptAfter === undefined || o.interruptAfter === null ? hours : Math.max(0, Math.min(hours, o.interruptAfter));
+    let done = 0;
+    let interrupted = null;
+    while (done < limit) {
+      const step = Math.min(1, limit - done);
+      advanceTime(w, step);
+      done = round2(done + step);
+      if (ex.queue.slice(before).some((q) => q.kind === 'incontro')) { interrupted = 'incontro'; break; }
+    }
+    if (!interrupted && done < hours) interrupted = 'master';
+    if (interrupted === 'incontro') log(w, '⚔ Il riposo è interrotto da un incontro dopo ' + fmtHours(done) + (guards.length ? ': era di guardia ' + guards[Math.min(guards.length - 1, Math.floor(Math.max(0, done - 0.01) / slice))].name : '') + '.', 'avviso');
+    const suppliesOk = ex.supplies.food > 0 && ex.supplies.water > 0;
+    const results = members.map((m) => {
+      const s = subj(m);
+      const r = kind === 'breve'
+        ? (interrupted ? { kind: 'breve', name: m.name, interrupted: true, hours: done, healed: 0, spent: 0, rolls: [], restored: [] } : RP.shortRest(s, { rolls: (o.rolls || {})[m.id] || [] }))
+        : RP.longRest(s, { opts: o.variants, suppliesOk, interruptedAfter: interrupted ? done : undefined });
+      if (kind === 'lungo' && !interrupted) s.markLongRest(ex.time.total);
+      // Senza cibo o acqua il riposo lungo non toglie lo sfinimento, anzi lo aumenta.
+      if (kind === 'lungo' && !interrupted && !suppliesOk) s.setExhaustion(s.getExhaustion() + 1);
+      log(w, r.interrupted && kind === 'breve' ? '🛏 Riposo breve interrotto: ' + m.name + ' non ne riceve i benefici.' : RP.summaryText(r), 'riposo');
+      return r;
+    });
+    if (kind === 'lungo' && !interrupted && !suppliesOk) log(w, '⚠ Senza cibo o acqua: il riposo lungo non toglie lo sfinimento e lo aumenta di 1.', 'avviso');
+    return { ok: true, hours: done, interrupted, results };
+  }
+  const fmtHours = (h) => (Number.isInteger(h) ? h : Math.round(h * 10) / 10) + 'h';
 
   // Pericolo ambientale: prova di ogni personaggio; chi fallisce subisce l'effetto.
   function resolveHazard(w, hz, b) {
@@ -534,6 +595,6 @@
     KINDS, UNITS, UNIT_NAMES, UNIT_KM, SCALE_PRESETS, DEFAULT_SCALE, LOG_MAX,
     normalizeScale, scaleKm, scaleLabel, formatDistance, normalizeFog, normalizeGridExtras, extrasOf, resizeExtras,
     normalizeState, normalizeParty, normalizeMember, create, biomeAt, activeParty, partyMembers, memberState, placeName, log, queue, eventCtx, worldOf, questOp,
-    advanceTime, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
+    advanceTime, rest, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
   };
 })(globalThis.DnD = globalThis.DnD || {});

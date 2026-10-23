@@ -37,6 +37,7 @@
   // ---------- Condizioni e concentrazione (condizioni.js) ----------
   // Le condizioni sono una fonte di modificatori per attacchi, salvezze, velocità e azioni; la UI è in ui-condizioni.js.
   const C = DnD.condizioni;
+  const RP = DnD.riposi;
   const UC = () => DnD.uiCondizioni;
   const customs = () => DnD.store.state.customConditions || [];
   const combatRules = () => DnD.impostazioni.combatRules();
@@ -722,7 +723,10 @@
   let hurtLines = [];
   function hurt(t, amount, crit) {
     const wasZero = t.hp <= 0;
-    hurtLines = hurtLines.concat(DnD.leggendario.damage(t, amount));
+    // PF temporanei (riposi.js): assorbono il danno per primi.
+    const tmp = DnD.riposi.absorbTemp(t, amount);
+    if (tmp.absorbed) hurtLines.push('🛡 ' + t.name + ': i PF temporanei assorbono ' + tmp.absorbed + ' danni (ne restano ' + (t.tempHp || 0) + ').');
+    hurtLines = hurtLines.concat(DnD.leggendario.damage(t, tmp.rest));
     if (!(amount > 0)) return;
     if (wasZero) hurtLines.push(...C.damageAtZero(t, crit));
     if (t.hp > 0 && t.concentration) {
@@ -1062,12 +1066,22 @@
     const xp = defeatedXp(combat());
     const ended = JSON.parse(JSON.stringify(combat()));
     const outcome = DnD.suoniDati.combatOutcome(ended);
+    const playerIds = ended.combatants.filter((x) => x.kind === 'player' && x.sourceId).map((x) => x.sourceId);
     if (xp) toast('PE dei nemici sconfitti: ' + xp + ' (da dividere tra il party).', 'success');
-    mutate((c, st) => { session(st).combat = null; });
+    // Lo stato dei giocatori (PF, PF temporanei, dadi vita, sfinimento, risorse) torna sulla scheda.
+    mutate((c, st) => {
+      for (const x of c.combatants) { const p = x.kind === 'player' ? st.players.find((q) => q.id === x.sourceId) : null; if (p) DnD.riposi.syncBack(x, p); }
+      session(st).combat = null;
+    });
     if (outcome) DnD.audio.suona(outcome);
     toast('Combattimento terminato.');
     // Combattimento preparato da un evento dell'esplorazione: esito e ritorno all'esplorazione.
     if (DnD.uiEsplorazione) DnD.uiEsplorazione.onCombatEnded(ended);
+    // Proposta rapida: riposo breve dei giocatori del combattimento.
+    if (playerIds.length) openDialog('Combattimento terminato', el('p', { text: 'Riposo breve ora? I giocatori possono spendere i dadi vita.' }), [
+      { text: 'No' },
+      { text: '🛏 Riposo breve', class: 'primary', onclick: () => { setTimeout(() => DnD.uiRiposi.restPlayers('breve', playerIds), 0); } },
+    ]);
   }
 
   function rollText(rolls, flat) {
@@ -1760,6 +1774,39 @@
       st.lair.length ? el('p', { class: 'muted small', text: '🏰 Tana (iniziativa 20): ' + st.lair.map((a) => a.name).join(', ') }) : null);
   }
 
+  // Risorse del combattente (riposi.js): elenco con − e +, risorse personalizzate, ripristino del master. Il riposo
+  // è disattivato durante il combattimento attivo.
+  const openRes = new Set(); // riquadri «Risorse» aperti (restano aperti tra un − e un +)
+  function restBox(x) {
+    const view = RP.resources(RP.fromCombatant(clone(x)));
+    const change = (fn, text) => mutate((c) => { const t = c.combatants.find((y) => y.id === x.id); if (!t) return; fn(t); if (text) log(c, 'sistema', text(t)); });
+    const active = combat().phase === 'attivo';
+    return el('details', { class: 'res-details small', open: openRes.has(x.id), ontoggle: (e) => { if (e.target.open) openRes.add(x.id); else openRes.delete(x.id); } }, el('summary', { text: '🎒 Risorse' + (x.tempHp ? ' · 🛡 ' + x.tempHp + ' PF temporanei' : '') }),
+      DnD.uiRiposi.resourcesBox(view, (id, d) => change((t) => RP.adjust(RP.fromCombatant(t), id, d), (t) => t.name + ': ' + (view.find((r) => r.id === id) || {}).label + ' ' + (d > 0 ? '+1' : '−1') + '.'), {
+        add: (data) => change((t) => { RP.fromCombatant(t); t.resources.push(RP.normalizeResource(Object.assign({ value: data.max }, data))); }, (t) => t.name + ': nuova risorsa «' + data.label + '».'),
+        remove: (rid) => change((t) => { t.resources = (t.resources || []).filter((r) => r.id !== rid); }),
+      }),
+      el('div', { class: 'head-actions' },
+        ['breve', 'lungo'].map((kind) => el('button', { type: 'button', class: 'btn small', text: '🛏 Riposo ' + kind, disabled: active, title: active ? DnD.uiRiposi.BUSY : null, onclick: () => restCombatant(x, kind) })),
+        el('button', { type: 'button', class: 'btn small', text: '⟲ Ripristina tutto (master)', onclick: () => {
+          if (confirm('Ripristinare PF, dadi vita, slot, usi e risorse di ' + x.name + '?')) change((t) => RP.restoreAll(RP.fromCombatant(t)), (t) => RP.summaryText({ kind: 'tutto', name: t.name }));
+        } })));
+  }
+
+  // Riposo di un combattente (nemici e NPC compresi) quando il combattimento non è attivo.
+  function restCombatant(x, kind) {
+    DnD.uiRiposi.restDialog({ kind, subjects: [{ id: x.id, acc: RP.fromCombatant(clone(x)) }], now: null, onConfirm: (params) => {
+      const lines = [];
+      change0(x.id, (c, t) => {
+        const r = kind === 'breve' ? RP.shortRest(RP.fromCombatant(t), { rolls: params.rolls[x.id] || [] }) : RP.longRest(RP.fromCombatant(t), { opts: DnD.impostazioni.restOptions(), interruptedAfter: params.interruptAfter });
+        lines.push(RP.summaryText(r));
+        log(c, 'sistema', lines[0]);
+      });
+      return { ok: true, lines };
+    } });
+  }
+  const change0 = (id, fn) => mutate((c) => { const t = c.combatants.find((y) => y.id === id); if (t) fn(c, t); });
+
   function hpBar(x) {
     const pct = x.maxHp > 0 ? Math.round((x.hp / x.maxHp) * 100) : 0;
     return el('div', { class: 'hp' },
@@ -1800,6 +1847,7 @@
       // Leggendari: Trasformati / Torna normale, rango e forma attiva.
       x.legend && DnD.uiLeggendario ? DnD.uiLeggendario.combatBox(x, { mutate, log, byId, render }) : null,
       creatureBox(x),
+      restBox(x),
       el('div', { class: 'card-actions' },
         el('button', {
           class: 'btn primary', text: 'Attacca', onclick: () => attackDialog(x),

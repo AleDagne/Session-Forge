@@ -50,6 +50,22 @@
     for (const g of snap.grids) { const t = gridOf(st, g.id); if (t) Object.assign(t, clone({ events: g.events, fog: g.fog, biomeMap: g.biomeMap })); }
     st.players = clone(snap.players);
   }
+  // Riposo del gruppo attivo (esplorazione.rest): anteprima su una copia, poi il riposo vero con l'annulla.
+  function restDialog(kind) {
+    const w0 = world(JSON.parse(JSON.stringify(DnD.store.state)));
+    if (!w0) return;
+    const members = X.partyMembers(w0);
+    const subjects = members.map((p) => ({ id: p.id, acc: DnD.riposi.fromSheet(p, w0.st, X.memberState(w0.ex, p.id, p)) }));
+    DnD.uiRiposi.restDialog({ kind, subjects, now: w0.ex.time.total, guards: members, note: 'il tempo passa ora per ora: scorte, meteo e incontri casuali (un incontro interrompe il riposo)',
+      onConfirm: (params) => {
+        let r = null;
+        mutate((ww) => { r = X.rest(ww, kind, Object.assign({ variants: DnD.impostazioni.restOptions() }, params)); });
+        afterAction();
+        if (!r || !r.ok) return r;
+        return { ok: true, lines: r.results.map((x) => (x.interrupted && kind === 'breve' ? '🛏 Riposo breve interrotto: ' + x.name + ' non ne riceve i benefici.' : DnD.riposi.summaryText(x))).concat(r.interrupted === 'incontro' ? ['⚔ Riposo interrotto da un incontro: vedi le finestre in attesa.'] : []) };
+      } });
+  }
+
   // fn(w) modifica il mondo; con undoable si può annullare con Ctrl+Z / ↶.
   function mutate(fn, undoable) {
     let out;
@@ -585,6 +601,9 @@
             mutate((ww) => { X.advanceTime(ww, h); X.log(ww, '⏩ Passano ' + h + ' ore.', 'tempo'); });
             afterAction();
           } })),
+        el('div', { class: 'input-row' },
+          el('button', { class: 'btn', text: '🛏 Riposo breve', disabled: DnD.uiRiposi.combatActive(), title: DnD.uiRiposi.combatActive() ? DnD.uiRiposi.BUSY : 'Dadi vita e risorse «riposo breve»; il tempo passa', onclick: () => restDialog('breve') }),
+          el('button', { class: 'btn', text: '🛏 Riposo lungo', disabled: DnD.uiRiposi.combatActive(), title: DnD.uiRiposi.combatActive() ? DnD.uiRiposi.BUSY : 'PF, dadi vita, slot e risorse; consuma tempo e scorte, può arrivare un incontro', onclick: () => restDialog('lungo') })),
         e.queue.length ? el('button', { class: 'btn wide', text: '❗ Finestre in attesa (' + e.queue.length + ')', onclick: () => { snoozed = false; afterAction(); } }) : null,
         pending ? el('div', { class: 'explore-pending' }, el('span', { text: '⚔ «' + pending.name + '» in attesa del combattimento.' }),
           pending.combatId ? el('button', { class: 'btn small', text: 'Vai al Combattimento', onclick: () => DnD.app.navigate('combattimento') })
@@ -632,5 +651,5 @@
 
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.esplorazione = { title: 'Esplorazione', render, reset: () => { if (tools) tools.reset(); snoozed = false; } };
-  DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo };
+  DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo, restDialog };
 })(globalThis.DnD = globalThis.DnD || {});

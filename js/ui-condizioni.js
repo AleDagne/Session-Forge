@@ -4,7 +4,7 @@
 (function (DnD) {
   'use strict';
 
-  const { el, clear, field, numberInput, textInput, readNumber, toast, openDialog } = DnD.ui;
+  const { el, clear, fill, field, numberInput, textInput, readNumber, toast, openDialog } = DnD.ui;
   const C = DnD.condizioni;
   const AB = ['FOR', 'DES', 'COS', 'INT', 'SAG', 'CAR'];
   const opt = (value, text, selected) => el('option', { value, text, selected });
@@ -95,7 +95,7 @@
 
     function draw() {
       const x = ctx.byId(id);
-      if (!x) { clear(body).append(el('p', { text: 'Il combattente non è più nel combattimento.' })); return; }
+      if (!x) { fill(body, el('p', { text: 'Il combattente non è più nel combattimento.' })); return; }
       const list = C.normalizeList(x.conditions);
       const others = ctx.combatants().filter((y) => y.id !== id);
       const rows = list.map((e) => {
@@ -125,7 +125,7 @@
       const immune = !d.type.startsWith('custom:') && C.immuneTo(x, d.type);
       const ds = C.normalizeDeathSaves(x.deathSaves);
       const num = (v, onset) => { const n = numberInput(v, { class: 'qty', min: 0, max: 3, oninput: () => onset(Math.max(0, Math.min(3, readNumber(n) || 0))) }); return n; };
-      clear(body).append(
+      fill(body, 
         list.length ? el('ul', { class: 'cond-list' }, rows) : el('p', { class: 'muted small', text: 'Nessuna condizione attiva.' }),
         lastRemoved ? el('button', { type: 'button', class: 'btn small', text: '↶ Annulla: rimetti ' + C.nameOf(lastRemoved).toLowerCase(), onclick: () => {
           const e = lastRemoved;
@@ -206,7 +206,7 @@
             el('button', { type: 'button', class: 'btn primary small', text: 'Salva', onclick: () => save(edit) }),
             el('button', { type: 'button', class: 'btn small', text: 'Annulla', onclick: () => { edit = null; draw(); } })));
       })() : el('button', { type: 'button', class: 'btn small', text: '+ Nuova condizione personalizzata', onclick: () => { edit = { name: '', icon: '✦', color: '#8b5cf6', description: '', effects: [] }; draw(); } });
-      clear(body).append(list.length ? el('ul', { class: 'cond-list' }, rows) : el('p', { class: 'muted small', text: 'Nessuna condizione personalizzata.' }), form);
+      fill(body, list.length ? el('ul', { class: 'cond-list' }, rows) : el('p', { class: 'muted small', text: 'Nessuna condizione personalizzata.' }), form);
     }
     draw();
     openDialog('Condizioni personalizzate', body, [{ text: 'Chiudi', onclick: () => { if (onDone) onDone(); } }]);
@@ -231,7 +231,7 @@
       const save = inf.save || { ability: '', dc: null };
       const saveAb = el('select', { onchange: () => { inf.save = saveAb.value ? { ability: saveAb.value, dc: readNumber(saveDc) || null } : null; } }, opt('', 'nessuna', !save.ability), AB.map((ab) => opt(ab, ab, ab === save.ability)));
       const saveDc = numberInput(save.dc === null ? '' : save.dc, { class: 'qty', min: 1, max: 40, placeholder: 'CD', oninput: () => { if (inf.save) inf.save.dc = readNumber(saveDc) || null; } });
-      clear(box).append(el('legend', { text: '🌀 Condizione inflitta' }),
+      fill(box, el('legend', { text: '🌀 Condizione inflitta' }),
         el('div', { class: 'grid-3 tight' }, field('Condizione', type), inf.type === 'sfinimento' ? field('Livello', level) : null,
           inf.type && o.save ? field('Salvezza che la evita', el('div', { class: 'input-row' }, saveAb, saveDc)) : null),
         inf.type ? durationFields(inf.duration, [['fonte', 'chi la causa'], ['bersaglio', 'il bersaglio']]) : null,

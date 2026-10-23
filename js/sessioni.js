@@ -10,7 +10,7 @@
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   function newSession(name, id) {
-    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}) };
+    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}), restClock: 0 };
   }
 
   function current(state) {

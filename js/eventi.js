@@ -368,16 +368,10 @@
         return row ? row.actions : null;
       }
       case 'riposo': {
-        const hours = a.long ? 8 : 1;
-        const people = ctx.members().length;
-        ex.supplies.food = Math.max(0, Math.round((ex.supplies.food - (a.long ? 1 : 0) * people) * 100) / 100);
-        ex.supplies.water = Math.max(0, Math.round((ex.supplies.water - (a.long ? 1 : 0) * people) * 100) / 100);
-        for (const m of ctx.members()) {
-          const ms = ctx.memberState(m.id);
-          if (a.long) { ms.hp = ms.maxHp; ms.exhaustion = Math.max(0, ms.exhaustion - 1); }
-        }
-        ctx.advance(hours);
-        ctx.log('🛏 Riposo ' + (a.long ? 'lungo (8 ore, PF al massimo, -1 sfinimento, scorte consumate)' : 'breve (1 ora)') + '.', 'riposo');
+        // Il riposo dell'esplorazione (esplorazione.rest con riposi.js): tempo, scorte, PF, dadi vita, risorse, sfinimento.
+        if (ctx.rest) { const r = ctx.rest(a.long ? 'lungo' : 'breve'); if (!r.ok) ctx.log('⚠ Riposo: ' + r.reason + '.', 'avviso'); return null; }
+        ctx.advance(a.long ? 8 : 1);
+        ctx.log('🛏 Riposo ' + (a.long ? 'lungo' : 'breve') + '.', 'riposo');
         return null;
       }
       case 'ambiente': {

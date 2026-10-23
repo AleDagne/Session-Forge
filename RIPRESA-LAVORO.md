@@ -1,8 +1,23 @@
 # Ripresa del lavoro
 
-## Fase in corso: «FASE 1/5: Condizioni e concentrazione» (23 ottobre 2026)
+## Fase in corso: «FASE 2/5: Riposi e risorse» (23 ottobre 2026)
 
-- Stato: **completata**, non ancora committata. Dati alla versione **13**, cache del service worker `session-forge-v26`.
+- Stato: **completata**, non ancora committata. Dati alla versione **14**, cache `session-forge-v28`.
+- `test.html`: **230/230** passati (7 test nuovi della fase). Attenzione: con la finestra di anteprima a 0×0 il test
+  «Boss UI: la vignettatura…» fallisce (elementFromPoint): serve una finestra visibile.
+- File nuovi: `js/riposi-dati.js`, `js/riposi.js`, `js/ui-riposi.js`. Aiuto nuovo `DnD.ui.fill` in `ui-comune.js`.
+- Toccati: `dati.js` (v14, `status` sulle schede, campi del combattente, `restClock`), `regole.js` (seed dei
+  combattenti), `esplorazione.js` (`rest`, alba, PF dalla scheda), `eventi.js` (azione Riposo), `impostazioni.js` e
+  `ui-impostazioni.js` (gruppo Riposi), `sessioni.js`, `ui-combattimento.js` (PF temporanei, Risorse, fine del
+  combattimento), `ui-creature.js`, `ui-leggendario.js`, `ui-party.js`, `ui-esplorazione.js`, `ui-condizioni.js`, CSS.
+- Da provare a mano: riposo breve e lungo di giocatori veri (Giocatori, Party, Esplorazione con incontro notturno),
+  proposta «Riposo breve ora?» a fine combattimento.
+- Limiti: il riposo di nemici e NPC c'è sulla scheda del combattente ma è disattivato durante il combattimento attivo
+  (come richiesto); le creature della libreria non hanno uno stato tra un combattimento e l'altro.
+
+## Fase precedente: «FASE 1/5: Condizioni e concentrazione» (commit `1afa9c1`)
+
+- Stato: completata. Dati alla versione 13.
 - `test.html`: **223/223** passati (10 test nuovi della fase).
 - Prova nel browser: condizione applicata dalla finestra, attacco della creatura con vantaggio e critico automatico
   contro un paralizzato, azioni del paralizzato disattivate, salvezza ripetuta a fine turno che chiude la condizione,
