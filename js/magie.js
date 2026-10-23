@@ -64,7 +64,8 @@
     return { count: base.count + extra * up.count, sides: base.sides, modifier: base.modifier + extra * up.modifier };
   }
 
-  // Risolve un incantesimo. p: { spell, slotLevel, caster: { attack, dc, mod }, targets: [{ id, ac, saves }], mode }.
+  // Risolve un incantesimo. p: { spell, slotLevel, caster: { attack, dc, mod }, targets: [{ id, ac, saves, mode, autoCrit,
+  // saveMode, autoFail }], mode }: i campi del bersaglio (dalle condizioni) prevalgono sul modo comune.
   // Restituisce { dice, roll (danno/cura comune, se c'è), targets: [{ id, amount, ...dettagli del tiro }] }.
   function resolveSpell(p, rng) {
     const { spell, caster } = p;
@@ -76,11 +77,11 @@
 
     if (e.type === 'attacco') {
       for (const t of p.targets) {
-        const d20 = DnD.regole.rollD20(p.mode, rng);
-        const crit = d20.natural === 20;
+        const d20 = DnD.regole.rollD20(t.mode || p.mode, rng);
         const fumble = d20.natural === 1;
         const total = d20.natural + caster.attack;
-        const hit = crit || (!fumble && total >= t.ac);
+        const hit = d20.natural === 20 || (!fumble && total >= t.ac);
+        const crit = d20.natural === 20 || Boolean(t.autoCrit && hit);
         const r = hit ? rollDice(crit ? 2 : 1) : null;
         out.targets.push({ id: t.id, d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble, roll: r, amount: r ? Math.max(0, r.total) : 0 });
       }
@@ -88,8 +89,8 @@
       out.roll = rollDice(1);
       const full = out.roll ? Math.max(0, out.roll.total) : 0;
       for (const t of p.targets) {
-        const s = DnD.regole.rollSave({ bonus: t.saves[e.saveAbility] || 0, mode: 'normale', dc: caster.dc }, rng);
-        out.targets.push({ id: t.id, natural: s.natural, saveTotal: s.total, success: s.success, amount: s.success ? (e.halfOnSave ? Math.floor(full / 2) : 0) : full });
+        const s = t.autoFail ? { natural: null, total: null, success: false } : DnD.regole.rollSave({ bonus: t.saves[e.saveAbility] || 0, mode: t.saveMode || 'normale', dc: caster.dc }, rng);
+        out.targets.push({ id: t.id, natural: s.natural, saveTotal: s.total, success: s.success, autoFail: Boolean(t.autoFail), amount: s.success ? (e.halfOnSave ? Math.floor(full / 2) : 0) : full });
       }
     } else {
       // Cura e "nessun tiro": un solo tiro (se ci sono dadi) applicato a tutti i bersagli.

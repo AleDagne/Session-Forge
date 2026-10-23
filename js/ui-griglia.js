@@ -24,7 +24,7 @@
       palette = {
         bg: v('--grid-bg'), board: v('--grid-board'), line: v('--grid-line'), line5: v('--grid-line-strong'),
         label: v('--grid-label'), labelBg: v('--grid-label-bg'), text: v('--text'), current: v('--accent'), selected: v('--selection'),
-        missing: v('--grid-missing'), missingText: v('--grid-missing-text'),
+        missing: v('--grid-missing'), missingText: v('--grid-missing-text'), conc: v('--conc'), condBg: v('--cond-token-bg'),
         ok: 'rgba(63,174,99,0.45)', bad: 'rgba(212,69,58,0.5)',
         // Movimento: celle raggiungibili (1×) e con lo Scatto (2×), percorso.
         reach: 'rgba(63,174,99,0.18)', reachDash: 'rgba(232,131,42,0.16)', path: v('--accent'),
@@ -625,6 +625,8 @@
         ctx.textBaseline = 'middle';
         ctx.fillText(String(t.copy), bxx, byy + 0.5);
       }
+      // Condizioni: al massimo 4 simboli in basso (gli altri come «+N»); concentrazione: anello tratteggiato.
+      if (DnD.uiCondizioni && !t.dead) drawConditions(ctx, t, px, py, dw, dh, pad, s);
       // Nome sotto la pedina.
       if (s >= 22) {
         const fs = Math.max(9, Math.min(13, s * 0.3));
@@ -638,6 +640,48 @@
         ctx.fillStyle = down ? colors().label : colors().text;
         ctx.fillText(t.name, cx, ty, dw + s);
       }
+    }
+
+    function drawConditions(ctx, t, px, py, dw, dh, pad, s) {
+      const g = DnD.uiCondizioni.tokenGlyphs(t);
+      if (g.conc) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(px + dw / 2, py + dh / 2, dw / 2 - pad * 0.15, dh / 2 - pad * 0.15, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = colors().conc;
+        ctx.lineWidth = Math.max(1.5, s * 0.05);
+        ctx.setLineDash([2, 3]);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (!g.icons.length || s < 18) return;
+      const size = Math.max(8, Math.min(16, s * 0.28));
+      const items = g.icons.map((x) => ({ text: x.icon, level: x.level, color: x.color })).concat(g.more ? [{ text: '+' + g.more }] : []);
+      const total = items.length * size;
+      let x = px + dw / 2 - total / 2 + size / 2;
+      const y = py + dh - pad - size * 0.55;
+      ctx.save();
+      ctx.font = Math.round(size * 0.78) + 'px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const it of items) {
+        ctx.beginPath();
+        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+        ctx.fillStyle = colors().condBg;
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = it.color || colors().line5;
+        ctx.stroke();
+        ctx.fillStyle = colors().text;
+        ctx.fillText(it.text, x, y + 0.5);
+        if (it.level) {
+          ctx.font = 'bold ' + Math.round(size * 0.5) + 'px system-ui, sans-serif';
+          ctx.fillText(String(it.level), x + size * 0.38, y + size * 0.36);
+          ctx.font = Math.round(size * 0.78) + 'px system-ui, sans-serif';
+        }
+        x += size;
+      }
+      ctx.restore();
     }
 
     // Fazioni della sessione per colore e nome (contorno delle pedine e degli NPC).

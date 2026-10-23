@@ -124,6 +124,9 @@
       addMod: el('input', { type: 'checkbox', checked: s.effect.addMod }),
     };
     const classChecks = {};
+    // Condizione inflitta: a chi fallisce la salvezza, a chi è colpito, o (senza tiro) a tutti i bersagli salvo la salvezza indicata.
+    const inflict = DnD.condizioni.normalizeInflict(s.inflict);
+    const inflictBox = DnD.uiCondizioni.inflictEditor(inflict, { save: true, note: 'Tiro salvezza dell\'incantesimo: la subisce chi fallisce. Attacco: chi è colpito. Senza tiro: tutti i bersagli, salvo la salvezza qui indicata. Con la concentrazione, finisce quando la concentrazione termina.' });
     const materialField = field('Materiale', inp.material, 'components.material');
     const saveFields = el('div', { class: 'grid-3' }, field('Tiro salvezza su', inp.saveAbility),
       el('label', { class: 'check' }, inp.halfOnSave, ' Il tiro salvezza riuscito dimezza i danni'));
@@ -172,7 +175,8 @@
       el('fieldset', {},
         el('legend', { text: 'Effetto meccanico (facoltativo)' }),
         field('Tipo', inp.type),
-        effectFields),
+        effectFields,
+        inflictBox),
       el('div', { class: 'form-actions' },
         el('button', { type: 'button', class: 'btn', text: 'Annulla', onclick: () => { editing = null; render(); } }),
         el('button', { type: 'submit', class: 'btn primary', text: 'Salva incantesimo' })));
@@ -201,6 +205,7 @@
           halfOnSave: inp.halfOnSave.checked,
           addMod: inp.addMod.checked,
         },
+        inflict,
       };
       if (!showErrors(form, DnD.validazione.validateSpell(data))) return;
       const normalized = DnD.dati.normalizeSpell(data);

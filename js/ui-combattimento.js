@@ -34,7 +34,30 @@
   const fpc = () => (combat() && combat().grid.feetPerCell) || 5;
   const limited = (x) => { const c = combat(); return Boolean(c && c.phase === 'attivo' && !c.freeMovement && !x.ignoreSpeed); };
   const cellsText = (n) => n + (n === 1 ? ' casella' : ' caselle');
-  const condsOf = (x) => x.conditions || []; // i combattenti appena creati non hanno ancora il campo
+  // ---------- Condizioni e concentrazione (condizioni.js) ----------
+  // Le condizioni sono una fonte di modificatori per attacchi, salvezze, velocità e azioni; la UI è in ui-condizioni.js.
+  const C = DnD.condizioni;
+  const UC = () => DnD.uiCondizioni;
+  const customs = () => DnD.store.state.customConditions || [];
+  const combatRules = () => DnD.impostazioni.combatRules();
+  // Arma a distanza (dal catalogo); le armi scritte a mano contano come mischia entro 1 cella.
+  const weaponRanged = (w) => { const e = w && w.equipmentId ? DnD.store.state.equipment.find((x) => x.id === w.equipmentId) : null; return Boolean(e && e.weapon && e.weapon.kind === 'distanza'); };
+  // Modificatori delle condizioni per un attacco (base = modo scelto); la paura vale con la fonte in vista.
+  function attackModsFor(a, t, ranged, base) {
+    const distance = a.pos && t.pos ? G.tokenDistance(a, t) : null;
+    let map = null;
+    const canSee = (x, y) => { if (!x.pos || !y.pos) return true; map = map || IA.buildMap(aiState()); return IA.visible(map, x, y); };
+    return C.attackMods(a, t, { melee: !ranged && (distance === null || distance <= 1), distance, base, byId, canSee });
+  }
+  // Azioni bloccate dalle condizioni (il master può permetterle): il motivo, oppure null.
+  const blockedBy = (x) => (x.forceActions ? null : C.actionBlock(x));
+  // Applica la condizione inflitta da un'azione o da un incantesimo a un bersaglio (con la riga nel log).
+  function inflictOn(c, src, t, inflict, spell) {
+    const data = C.inflictData(inflict, src, t, spell, customs());
+    if (!data) return;
+    const r = C.apply(t, data);
+    if (r.line) log(c, r.ok ? 'condizione' : 'sistema', r.line);
+  }
   // Velocità e residuo: «🚶 30 ft (6 caselle) · restano 4 (prono: striscia…)».
   function speedText(x, short) {
     const st = Mv.speedState(x, rules(), fpc());
@@ -96,36 +119,22 @@
       log(c, 'movimento', t.name + ': modalità di movimento ' + Mv.MODE_NAMES[mode].toLowerCase() + ' (' + Mv.feetIn(t, mode) + ' ft).');
     });
   }
-  function toggleCondition(id, cond) {
-    mutate((c) => {
-      const t = c.combatants.find((y) => y.id === id);
-      const on = !condsOf(t).includes(cond);
-      t.conditions = on ? condsOf(t).concat(cond) : condsOf(t).filter((x) => x !== cond);
-      aiPlan = null;
-      log(c, 'sistema', t.name + (on ? ' è ' + cond : ' non è più ' + cond) + '.');
-    });
-  }
-  // Condizioni (anche «rallentato»): quelle che cambiano la velocità sono indicate.
+  // Finestra delle condizioni (applica, modifica, togli, concentrazione, tiri contro la morte): ui-condizioni.js.
   function conditionsDialog(x) {
-    const speedy = new Set(Mv.STOP.concat('prono', 'rallentato'));
-    const body = el('div', { class: 'check-row' }, Mv.conditions().map((k) => el('label', { class: 'check small' },
-      el('input', { type: 'checkbox', checked: condsOf(x).includes(k), onchange: () => toggleCondition(x.id, k) }), ' ' + k + (speedy.has(k) ? ' 🦶' : ''))));
-    openDialog('Condizioni di ' + x.name, el('div', { class: 'form' }, body,
-      el('p', { class: 'muted small', text: '🦶 = cambia la velocità: afferrato, trattenuto, paralizzato, pietrificato e privo di sensi = 0; prono = striscia (costo doppio; Rialzarsi costa metà velocità); rallentato = metà velocità.' })), [{ text: 'Chiudi' }]);
+    UC().dialog(x.id, { mutate, log, byId, combatants: () => combat().combatants, after: () => { aiPlan = null; } });
   }
   // Riquadro del movimento nella scheda: velocità e residuo con il motivo, condizioni, azioni.
   function movementBox(x) {
     const m = Mv.movementOf(x);
-    const prone = condsOf(x).includes('prono');
+    const prone = C.has(x, 'prono');
     return el('div', { class: 'move-box' + (limited(x) && !Mv.left(x, rules(), fpc()) ? ' empty' : '') },
       el('span', { class: 'small', text: speedText(x) }),
-      condsOf(x).length ? el('div', { class: 'cond-chips' }, condsOf(x).map((k) => el('span', { class: 'tag cond-tag', text: k }))) : null,
       el('div', { class: 'head-actions' },
-        el('button', { type: 'button', class: 'btn small', text: '🏃 Scatto', title: 'Aggiunge la velocità al residuo (usa l\'azione)', disabled: R.isDown(x), onclick: () => moveAction(x.id, 'scatto') }),
-        el('button', { type: 'button', class: 'btn small', text: '↩ Disimpegno', title: 'Promemoria: niente attacchi di opportunità (usa l\'azione)', disabled: R.isDown(x) || m.disengaged, onclick: () => moveAction(x.id, 'disimpegno') }),
+        el('button', { type: 'button', class: 'btn small', text: '🏃 Scatto', title: blockedBy(x) || 'Aggiunge la velocità al residuo (usa l\'azione)', disabled: R.isDown(x) || Boolean(blockedBy(x)), onclick: () => moveAction(x.id, 'scatto') }),
+        el('button', { type: 'button', class: 'btn small', text: '↩ Disimpegno', title: blockedBy(x) || 'Promemoria: niente attacchi di opportunità (usa l\'azione)', disabled: R.isDown(x) || m.disengaged || Boolean(blockedBy(x)), onclick: () => moveAction(x.id, 'disimpegno') }),
         prone ? el('button', { type: 'button', class: 'btn small', text: '⤒ Rialzati', title: 'Costa metà della velocità', onclick: () => moveAction(x.id, 'rialzati') }) : null,
         m.moves.length ? el('button', { type: 'button', class: 'btn small', text: '↶ Annulla spostamento', title: 'Torna alla posizione d\'inizio turno e restituisce il movimento', onclick: () => moveAction(x.id, 'annulla') }) : null,
-        el('button', { type: 'button', class: 'btn small', text: 'Condizioni…', onclick: () => conditionsDialog(byId(x.id)) })));
+        el('button', { type: 'button', class: 'btn small', text: '⚕ Condizioni…', onclick: () => conditionsDialog(byId(x.id)) })));
   }
   // Interruttore del master: nessun limite di velocità.
   const freeBox = el('input', { type: 'checkbox', onchange: (e) => mutate((c) => { c.freeMovement = e.target.checked; log(c, 'sistema', 'Movimento libero ' + (c.freeMovement ? 'attivo: nessun limite di velocità.' : 'disattivato.')); }) });
@@ -267,7 +276,8 @@
         beginDice();
         mutate((c) => {
           const t = c.combatants.find((y) => y.id === x.id);
-          const r = R.rollSave({ bonus: p ? DnD.leggendario.checkBonus(p, 'Persuasione', false, DnD.store.state) : 0, mode: 'normale', dc: t.npc.calmDc }, dice());
+          // Prova di Persuasione: le condizioni di chi parla (avvelenato, spaventato…) danno svantaggio.
+          const r = R.rollSave({ bonus: p ? DnD.leggendario.checkBonus(p, 'Persuasione', false, DnD.store.state) : 0, mode: C.checkMods(who).mode, dc: t.npc.calmDc }, dice());
           log(c, r.success ? 'successo' : 'fallimento', who.name + ' prova a calmare ' + t.name + ': Persuasione ' + r.total + ' contro CD ' + t.npc.calmDc + ' → ' + (r.success ? NP.calm(t) : 'non ci riesce.'));
           aiPlan = null;
         });
@@ -639,11 +649,11 @@
     const x = byId(id);
     if (!x) return [];
     return [
-      x.creature ? { text: '🐉 Azioni della creatura…', disabled: R.isDown(x), onclick: () => selectCombatant(id, 'list') } : null,
-      { text: '⚔ Attacca', disabled: R.isDown(x) || !x.weapons.length || combat().combatants.length < 2, onclick: () => attackDialog(byId(id)) },
+      x.creature ? { text: '🐉 Azioni della creatura…', disabled: R.isDown(x) || Boolean(blockedBy(x)), onclick: () => selectCombatant(id, 'list') } : null,
+      { text: '⚔ Attacca', disabled: R.isDown(x) || !x.weapons.length || combat().combatants.length < 2 || Boolean(blockedBy(x)), onclick: () => attackDialog(byId(id)) },
       { text: '✚ Cura', onclick: () => healDialog(byId(id)) },
       { text: '🛡 Tiro salvezza', onclick: () => saveDialog(byId(id)) },
-      x.spellcasting ? { text: '✨ Lancia incantesimo', disabled: R.isDown(x) || !x.spellcasting.spells.length, onclick: () => castDialog(byId(id)) } : null,
+      x.spellcasting ? { text: '✨ Lancia incantesimo', disabled: R.isDown(x) || !x.spellcasting.spells.length || Boolean(blockedBy(x)), onclick: () => castDialog(byId(id)) } : null,
       { text: '✎ Modifica', onclick: () => editDialog(byId(id)) },
       { text: '↔ Dimensione sulla griglia…', onclick: () => resizeDialog(byId(id)) },
       ...Mv.MODES.filter((mode) => mode !== Mv.modeOf(x)).map((mode) => {
@@ -652,10 +662,10 @@
         return { text: Mv.MODE_ICONS[mode] + ' Modalità: ' + Mv.MODE_NAMES[mode].toLowerCase() + (ft > 0 ? ' (' + ft + ' ft)' : mode === 'cammina' ? '' : banned ? ' (nessuna velocità)' : ' (costo doppio)'),
           disabled: banned, onclick: () => setMode(id, mode) };
       }),
-      { text: '🏃 Scatto', disabled: R.isDown(x), onclick: () => moveAction(id, 'scatto') },
-      condsOf(x).includes('prono') ? { text: '⤒ Rialzati (metà velocità)', onclick: () => moveAction(id, 'rialzati') } : null,
+      { text: '🏃 Scatto', disabled: R.isDown(x) || Boolean(blockedBy(x)), onclick: () => moveAction(id, 'scatto') },
+      C.has(x, 'prono') ? { text: '⤒ Rialzati (metà velocità)', onclick: () => moveAction(id, 'rialzati') } : null,
       Mv.movementOf(x).moves.length ? { text: '↶ Annulla spostamento', onclick: () => moveAction(id, 'annulla') } : null,
-      { text: '⚕ Condizioni…', onclick: () => conditionsDialog(byId(id)) },
+      { text: '⚕ Condizioni e concentrazione…', onclick: () => conditionsDialog(byId(id)) },
       { text: x.ignoreSpeed ? '🦶 Rispetta la velocità' : '🦶 Ignora velocità', onclick: () => mutate((c) => {
         const t = c.combatants.find((y) => y.id === id);
         t.ignoreSpeed = !t.ignoreSpeed;
@@ -708,9 +718,34 @@
 
   // Danno con le regole della trasformazione leggendaria: a 0 PF della forma si torna normali e il danno in
   // eccesso passa al personaggio (le righe finiscono nel log alla fine dell'azione).
+  // Danni a 0 PF (tiri contro la morte) e concentrazione: salvezza su COS con CD max(10, metà del danno).
   let hurtLines = [];
-  function hurt(t, amount) {
+  function hurt(t, amount, crit) {
+    const wasZero = t.hp <= 0;
     hurtLines = hurtLines.concat(DnD.leggendario.damage(t, amount));
+    if (!(amount > 0)) return;
+    if (wasZero) hurtLines.push(...C.damageAtZero(t, crit));
+    if (t.hp > 0 && t.concentration) {
+      const r = C.concentrationCheck(t, amount, dice());
+      hurtLines.push({ type: r.kept ? 'tiro-salvezza' : 'ts-fallito', text: r.line });
+      if (!r.kept) hurtLines.push(...C.endConcentration(t, combat().combatants, 'danno').lines.map((text) => ({ type: 'concentrazione', text })));
+    }
+  }
+  // Dopo ogni azione: chi scende a 0 PF (privo di sensi e tiri contro la morte, o nemico che muore), chi torna
+  // sopra 0 e le concentrazioni che finiscono da sole (0 PF, incapacitato).
+  function conditionsAfter(c, beforeHp) {
+    for (const x of c.combatants) {
+      const before = beforeHp.has(x.id) ? beforeHp.get(x.id) : x.hp;
+      if (before > 0 && x.hp <= 0) for (const line of C.dropToZero(x, combatRules())) log(c, 'sistema', line);
+      const ds = C.normalizeDeathSaves(x.deathSaves);
+      if (x.hp > 0 && (ds.active || ds.stable || x.dead || C.normalizeList(x.conditions).some((e) => e.auto === 'zero'))) {
+        C.revive(x);
+        x.dead = false;
+        if (ds.active || ds.stable) log(c, 'sistema', x.name + ' torna cosciente.');
+      }
+      const why = C.concentrationBreaker(x);
+      if (why) for (const line of C.endConcentration(x, c.combatants, why).lines) log(c, 'concentrazione', line);
+    }
   }
 
   function mutate(fn) {
@@ -726,10 +761,11 @@
       const before = DnD.suoniDati.combatSnapshot(prev);
       const lastLine = prev && prev.log.length ? prev.log[prev.log.length - 1] : null;
       fn(session(st).combat, st);
-      if (hurtLines.length && session(st).combat) for (const line of hurtLines) log(session(st).combat, 'sistema', line);
+      if (hurtLines.length && session(st).combat) for (const line of hurtLines) log(session(st).combat, line.type || 'sistema', line.text || line);
       hurtLines = [];
       // Mondo: provocazioni degli NPC neutrali, uccisioni (quest, reputazione) e fine per fazioni.
       const c = session(st).combat;
+      if (c) conditionsAfter(c, beforeHp);
       if (c) worldAfter(c, st, beforeHp, aggr);
       // Boss: passaggi di fase e sconfitte (anche più fasi con un solo colpo), con le note nel log.
       if (c && c.phase === 'attivo') events = DnD.boss.checkCombat(c, (type, text) => log(c, type, text));
@@ -984,6 +1020,10 @@
     const cur = byId(nextId);
     Mv.resetTurn(cur);
     log(c, 'turno', 'Turno di ' + cur.name + '.');
+    // Condizioni «fino all'inizio del turno di…», tiri contro la morte e promemoria delle azioni bloccate.
+    for (const line of C.startTurn(c.combatants, nextId)) log(c, 'sistema', line);
+    if (C.dying(cur)) log(c, 'sistema', C.deathSave(cur, dice()).line);
+    else if (C.actionBlock(cur) && cur.hp > 0) log(c, 'sistema', '⚠ ' + cur.name + ': ' + C.actionBlock(cur) + (cur.forceActions ? ' (il master le permette).' : '.'));
     // Trasformazione leggendaria: la durata scende all'inizio del turno.
     for (const line of DnD.leggendario.tick(cur)) log(c, 'sistema', line);
     if (cur.creature) for (const line of M.startTurn(cur.creature, dice())) log(c, 'sistema', line);
@@ -996,6 +1036,8 @@
       const res = R.nextTurn(sorted, c.currentId, c.round);
       if (res.currentId === c.currentId && res.round === c.round) return;
       const newRound = res.round !== c.round;
+      // Fine del turno di chi ha appena giocato: durate in round, salvezze ripetute, «fino alla fine del turno di…».
+      if (c.currentId) for (const line of C.endTurn(c.combatants, c.currentId, dice())) log(c, 'sistema', line);
       if (newRound) log(c, 'round', '— Round ' + res.round + ' —');
       // NPC diventati ostili: entrano nell'ordine di iniziativa da questo round.
       if (newRound) for (const x of c.combatants.filter((y) => y.joinRound && y.joinRound <= res.round)) { x.joinRound = 0; log(c, 'sistema', x.name + ' entra nell\'ordine di iniziativa.'); }
@@ -1058,19 +1100,26 @@
       } })
       : null;
     const distance = el('p', { class: 'muted small', 'aria-live': 'polite' });
+    const modsLine = el('p', { class: 'small cond-preview', 'aria-live': 'polite' });
     const showDistance = () => {
       const t = byId(target.value);
       const dd = t ? G.tokenDistance(attacker, t) : null;
       distance.textContent = dd === null ? '' : 'Distanza (tra le celle più vicine): ' + G.formatDistance(dd, combat().grid.feetPerCell);
+      // Anteprima delle condizioni: «vantaggio: bersaglio prono, entro 1 cella».
+      const w = attacker.weapons.find((x) => x.id === weapon.value);
+      const m = t && body ? attackModsFor(attacker, t, weaponRanged(w), currentMode()) : null;
+      modsLine.textContent = m && (m.adv.length || m.dis.length || m.autoCrit || m.blocked) ? '🌀 ' + C.modsText(m) + (m.mode !== currentMode() ? ' → tiro ' + m.mode : '') : '';
     };
     target.addEventListener('change', showDistance);
-    showDistance();
-    const body = el('div', { class: 'form' },
+    weapon.addEventListener('change', showDistance);
+    const body = el('div', { class: 'form', onchange: (e) => { if (e.target.name === 'modo') showDistance(); } },
       el('div', { class: 'target-row' }, field('Bersaglio', target), pickButton),
       distance,
       field('Arma', weapon),
       el('fieldset', { class: 'radio-row' }, el('legend', { text: 'Tiro' }),
-        mode(R.MODES.normale, 'Normale'), mode(R.MODES.vantaggio, 'Vantaggio'), mode(R.MODES.svantaggio, 'Svantaggio')));
+        mode(R.MODES.normale, 'Normale'), mode(R.MODES.vantaggio, 'Vantaggio'), mode(R.MODES.svantaggio, 'Svantaggio')),
+      modsLine);
+    showDistance();
 
     const dialog = openDialog(attacker.name + ' attacca', body, [
       { text: 'Annulla' },
@@ -1091,11 +1140,15 @@
       const t = byId(targetId);
       const w = a && a.weapons.find((x) => x.id === weaponId);
       if (!a || !t || !w) return;
-      const res = R.resolveAttack({ toHit: w.toHit, targetAC: t.ac, damageDice: w.damageDice, damageBonus: w.damageBonus, mode }, dice());
-      const d20 = mode === R.MODES.normale
+      // Condizioni: vantaggio e svantaggio da più fonti, critico automatico, attacco impossibile (affascinato).
+      const mods = attackModsFor(a, t, weaponRanged(w), mode);
+      if (mods.blocked) { log(c, 'sistema', a.name + ' non attacca ' + t.name + ': ' + mods.blocked + '.'); summary = a.name + ': ' + mods.blocked + '.'; return; }
+      const res = R.resolveAttack({ toHit: w.toHit, targetAC: t.ac, damageDice: w.damageDice, damageBonus: w.damageBonus, mode: mods.mode, autoCrit: Boolean(mods.autoCrit) }, dice());
+      const why = C.modsText(mods);
+      const d20 = mods.mode === R.MODES.normale
         ? 'd20 = ' + res.natural
-        : 'd20 con ' + mode + ' [' + res.d20Rolls.join(', ') + '] → ' + res.natural;
-      let text = a.name + ' attacca ' + t.name + ' con ' + w.name + ': ' + d20 + ' ' + R.formatModifier(w.toHit) + ' = ' + res.total + ' contro CA ' + t.ac;
+        : 'd20 con ' + mods.mode + ' [' + res.d20Rolls.join(', ') + '] → ' + res.natural;
+      let text = a.name + ' attacca ' + t.name + ' con ' + w.name + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' + R.formatModifier(w.toHit) + ' = ' + res.total + ' contro CA ' + t.ac;
       if (res.fumble) {
         text += '. 1 NATURALE: fallimento automatico.';
         summary = a.name + ': fallimento automatico!';
@@ -1110,9 +1163,9 @@
       }
       const before = t.hp;
       const def = M.applyDefenses(res.damage, M.damageTypeOf(w.damageType), t.defenses, w.magical);
-      hurt(t, def.amount);
+      hurt(t, def.amount, res.crit);
       const dmgExpr = res.damageDiceCount + 'd' + res.damageSides;
-      text += res.crit ? '. 20 NATURALE, COLPO CRITICO! ' : ' → colpito. ';
+      text += res.crit ? (res.natural === 20 ? '. 20 NATURALE, COLPO CRITICO! ' : '. COLPO CRITICO (' + mods.autoCrit + ')! ') : ' → colpito. ';
       text += 'Danni ' + dmgExpr + (res.crit ? ' (dadi raddoppiati)' : '') + ': ' + rollText(res.damageRolls, res.damageFlat) +
         ' = ' + res.damage + (w.damageType ? ' ' + w.damageType : '') + (def.note ? ' (' + def.note + ')' : '') + '. ' + t.name + ': ' + before + ' → ' + t.hp + ' PF.';
       log(c, res.crit ? 'critico' : 'colpito', text);
@@ -1243,6 +1296,8 @@
         if (sp.effect.type !== 'nessuno' && !targets.length) { toast('Scegli almeno un bersaglio.', 'error'); return false; }
         const inn = innateOf(sc, sp);
         if (sp.area && sp.effect.type !== 'cura' && !confirmArea(caster.id, targets)) return false;
+        const cur = byId(caster.id);
+        if (sp.concentration && cur && cur.concentration && !confirm(cur.name + ' è concentrato su ' + cur.concentration.name + ': lanciando ' + sp.name + ' la concentrazione precedente termina (e i suoi effetti). Continuare?')) return false;
         if (inn ? inn.freq === 'giorno' && inn.left <= 0 : sp.level > 0 && !DnD.magie.castableLevels(sp, sc.slotsTotal, sc.slotsUsed).includes(Number(slotSel.value))) {
           toast(inn ? 'Usi giornalieri esauriti.' : 'Nessuno slot disponibile per questo incantesimo.', 'error');
           return false;
@@ -1281,10 +1336,14 @@
         if (source) source.spellcasting.slotsUsed[slotLevel - 1] = sc.slotsUsed[slotLevel - 1];
       }
       const targets = targetIds.map(byId).filter(Boolean);
+      // Condizioni di ogni bersaglio: modo dell'attacco (e critico automatico da vicino), salvezze automatiche o con svantaggio.
+      const tmods = new Map(targets.map((t) => [t.id, sp.effect.type === 'attacco' ? attackModsFor(a, t, false, mode) : C.saveMods(t, sp.effect.saveAbility)]));
       const res = DnD.magie.resolveSpell({
         spell: sp, slotLevel, mode, caster: { attack: sc.attack, dc: sc.dc, mod: sc.mod },
-        targets: targets.map((t) => ({ id: t.id, ac: t.ac, saves: t.saves })),
+        targets: targets.map((t) => { const m = tmods.get(t.id); return { id: t.id, ac: t.ac, saves: t.saves, mode: m.mode, autoCrit: Boolean(m.autoCrit), saveMode: m.mode, autoFail: Boolean(m.autoFail) }; }),
       }, dice());
+      // Concentrazione: inizia prima di applicare gli effetti (quella precedente finisce con i suoi).
+      const concLines = sp.concentration ? C.startConcentration(a, sp, c.combatants, c.round) : [];
       const e = sp.effect;
       const dmgType = e.damageType ? ' ' + e.damageType : '';
       const diceText = (r) => (r ? DnD.dadi.formatExpr(r.count, r.sides, r.modifier) + ': ' + rollText(r.rolls, r.modifier) + ' = ' + Math.max(0, r.total) : '');
@@ -1300,7 +1359,7 @@
         else if (r.amount) {
           const def = M.applyDefenses(r.amount, M.damageTypeOf(e.damageType), t.defenses, true);
           defNote = def.note ? ' (' + def.note + ')' : '';
-          hurt(t, def.amount);
+          hurt(t, def.amount, r.crit);
           r.amount = def.amount;
         }
         // Tiro salvezza fallito: la Resistenza leggendaria può trasformarlo in un successo.
@@ -1308,13 +1367,15 @@
           t.pendingSave = { full: [{ amount: res.roll ? Math.max(0, res.roll.total) : 0, type: M.damageTypeOf(e.damageType) }], half: e.halfOnSave, applied: before - t.hp, magical: true, text: sp.name };
         }
         const hpText = (before === t.hp ? '' : ' (' + before + ' → ' + t.hp + ' PF)') + defNote;
+        const why = C.modsText(tmods.get(t.id));
         if (e.type === 'attacco') {
-          const d20 = mode === 'normale' ? 'd20 = ' + r.natural : 'd20 con ' + mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
+          const tm = tmods.get(t.id).mode;
+          const d20 = tm === 'normale' ? 'd20 = ' + r.natural : 'd20 con ' + tm + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
           const outcome = r.fumble ? '1 NATURALE, mancato' : r.crit ? 'CRITICO, ' + r.amount + ' danni' + dmgType + ' (' + diceText(r.roll) + ')'
             : r.hit ? 'colpito, ' + r.amount + ' danni' + dmgType + ' (' + diceText(r.roll) + ')' : 'mancato';
-          parts.push(t.name + ': ' + d20 + ' ' + R.formatModifier(sc.attack) + ' = ' + r.total + ' contro CA ' + t.ac + ' → ' + outcome + hpText + '.');
+          parts.push(t.name + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' + R.formatModifier(sc.attack) + ' = ' + r.total + ' contro CA ' + t.ac + ' → ' + outcome + hpText + '.');
         } else if (e.type === 'salvezza') {
-          parts.push(t.name + ': salvezza ' + e.saveAbility + ' ' + r.saveTotal + ' vs CD ' + sc.dc + ' → ' + (r.success ? 'riesce' : 'fallisce') + ', ' + r.amount + ' danni' + hpText + '.');
+          parts.push(t.name + ': salvezza ' + e.saveAbility + ' ' + (r.autoFail ? 'fallita in automatico (' + why + ')' : r.saveTotal + ' vs CD ' + sc.dc + (why ? ' (' + why + ')' : '') + ' → ' + (r.success ? 'riesce' : 'fallisce')) + ', ' + r.amount + ' danni' + hpText + '.');
         } else if (e.type === 'cura') {
           parts.push(t.name + ' recupera ' + (t.hp - before) + ' PF' + hpText + (before === 0 && t.hp > 0 ? ', torna in piedi' : '') + '.');
         } else if (res.roll) {
@@ -1323,6 +1384,22 @@
         if (before > 0 && t.hp === 0) downed.push(t.name);
       }
       log(c, 'magia', parts.join(' '));
+      for (const line of concLines) log(c, line.includes('perde') ? 'concentrazione' : 'sistema', line);
+      // Condizione inflitta: a chi fallisce la salvezza, a chi è colpito, o (senza tiro) a tutti salvo la salvezza propria.
+      if (sp.inflict && sp.inflict.type) {
+        for (const r of res.targets) {
+          const t = byId(r.id);
+          if (!t || (e.type === 'salvezza' && r.success) || (e.type === 'attacco' && !r.hit)) continue;
+          if (e.type !== 'salvezza' && e.type !== 'attacco' && sp.inflict.save) {
+            const sm = C.saveMods(t, sp.inflict.save.ability);
+            const dc = sp.inflict.save.dc || sc.dc;
+            const s2 = sm.autoFail ? { success: false, total: '—' } : R.rollSave({ bonus: t.saves[sp.inflict.save.ability] || 0, mode: sm.mode, dc }, dice());
+            log(c, s2.success ? 'tiro-salvezza' : 'ts-fallito', t.name + ': salvezza su ' + sp.inflict.save.ability + ' contro ' + sp.name + ' ' + s2.total + ' vs CD ' + dc + ' → ' + (s2.success ? 'riesce.' : 'fallisce.'));
+            if (s2.success) continue;
+          }
+          inflictOn(c, a, t, sp.inflict, sp);
+        }
+      }
       for (const n of downed) log(c, 'a-terra', n + ' è a terra!');
       summaryText = a.name + ' lancia ' + sp.name + (downed.length ? ' · a terra: ' + downed.join(', ') : '');
     });
@@ -1356,10 +1433,19 @@
         mutate((c) => {
           const t = byId(target.id);
           if (!t) return;
-          const r = R.rollSave({ bonus: t.saves[ab], mode: m, dc: dcValue }, dice());
-          const d20 = m === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + m + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
+          // Condizioni: fallimento automatico (FOR e DES da paralizzato, stordito…) o svantaggio.
+          const sm = C.saveMods(t, ab, m);
+          if (sm.autoFail) {
+            log(c, 'ts-fallito', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': fallito in automatico (' + sm.autoFail + ').');
+            summaryText = t.name + ': TS ' + ab + ' fallito in automatico (' + sm.autoFail + ')';
+            summaryType = 'error';
+            return;
+          }
+          const r = R.rollSave({ bonus: t.saves[ab], mode: sm.mode, dc: dcValue }, dice());
+          const why = C.modsText(sm);
+          const d20 = sm.mode === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + sm.mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
           const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
-          log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': ' + d20 + ' ' +
+          log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' +
             R.formatModifier(t.saves[ab]) + ' = ' + r.total + (outcome || '.'));
           summaryText = t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)');
           summaryType = r.success === false ? 'error' : r.success ? 'success' : 'info';
@@ -1547,6 +1633,7 @@
       if (!a) return;
       const use = M.canUse(st, a);
       if (!use.ok) { toast(a.name + ': ' + use.reason + '.', 'error'); return; }
+      if (blockedBy(x)) { toast(x.name + ': ' + blockedBy(x) + '.', 'error'); return; }
       M.consume(st, a);
       if (a.group === 'bonusActions' || a.group === 'reactions') DnD.audio.suona('azione-lieve', { coda: true });
       const header = x.name + (a.group === 'legendary' ? ' (azione leggendaria, ' + st.legendaryPoints.left + ' punti rimasti)' : '') + ' usa ' + a.name;
@@ -1560,26 +1647,45 @@
           const before = t.hp;
           const who = steps.length > 1 ? x.name + ' — ' + sub.name : header;
           if (sub.mech.kind === 'attacco') {
-            const r = M.resolveAttack(st, sub, t, mode, dice());
-            const d20 = mode === 'normale' ? 'd20 = ' + r.natural : 'd20 con ' + mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
-            let text = who + ' contro ' + t.name + ': ' + d20 + ' ' + R.formatModifier(r.bonus) + ' = ' + r.total + ' contro CA ' + t.ac;
+            const mods = attackModsFor(x, t, sub.mech.range === 'distanza', mode);
+            if (mods.blocked) { log(c, 'sistema', who + ': non attacca ' + t.name + ' (' + mods.blocked + ').'); continue; }
+            const r = M.resolveAttack(st, sub, t, mods.mode, dice(), Boolean(mods.autoCrit));
+            const why = C.modsText(mods);
+            const d20 = mods.mode === 'normale' ? 'd20 = ' + r.natural : 'd20 con ' + mods.mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
+            let text = who + ' contro ' + t.name + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' + R.formatModifier(r.bonus) + ' = ' + r.total + ' contro CA ' + t.ac;
             if (r.fumble || !r.hit) { log(c, 'mancato', text + (r.fumble ? '. 1 NATURALE: mancato.' : ' → mancato.')); continue; }
             const applied = M.applyDamageParts(r.parts, t.defenses, sub.mech.magical);
-            hurt(t, applied.total);
-            text += (r.crit ? '. 20 NATURALE, CRITICO (dadi raddoppiati)! ' : ' → colpito: ') +
+            hurt(t, applied.total, r.crit);
+            text += (r.crit ? (r.natural === 20 ? '. 20 NATURALE, CRITICO (dadi raddoppiati)! ' : '. CRITICO (' + mods.autoCrit + ', dadi raddoppiati)! ') : ' → colpito: ') +
               r.parts.map((q) => q.dice + rollText(q.rolls, q.bonus).replace(/^/, ' ') + ' = ' + q.amount + (q.type ? ' ' + q.type : '')).join(' + ') +
               (applied.notes.length ? ' (' + applied.notes.join('; ') + ')' : '') + ' → ' + applied.total + ' danni. ' + t.name + ': ' + before + ' → ' + t.hp + ' PF.';
             log(c, r.crit ? 'critico' : 'colpito', text);
+            // Condizione inflitta dal colpo (con la salvezza che la evita, se indicata).
+            const inf = sub.mech.inflict;
+            if (inf && inf.type) {
+              let saved = false;
+              if (inf.save) {
+                const sm = C.saveMods(t, inf.save.ability);
+                const dc = inf.save.dc || 10;
+                const s2 = sm.autoFail ? { success: false, total: '—' } : R.rollSave({ bonus: t.saves[inf.save.ability] || 0, mode: sm.mode, dc }, dice());
+                saved = s2.success;
+                log(c, saved ? 'tiro-salvezza' : 'ts-fallito', t.name + ': salvezza su ' + inf.save.ability + ' contro ' + C.inflictName(inf, customs()).toLowerCase() + ' ' + s2.total + ' vs CD ' + dc + ' → ' + (saved ? 'riesce.' : 'fallisce.'));
+              }
+              if (!saved) inflictOn(c, x, t, inf, null);
+            }
           } else if (sub.mech.kind === 'salvezza') {
-            const r = M.resolveSave(st, sub, t, dice());
+            const sm = C.saveMods(t, sub.mech.ability);
+            const r = M.resolveSave(st, sub, t, dice(), sm.mode, Boolean(sm.autoFail));
             const applied = M.applyDamageParts(r.parts, t.defenses, false);
             hurt(t, applied.total);
-            let text = who + ': ' + t.name + ' tira salvezza su ' + R.ABILITY_NAMES[r.ability] + ' ' + r.total + ' contro CD ' + r.dc + ' → ' + (r.success ? 'riesce' : 'fallisce');
+            const why = C.modsText(sm);
+            let text = who + ': ' + t.name + ' tira salvezza su ' + R.ABILITY_NAMES[r.ability] + ' ' + (sm.autoFail ? '— fallita in automatico (' + sm.autoFail + ')' : r.total + ' contro CD ' + r.dc + (why ? ' (' + why + ')' : '') + ' → ' + (r.success ? 'riesce' : 'fallisce'));
             if (r.parts.length) text += ', ' + r.full.map((q) => q.dice + ' [' + q.rolls.join(', ') + ']' + (q.bonus ? ' ' + R.formatModifier(q.bonus) : '') + ' = ' + q.amount + (q.type ? ' ' + q.type : '')).join(' + ') +
               (r.success && sub.mech.half ? ' (metà)' : '') + (applied.notes.length ? ' (' + applied.notes.join('; ') + ')' : '') + ' → ' + applied.total + ' danni';
             if (!r.success && sub.mech.effect) text += '; ' + sub.mech.effect;
             text += '. ' + (before !== t.hp ? t.name + ': ' + before + ' → ' + t.hp + ' PF.' : '');
             log(c, r.success ? 'tiro-salvezza' : 'ts-fallito', text);
+            if (!r.success && sub.mech.inflict && sub.mech.inflict.type) inflictOn(c, x, t, Object.assign({}, sub.mech.inflict, { save: { ability: sub.mech.ability, dc: r.dc } }), null);
             if (!r.success && t.creature && t.creature.legendaryResistance.left > 0) {
               t.pendingSave = { full: r.full.map((q) => ({ amount: q.amount, type: q.type })), half: sub.mech.half, applied: before - t.hp, magical: false, text: sub.name };
             }
@@ -1618,11 +1724,12 @@
       if (a.freq.kind === 'ricarica') return st.recharge[a.id] ? '' : ' (da ricaricare)';
       return '';
     };
+    const block = blockedBy(x);
     const btn = (a, extraDisabled) => {
       const u = M.canUse(st, a);
       return el('button', {
-        type: 'button', class: 'btn small' + (a.mech.kind === 'multiattacco' ? ' primary' : ''), disabled: down || !u.ok || extraDisabled,
-        title: (u.reason ? u.reason + ' · ' : '') + M.actionText(st, a), text: a.name + (a.cost > 1 ? ' (' + a.cost + ')' : '') + usesText(a),
+        type: 'button', class: 'btn small' + (a.mech.kind === 'multiattacco' ? ' primary' : ''), disabled: down || !u.ok || extraDisabled || Boolean(block),
+        title: (block ? block + ' (il master può permetterle da «Condizioni») · ' : '') + (u.reason ? u.reason + ' · ' : '') + M.actionText(st, a), text: a.name + (a.cost > 1 ? ' (' + a.cost + ')' : '') + usesText(a),
         onclick: () => creatureActionDialog(x, a.id),
       });
     };
@@ -1663,6 +1770,8 @@
 
   function combatantCard(x, current) {
     const down = R.isDown(x);
+    const block = blockedBy(x);
+    const blockTitle = block ? block + ' (il master può permetterle da «Condizioni»)' : null;
     return el('article', {
       class: 'combatant ' + x.kind + (current ? ' current' : '') + (down ? ' down' : '') + (x.id === selectedId ? ' selected' : '') + (x.legend ? ' legendary' : '') + (x.legend && x.legend.form ? ' transformed' : ''),
       'data-id': x.id,
@@ -1678,10 +1787,11 @@
           x.npc ? el('span', { class: 'tag att-' + x.npc.attitude, title: 'NPC del Mondo', text: '👤 ' + DnD.mondoDati.ATTITUDE_NAMES[x.npc.attitude] }) : null,
           x.hostileTo && x.hostileTo.length ? el('span', { class: 'tag danger', title: 'Ostile per una provocazione', text: '⚔ provocato' }) : null,
           x.joinRound ? el('span', { class: 'badge', text: 'ENTRA AL ROUND ' + x.joinRound }) : null,
-          down ? el('span', { class: 'badge down-badge', text: 'A TERRA' }) : null,
+          x.dead ? el('span', { class: 'badge down-badge', text: '✝ MORTO' }) : down ? el('span', { class: 'badge down-badge', text: C.dying(x) ? 'TIRI CONTRO LA MORTE' : x.deathSaves && x.deathSaves.stable ? 'STABILE' : 'A TERRA' }) : null,
           current ? el('span', { class: 'badge turn-badge', text: 'TURNO' }) : null),
         el('div', { class: 'ac-shield', title: 'Classe Armatura' }, el('small', { text: 'CA' }), el('b', { text: String(x.ac) }))),
       hpBar(x),
+      UC().cardBox(x, byId, () => conditionsDialog(byId(x.id))),
       x.defenses && (x.defenses.vuln.length || x.defenses.res.length || x.defenses.imm.length) ? el('p', { class: 'muted small', text: [
         x.defenses.vuln.length ? 'Vulnerabile: ' + M.defensesText(x.defenses.vuln) : '', x.defenses.res.length ? 'Resiste: ' + M.defensesText(x.defenses.res) : '',
         x.defenses.imm.length ? 'Immune: ' + M.defensesText(x.defenses.imm) : ''].filter(Boolean).join(' · ') }) : null,
@@ -1693,14 +1803,14 @@
       el('div', { class: 'card-actions' },
         el('button', {
           class: 'btn primary', text: 'Attacca', onclick: () => attackDialog(x),
-          disabled: down || !x.weapons.length || combat().combatants.length < 2,
-          title: down ? 'È a terra' : !x.weapons.length ? 'Nessuna arma equipaggiata' : null,
+          disabled: down || !x.weapons.length || combat().combatants.length < 2 || Boolean(block),
+          title: down ? 'È a terra' : block ? blockTitle : !x.weapons.length ? 'Nessuna arma equipaggiata' : null,
         }),
         el('button', { class: 'btn', text: 'Cura', onclick: () => healDialog(x) }),
         el('button', { class: 'btn', text: 'Tiro salvezza', onclick: () => saveDialog(x) }),
         x.spellcasting ? el('button', {
           class: 'btn', text: '✨ Lancia incantesimo', onclick: () => castDialog(x),
-          disabled: down || !x.spellcasting.spells.length, title: !x.spellcasting.spells.length ? 'Nessun incantesimo conosciuto' : null,
+          disabled: down || !x.spellcasting.spells.length || Boolean(block), title: block ? blockTitle : !x.spellcasting.spells.length ? 'Nessun incantesimo conosciuto' : null,
         }) : null,
         el('button', { class: 'btn', text: 'Modifica', onclick: () => editDialog(x) }),
         el('button', { class: 'btn danger', text: 'Rimuovi', onclick: () => removeCombatant(x) })));

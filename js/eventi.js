@@ -174,8 +174,15 @@
     else if (a.who === 'migliore') who = [members.slice().sort((x, y) => bonusOf(y) - bonusOf(x))[0]];
     else if (a.who === 'turno') { who = [members[ctx.ex.rotation % members.length]]; ctx.ex.rotation += 1; }
     const results = who.map((m) => {
-      const r = DnD.regole.rollSave({ bonus: bonusOf(m), mode: a.mode || 'normale', dc: a.dc }, ctx.rng);
-      return { id: m.id, name: m.name, natural: r.natural, total: r.total, success: r.success };
+      // Condizioni del personaggio (condizioni.js): svantaggio alle prove, salvezze con svantaggio o fallite in automatico.
+      const ms = ctx.memberState ? ctx.memberState(m.id) : null;
+      const pseudo = { conditions: ms ? (ms.conditions || []).concat(ms.exhaustion ? [{ type: 'sfinimento', level: ms.exhaustion }] : []) : [] };
+      const C = DnD.condizioni;
+      const ability = AB().includes(a.what) ? a.what : (DnD.creatureDati.SKILLS[a.what] || 'FOR');
+      const mods = a.save ? C.saveMods(pseudo, ability, a.mode || 'normale') : C.checkMods(pseudo, { base: a.mode || 'normale', sight: a.what === 'Percezione' || a.what === 'Indagare' });
+      if (mods.autoFail) return { id: m.id, name: m.name, natural: null, total: null, success: false, note: 'fallisce in automatico (' + mods.autoFail + ')' };
+      const r = DnD.regole.rollSave({ bonus: bonusOf(m), mode: mods.mode, dc: a.dc }, ctx.rng);
+      return { id: m.id, name: m.name, natural: r.natural, total: r.total, success: r.success, note: C.modsText(mods) };
     });
     const ok = results.filter((r) => r.success).length;
     const success = a.who === 'gruppo' && a.group ? ok * 2 >= results.length : a.who === 'gruppo' ? ok === results.length : ok > 0;
@@ -319,7 +326,7 @@
         const r = resolveCheck(a, ctx, ex.weather ? -(ex.weather.dc || 0) : 0);
         const success = forced ? forced === 'successo' : r.success;
         ctx.log('🎲 ' + (a.save ? 'Tiro salvezza su ' : 'Prova di ') + a.what + ' CD ' + a.dc + ' (' + WHO_NAMES[a.who].toLowerCase() + (a.group ? ', prova di gruppo' : '') + '): ' +
-          (r.results.map((x) => x.name + ' ' + x.total + (x.success ? ' ✓' : ' ✗')).join(', ') || r.note || '—') + ' → ' + (success ? 'SUCCESSO' : 'FALLIMENTO') + (forced ? ' (scelto dal master)' : '') + '.', success ? 'successo' : 'fallimento');
+          (r.results.map((x) => x.name + ' ' + (x.total === null ? '—' : x.total) + (x.success ? ' ✓' : ' ✗') + (x.note ? ' (' + x.note + ')' : '')).join(', ') || r.note || '—') + ' → ' + (success ? 'SUCCESSO' : 'FALLIMENTO') + (forced ? ' (scelto dal master)' : '') + '.', success ? 'successo' : 'fallimento');
         return success ? a.success : a.failure;
       }
       case 'danno': {

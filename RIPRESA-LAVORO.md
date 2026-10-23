@@ -1,4 +1,22 @@
-# Ripresa del lavoro — Fase «NPC, Fazioni, Città e Party»
+# Ripresa del lavoro
+
+## Fase in corso: «FASE 1/5: Condizioni e concentrazione» (23 ottobre 2026)
+
+- Stato: **completata**, non ancora committata. Dati alla versione **13**, cache del service worker `session-forge-v26`.
+- `test.html`: **223/223** passati (10 test nuovi della fase).
+- Prova nel browser: condizione applicata dalla finestra, attacco della creatura con vantaggio e critico automatico
+  contro un paralizzato, azioni del paralizzato disattivate, salvezza ripetuta a fine turno che chiude la condizione,
+  simboli sulla scheda e sulla pedina, moduli di creature e incantesimi con «Condizione inflitta».
+- File nuovi: `js/condizioni.js` (logica pura), `js/ui-condizioni.js` (interfaccia).
+- File toccati: `regole.js` (turni di chi tira contro la morte, critico automatico), `movimento.js`, `creature.js`,
+  `magie.js`, `dati.js` (v13, campi del combattente, `customConditions`, `inflict`), `sessioni.js`, `impostazioni.js`
+  e `ui-impostazioni.js` (gruppo Combattimento), `ia.js` e `ia-dati.js`, `eventi.js` (prove con le condizioni),
+  `suoni-dati.js`, `ui-combattimento.js`, `ui-griglia.js`, `ui-mostri.js`, `ui-magie.js`, `css/style.css`, README e CLAUDE.md.
+- Da provare a mano: concentrazione con un incantesimo vero (lancio, danno, «Ripristina»), tiri contro la morte di un
+  giocatore, condizioni personalizzate, pedina con più di 4 condizioni a zoom diversi.
+- Prossime fasi: 2/5 … 5/5 (prompt dell'utente).
+
+## Fase precedente: «NPC, Fazioni, Città e Party» (completata, commit `9887590`)
 
 Data: 23 ottobre 2026. Questo file serve a riprendere il lavoro da un altro PC.
 

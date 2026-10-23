@@ -2396,7 +2396,7 @@
     eq(MV().speedState(k, RULES1, 5).extra, 1);
     eq(MV().reach(openMap(20, 20), aiState([k]), k, { rules: RULES1 }).dist.get(G().key(3, 0)), 6, 'striscia: 3 celle costano 6');
     const sUp = MV().standUp(k, RULES1, 5);
-    eq([sUp.ok, sUp.cost, k.conditions, MV().left(k, RULES1, 5), MV().speedState(k, RULES1, 5).extra], [true, 3, [], 9, 0]);
+    eq([sUp.ok, sUp.cost, DnD.condizioni.types(k), MV().left(k, RULES1, 5), MV().speedState(k, RULES1, 5).extra], [true, 3, [], 9, 0]);
     const tired = mkC({ id: 't', conditions: ['prono'], movement: { used: 5 } });
     eq(MV().standUp(tired, RULES1, 5).ok, false, 'serve metà velocità di residuo');
     // Afferrato, trattenuto, paralizzato: 0 con il motivo; rallentato: metà.
@@ -2407,7 +2407,7 @@
     const slow = MV().speedState(mkC({ id: 's', conditions: ['rallentato'] }), RULES1, 5);
     eq([slow.feet, slow.cells, slow.reasons], [15, 3, ['rallentato: metà velocità']]);
     // Le condizioni si salvano (anche «rallentato», che non è del manuale); quelle sconosciute si scartano.
-    eq(DnD.dati.normalizeCombatant({ conditions: ['prono', 'rallentato', 'boh'] }).conditions, ['prono', 'rallentato']);
+    eq(DnD.condizioni.types(DnD.dati.normalizeCombatant({ conditions: ['prono', 'rallentato', 'boh'] })), ['prono', 'rallentato']);
   });
 
   test('Movimento: modalità (camminare, volare, nuotare…) e velocità mancante vietata o doppia', () => {
@@ -4324,6 +4324,327 @@
     eq(j.q3.status, 'scaduta');
     ok(w.ex.log.some((l) => /Quest «Corsa» scaduta/.test(l.text)), 'scadenza nel registro');
     eq(EV().missingRefs(EV().normalizeEvent({ actions: [{ kind: 'quest', questId: 'zz' }, { kind: 'reputazione', factionId: 'zz' }] }), w.st).sort(), ['fazione eliminata', 'quest eliminata'], 'avvisi nell\'elenco degli eventi');
+  });
+
+  // ======================= Condizioni e concentrazione =======================
+  const CO = () => DnD.condizioni;
+  // Attaccante e bersaglio adiacenti (1 cella) sulla griglia; t2 a 4 celle.
+  const duel = () => ({ a: mkHero({ id: 'a', name: 'Aria', pos: { x: 0, y: 0 } }), t: mkC({ id: 't', name: 'Orco', pos: { x: 1, y: 0 } }) });
+  const near = { melee: true, distance: 1 };
+  const far = { melee: false, distance: 4 };
+
+  test('Condizioni: tabella degli effetti, normalizzazione, stringhe precedenti, personalizzate', () => {
+    const ids = CO().TYPES.map((t) => t.id);
+    for (const id of ['accecato', 'affascinato', 'assordato', 'spaventato', 'afferrato', 'incapacitato', 'invisibile', 'paralizzato', 'pietrificato',
+      'avvelenato', 'prono', 'trattenuto', 'stordito', 'privo di sensi', 'sfinimento']) ok(ids.includes(id), id);
+    ok(CO().TYPES.every((t) => t.name && t.icon && t.text && /^#[0-9a-f]{6}$/.test(t.color) && t.effects.every((e) => CO().EFFECT_IDS.includes(e))), 'nome, icona, colore, testo, effetti validi');
+    const list = CO().normalizeList(['prono', 'boh', 'prono']);
+    eq([list.length, list[0].type, list[0].id, list[0].source.name, list[0].duration.kind], [1, 'prono', 'cond-prono', 'manuale', 'permanente'], 'stringhe della versione 12');
+    eq(CO().normalizeList(list)[0].id, 'cond-prono', 'id stabile');
+    const ex3 = CO().defOf(CO().normalizeEntry({ type: 'sfinimento', level: 3 }));
+    eq([ex3.name, ex3.effects.sort()], ['Sfinimento 3', ['attacchi-svantaggio', 'prove-svantaggio', 'ts-svantaggio', 'velocita-meta']], 'livelli cumulativi');
+    const mark = CO().normalizeCustom({ id: 'cp-marchio', name: 'Marchiato', icon: '🎯', effects: ['contro-vantaggio', 'boh'] });
+    eq(mark.effects, ['contro-vantaggio'], 'effetti scelti dall\'elenco');
+    const { a, t } = duel();
+    eq(CO().apply(t, { type: 'custom', custom: mark, source: { id: 'a', name: 'Aria' } }).ok, true);
+    eq(CO().attackMods(a, t, far).adv, ['bersaglio marchiato'], 'personalizzata come fonte di vantaggio');
+    eq([CO().has(t, 'prono'), CO().types(t), CO().nameOf(CO().normalizeList(t.conditions)[0])], [false, ['custom'], 'Marchiato']);
+  });
+
+  test('Condizioni negli attacchi: vantaggio e svantaggio da più fonti, prono vicino e a distanza, critico automatico', () => {
+    let { a, t } = duel();
+    CO().apply(t, { type: 'prono' });
+    const m1 = CO().attackMods(a, t, near);
+    eq([m1.mode, m1.adv, CO().modsText(m1)], ['vantaggio', ['bersaglio prono, entro 1 cella'], 'vantaggio: bersaglio prono, entro 1 cella']);
+    eq([CO().attackMods(a, t, far).mode, CO().attackMods(a, t, far).dis], ['svantaggio', ['bersaglio prono, a distanza']], 'prono a distanza');
+    CO().apply(a, { type: 'avvelenato' });
+    const both = CO().attackMods(a, t, near);
+    eq([both.mode, /si annullano/.test(CO().modsText(both))], ['normale', true], 'vantaggio e svantaggio insieme = normale');
+    eq(CO().attackMods(a, t, Object.assign({ base: 'vantaggio' }, far)).mode, 'normale', 'scelta del tiro e condizioni si combinano');
+    // Bersaglio paralizzato o privo di sensi: vantaggio e critico automatico in mischia entro 1 cella.
+    ({ a, t } = duel());
+    CO().apply(t, { type: 'paralizzato' });
+    eq([CO().attackMods(a, t, near).mode, CO().attackMods(a, t, near).autoCrit], ['vantaggio', 'bersaglio paralizzato, in mischia entro 1 cella']);
+    eq([CO().attackMods(a, t, far).autoCrit, CO().attackMods(a, t, { melee: false, distance: 1 }).autoCrit], [null, null], 'non a distanza né con un\'arma a distanza');
+    CO().remove(t, 'paralizzato');
+    CO().apply(t, { type: 'privo di sensi' });
+    ok(CO().attackMods(a, t, near).autoCrit, 'privo di sensi');
+    for (const ty of ['stordito', 'trattenuto', 'accecato', 'pietrificato']) {
+      ({ a, t } = duel());
+      CO().apply(t, { type: ty });
+      eq(CO().attackMods(a, t, far).mode, 'vantaggio', 'bersaglio ' + ty);
+    }
+    for (const ty of ['accecato', 'spaventato', 'avvelenato', 'prono', 'trattenuto']) {
+      ({ a, t } = duel());
+      CO().apply(a, { type: ty });
+      eq(CO().attackMods(a, t, near).mode, 'svantaggio', 'attaccante ' + ty);
+    }
+    ({ a, t } = duel());
+    CO().apply(a, { type: 'invisibile' });
+    eq(CO().attackMods(a, t, far).mode, 'vantaggio', 'attaccante invisibile');
+    eq(CO().attackMods(t, a, far).mode, 'svantaggio', 'contro un invisibile');
+    // Paura: solo con la fonte in vista; affascinato: non attacca chi l'ha affascinato.
+    ({ a, t } = duel());
+    CO().apply(a, { type: 'spaventato', source: { id: 't', name: 'Orco' } });
+    const byId = (id) => [a, t].find((x) => x.id === id);
+    eq([CO().attackMods(a, t, Object.assign({ byId, canSee: () => true }, near)).mode, CO().attackMods(a, t, Object.assign({ byId, canSee: () => false }, near)).mode], ['svantaggio', 'normale']);
+    CO().remove(a, 'spaventato');
+    CO().apply(a, { type: 'affascinato', source: { id: 't', name: 'Orco' } });
+    ok(/non può attaccare Orco/.test(CO().attackMods(a, t, near).blocked), 'affascinato');
+    eq(CO().attackMods(a, mkC({ id: 'z', name: 'Altro' }), near).blocked, null, 'gli altri sì');
+    // Regole dei tiri: critico automatico (dadi raddoppiati) solo se colpisce.
+    const hit = R().resolveAttack({ toHit: 5, targetAC: 10, damageDice: '1d6', damageBonus: 0, mode: 'normale', autoCrit: true }, seq(12, 3, 4));
+    eq([hit.hit, hit.crit, hit.damageDiceCount, hit.damage], [true, true, 2, 7]);
+    const miss = R().resolveAttack({ toHit: 0, targetAC: 15, damageDice: '1d6', damageBonus: 0, mode: 'normale', autoCrit: true }, seq(5));
+    eq([miss.hit, miss.crit], [false, false]);
+    const sp = DnD.dati.normalizeSpell({ id: 'raggio', name: 'Raggio', effect: { type: 'attacco', dice: '1d10' } });
+    const rs = DnD.magie.resolveSpell({ spell: sp, slotLevel: 0, mode: 'normale', caster: { attack: 5, dc: 13, mod: 3 }, targets: [{ id: 'x', ac: 10, saves: {}, mode: 'svantaggio' }] }, seq(18, 4, 2));
+    eq([rs.targets[0].d20Rolls, rs.targets[0].natural, rs.targets[0].hit], [[18, 4], 4, false], 'incantesimo: il modo del bersaglio prevale');
+  });
+
+  test('Condizioni nei tiri salvezza e nelle prove: fallimenti automatici e svantaggio', () => {
+    for (const ty of ['paralizzato', 'stordito', 'privo di sensi', 'pietrificato']) {
+      const c = mkC({ id: 'x' });
+      CO().apply(c, { type: ty });
+      eq([CO().saveMods(c, 'FOR').autoFail, CO().saveMods(c, 'DES').autoFail, CO().saveMods(c, 'SAG').autoFail], [ty, ty, null], ty);
+    }
+    const tr = mkC({ id: 'x' });
+    CO().apply(tr, { type: 'trattenuto' });
+    eq([CO().saveMods(tr, 'DES').mode, CO().saveMods(tr, 'FOR').mode, CO().saveMods(tr, 'DES', 'vantaggio').mode], ['svantaggio', 'normale', 'normale']);
+    const pv = mkC({ id: 'p' });
+    CO().apply(pv, { type: 'avvelenato' });
+    eq(CO().checkMods(pv).mode, 'svantaggio', 'avvelenato: prove');
+    const bl = mkC({ id: 'b' });
+    CO().apply(bl, { type: 'accecato' });
+    eq([CO().checkMods(bl, { sight: true }).mode, CO().checkMods(bl).mode], ['svantaggio', 'normale'], 'accecato: solo le prove di vista');
+    const fr = mkC({ id: 'f' });
+    CO().apply(fr, { type: 'spaventato' });
+    eq(CO().checkMods(fr).dis, ['spaventato']);
+    // Le azioni delle creature e gli incantesimi rispettano il fallimento automatico (nessun tiro).
+    const m = DnD.creature.normalizeMonster({ name: 'Drago', actions: [{ id: 'soffio', name: 'Soffio', mech: { kind: 'salvezza', ability: 'DES', dc: 15, damages: [{ dice: '2d6', bonus: 0 }] } }] });
+    const r = DnD.creature.resolveSave(m, m.actions[0], { saves: { DES: 5 } }, seq(3, 4), 'normale', true);
+    eq([r.success, r.total, r.parts[0].amount], [false, null, 7], 'fallimento automatico: danni pieni, nessun d20');
+    const sv = DnD.dati.normalizeSpell({ id: 's', effect: { type: 'salvezza', dice: '1d6', saveAbility: 'DES', halfOnSave: true } });
+    const res = DnD.magie.resolveSpell({ spell: sv, slotLevel: 0, caster: { attack: 0, dc: 12, mod: 0 }, targets: [{ id: 'x', saves: { DES: 10 }, autoFail: true }] }, seq(6));
+    eq([res.targets[0].success, res.targets[0].autoFail, res.targets[0].amount], [false, true, 6]);
+  });
+
+  test('Condizioni: azioni bloccate, velocità, IA (incapacitato, invisibili, bersagli con vantaggio)', () => {
+    for (const ty of ['incapacitato', 'paralizzato', 'stordito', 'pietrificato', 'privo di sensi']) {
+      const c = mkC({ id: 'x' });
+      CO().apply(c, { type: ty });
+      ok(/nessuna azione/.test(CO().actionBlock(c)), ty);
+    }
+    const pr = mkC({ id: 'p' });
+    CO().apply(pr, { type: 'prono' });
+    eq([CO().actionBlock(pr), CO().actionBlock(Object.assign(mkC({ id: 'm' }), { dead: true }))], [null, 'morto']);
+    for (const ty of ['afferrato', 'trattenuto', 'paralizzato', 'stordito', 'pietrificato', 'privo di sensi']) {
+      const c = mkC({ id: 'x' });
+      CO().apply(c, { type: ty });
+      eq(MV().speedState(c, RULES1, 5).cells, 0, ty + ': velocità 0');
+    }
+    eq(MV().speedState(pr, RULES1, 5).extra, 1, 'prono: striscia');
+    // IA: un combattente paralizzato non agisce (salvo permesso del master); evita gli invisibili; preferisce chi dà vantaggio.
+    const orc = mkC({ id: 'o', name: 'Orco', pos: { x: 5, y: 5 } });
+    const hero = mkHero({ id: 'h', name: 'Bran', pos: { x: 6, y: 5 } });
+    CO().apply(orc, { type: 'paralizzato' });
+    ok(/nessuna azione/.test(plan(aiState([orc, hero]), 'o').reason), 'paralizzato: nessuna azione');
+    orc.forceActions = true;
+    eq(plan(aiState([orc, hero]), 'o').action.targetIds, ['h'], 'permesso del master');
+    const orc2 = mkC({ id: 'o', name: 'Orco', pos: { x: 5, y: 5 } });
+    const ghost = mkHero({ id: 'g', name: 'Ombra', pos: { x: 6, y: 5 } });
+    const other = mkHero({ id: 'v', name: 'Vale', pos: { x: 5, y: 9 } });
+    CO().apply(ghost, { type: 'invisibile' });
+    eq(plan(aiState([orc2, ghost, other]), 'o').action.targetIds, ['v'], 'l\'invisibile viene evitato');
+    eq(plan(aiState([orc2, ghost]), 'o').action.targetIds, ['g'], 'se è l\'unico, lo cerca comunque');
+    const down = mkHero({ id: 'd', name: 'Dora', hp: 40, maxHp: 40, ac: 18, pos: { x: 9, y: 9 } });
+    const up = mkHero({ id: 'u', name: 'Ugo', hp: 40, maxHp: 40, ac: 18, pos: { x: 9, y: 2 } });
+    CO().apply(down, { type: 'prono' });
+    eq([IA().weakness(down, orc2, [orc2, down, up], '').terms.advantage, IA().weakness(up, orc2, [orc2, down, up], '').terms.advantage], [1, 0], 'prono: preferito');
+    const sly = mkC({ id: 's', name: 'Furbo', pos: { x: 5, y: 5 }, behavior: { temperament: 'furbo' } });
+    eq(plan(aiState([sly, down, up]), 's').action.targetIds, ['d'], 'il Furbo sceglie il bersaglio con vantaggio');
+  });
+
+  test('Sfinimento 1-6 (cumulativo, PF dimezzati, morte) e immunità alle condizioni', () => {
+    const c = mkHero({ id: 'c', name: 'Kael', maxHp: 30, hp: 30 });
+    const lvl = (n) => CO().apply(c, { type: 'sfinimento', level: n });
+    lvl(1);
+    eq([CO().checkMods(c).mode, MV().speedState(c, RULES1, 5).feet, CO().exhaustion(c)], ['svantaggio', 30, 1]);
+    lvl(2);
+    eq(MV().speedState(c, RULES1, 5).feet, 15, '2: velocità dimezzata');
+    lvl(3);
+    eq([CO().saveMods(c, 'SAG').mode, CO().attackMods(c, mkC({ id: 'z' }), near).mode], ['svantaggio', 'svantaggio'], '3: attacchi e salvezze');
+    lvl(4);
+    eq([c.maxHp, c.hp], [15, 15], '4: PF massimi dimezzati');
+    lvl(5);
+    eq([MV().speedState(c, RULES1, 5).cells, c.maxHp], [0, 15], '5: velocità 0 (i PF restano dimezzati una volta sola)');
+    const r6 = lvl(6);
+    eq([c.hp, c.dead, /muore/.test(r6.line)], [0, true, true], '6: morte');
+    const k = mkHero({ id: 'k', name: 'Lia', maxHp: 20, hp: 20 });
+    CO().apply(k, { type: 'sfinimento', level: 4 });
+    CO().remove(k, 'sfinimento');
+    eq([k.maxHp, CO().exhaustion(k)], [20, 0], 'tolto: PF massimi di prima');
+    CO().apply(k, { type: 'sfinimento', level: 2 });
+    CO().rest(k, true);
+    eq(CO().exhaustion(k), 1, 'il riposo lungo toglie un livello');
+    // Immunità dalla scheda della creatura (lo sfinimento lì si chiama «indebolimento»).
+    const golem = { id: 'g', name: 'Golem', conditions: [], creature: { conditionImmunities: ['avvelenato', 'indebolimento'] } };
+    const r = CO().apply(golem, { type: 'avvelenato' });
+    eq([r.ok, /immune/.test(r.line), CO().apply(golem, { type: 'sfinimento' }).ok, CO().apply(golem, { type: 'prono' }).ok, CO().types(golem)], [false, true, false, true, ['prono']]);
+  });
+
+  test('Durata: N round, inizio e fine del turno, salvezza ripetuta, 1 minuto, fino al riposo', () => {
+    const a = mkHero({ id: 'a', name: 'Aria' });
+    const b = mkC({ id: 'b', name: 'Orco' });
+    const all = [a, b];
+    CO().apply(b, { type: 'prono', duration: { kind: 'round', rounds: 2 } });
+    eq(CO().endTurn(all, 'a', seq()), [], 'il turno degli altri non conta');
+    CO().endTurn(all, 'b', seq());
+    eq(CO().normalizeList(b.conditions)[0].duration.rounds, 1);
+    ok(/termina/.test(CO().endTurn(all, 'b', seq())[0]) && !CO().has(b, 'prono'), 'durata finita');
+    CO().apply(b, { type: 'spaventato', duration: { kind: 'inizio-turno', who: 'a' } });
+    eq([CO().startTurn(all, 'b').length, CO().has(b, 'spaventato')], [0, true]);
+    eq([CO().startTurn(all, 'a').length, CO().has(b, 'spaventato')], [1, false], 'fino all\'inizio del turno di Aria');
+    CO().apply(b, { type: 'accecato', duration: { kind: 'fine-turno', who: 'a' } });
+    CO().endTurn(all, 'a', seq());
+    eq(CO().has(b, 'accecato'), false, 'fino alla fine del turno di Aria');
+    // Salvezza ripetuta a fine turno: riuscita = la condizione termina; fallimento automatico = nessun tiro.
+    CO().apply(b, { type: 'stordito', duration: { kind: 'salvezza', ability: 'SAG', dc: 12 } });
+    ok(/fallisce/.test(CO().endTurn(all, 'b', seq(5))[0]) && CO().has(b, 'stordito'), 'fallita: resta');
+    ok(/riesce/.test(CO().endTurn(all, 'b', seq(15))[0]) && !CO().has(b, 'stordito'), 'riuscita: termina');
+    CO().apply(b, { type: 'paralizzato', duration: { kind: 'salvezza', ability: 'FOR', dc: 12 } });
+    ok(/in automatico/.test(CO().endTurn(all, 'b', seq())[0]) && CO().has(b, 'paralizzato'), 'paralizzato su FOR: fallisce senza tirare');
+    CO().remove(b, 'paralizzato');
+    CO().apply(b, { type: 'avvelenato', duration: { kind: 'minuto' } });
+    for (let i = 0; i < 9; i++) CO().endTurn(all, 'b', seq());
+    eq(CO().has(b, 'avvelenato'), true, 'dopo 9 round resta');
+    CO().endTurn(all, 'b', seq());
+    eq(CO().has(b, 'avvelenato'), false, '1 minuto = 10 round');
+    CO().apply(b, { type: 'assordato', duration: { kind: 'riposo' } });
+    CO().endTurn(all, 'b', seq());
+    eq([CO().has(b, 'assordato'), CO().rest(b, false).length, CO().has(b, 'assordato')], [true, 1, false], 'fino al riposo');
+    const e = CO().normalizeEntry({ type: 'prono', duration: { kind: 'fine-turno', who: 'a' } });
+    eq(CO().durationText(e, (id) => all.find((x) => x.id === id)), 'fino alla fine del turno di Aria');
+  });
+
+  test('Concentrazione: CD 10 e metà danno, cambio di incantesimo, 0 PF e incapacitato, effetti collegati e ripristino', () => {
+    eq([CO().concentrationDc(5), CO().concentrationDc(22), CO().concentrationDc(41)], [10, 11, 20]);
+    const a = mkHero({ id: 'a', name: 'Mira' });
+    const b = mkC({ id: 'b', name: 'Orco' });
+    const all = [a, b];
+    const hold = DnD.dati.normalizeSpell({ id: 'blocca', name: 'Blocca persone', concentration: true });
+    const web = DnD.dati.normalizeSpell({ id: 'ragnatela', name: 'Ragnatela', concentration: true });
+    CO().startConcentration(a, hold, all, 1);
+    const data = CO().inflictData({ type: 'paralizzato', duration: { kind: 'salvezza' }, save: { ability: 'SAG', dc: 14 } }, a, b, hold, []);
+    eq([data.spellId, data.duration.kind, data.duration.ability, data.duration.dc, data.duration.who], ['blocca', 'salvezza', 'SAG', 14, 'a']);
+    CO().apply(b, data);
+    const chk = CO().concentrationCheck(a, 30, seq(9));
+    eq([chk.dc, chk.kept], [15, false], 'CD = metà del danno (30 → 15)');
+    eq(CO().concentrationCheck(a, 4, seq(10)).kept, true, 'CD minima 10');
+    const end = CO().endConcentration(a, all, 'danno');
+    eq([a.concentration, CO().has(b, 'paralizzato'), end.undo.removed.length, /Effetti tolti: Orco \(paralizzato\)/.test(end.lines[0])], [null, false, 1, true], 'gli effetti collegati spariscono');
+    ok(CO().restoreConcentration(a, all) && a.concentration.spellId === 'blocca' && CO().has(b, 'paralizzato'), 'ripristino del master (annulla)');
+    const lines = CO().startConcentration(a, web, all, 2);
+    eq([a.concentration.spellId, CO().has(b, 'paralizzato'), /perde la concentrazione su Blocca persone/.test(lines[0])], ['ragnatela', false, true], 'un nuovo incantesimo termina il precedente');
+    CO().apply(b, { type: 'trattenuto', source: { id: 'b', name: 'Orco' }, spellId: 'ragnatela' });
+    CO().endConcentration(a, all);
+    eq(CO().has(b, 'trattenuto'), true, 'solo gli effetti della stessa fonte');
+    CO().startConcentration(a, web, all, 3);
+    a.hp = 0;
+    eq(CO().concentrationBreaker(a), '0 PF');
+    a.hp = 10;
+    CO().apply(a, { type: 'stordito' });
+    eq(CO().concentrationBreaker(a), 'stordito', 'incapacitato');
+    CO().remove(a, 'stordito');
+    a.concentrationAdv = true;
+    eq(CO().concentrationCheck(a, 8, seq(3, 12)).kept, true, 'vantaggio dal tratto');
+  });
+
+  test('Tiri contro la morte (giocatori a 0 PF) e nemici che muoiono', () => {
+    const p = mkHero({ id: 'p', name: 'Aria', hp: 0, maxHp: 20 });
+    const rules = { deathSaves: true, enemiesDie: true };
+    ok(/privo di sensi/.test(CO().dropToZero(p, rules)[0]), 'privo di sensi');
+    eq([p.deathSaves.active, CO().has(p, 'privo di sensi'), CO().dying(p)], [true, true, true]);
+    const e = mkC({ id: 'e', name: 'Orco', initiative: 5 });
+    const order = R().sortByInitiative([Object.assign(p, { initiative: 15 }), e]);
+    eq([R().firstTurn(order), R().nextTurn(order, 'e', 1)], ['p', { currentId: 'p', round: 2 }], 'chi tira contro la morte ha ancora il turno');
+    CO().deathSave(p, seq(12));
+    CO().deathSave(p, seq(5));
+    eq([p.deathSaves.successes, p.deathSaves.failures], [1, 1]);
+    eq(CO().damageAtZero(p, true).length, 1);
+    eq([p.deathSaves.failures, p.dead], [3, true], 'un critico a 0 PF vale due fallimenti: morto');
+    eq(R().firstTurn(order), 'e', 'il morto è saltato');
+    const q = mkHero({ id: 'q', name: 'Bran', hp: 0 });
+    CO().dropToZero(q, rules);
+    CO().deathSave(q, seq(1));
+    eq(q.deathSaves.failures, 2, '1 naturale: due fallimenti');
+    const s = mkHero({ id: 's', name: 'Cora', hp: 0 });
+    CO().dropToZero(s, rules);
+    for (const v of [10, 14, 19]) CO().deathSave(s, seq(v));
+    eq([s.deathSaves.stable, CO().dying(s), /stabile/.test(CO().deathSave(Object.assign({}, s, { deathSaves: { active: true, successes: 2, failures: 0 } }), seq(11)).line)], [true, false, true]);
+    CO().damageAtZero(s, false);
+    eq([s.deathSaves.stable, s.deathSaves.failures, CO().dying(s)], [false, 1, true], 'stabile colpito: ricomincia');
+    const r20 = CO().deathSave(s, seq(20));
+    eq([s.hp, CO().has(s, 'privo di sensi'), s.deathSaves.active, /20 NATURALE/.test(r20.line)], [1, false, false, true], '20 naturale: torna a 1 PF');
+    const orc = mkC({ id: 'o', name: 'Orco', hp: 0 });
+    eq([CO().dropToZero(orc, rules)[0], orc.dead], ['✝ Orco muore.', true]);
+    const orc2 = mkC({ id: 'o2', name: 'Orco', hp: 0 });
+    eq([CO().dropToZero(orc2, { deathSaves: true, enemiesDie: false }), orc2.dead], [[], false], 'opzione: restano a terra come prima');
+    const off = mkHero({ id: 'x', name: 'Dan', hp: 0 });
+    eq([CO().dropToZero(off, { deathSaves: false, enemiesDie: true }), off.deathSaves.active], [[], false], 'interruttore spento');
+    eq([DnD.impostazioni.normalize({}).deathSaves, DnD.impostazioni.normalize({}).enemiesDie, DnD.impostazioni.normalize({ deathSaves: false }).deathSaves], [true, true, false], 'impostazioni: accesi di base');
+  });
+
+  test('Condizioni nelle prove dell\'esplorazione: avvelenato con svantaggio, paralizzato fallisce le salvezze di DES', () => {
+    const w = exploreWorld();
+    w.ex.members.p1.conditions = ['avvelenato'];
+    const check = EV().normalizeAction({ kind: 'prova', what: 'Atletica', dc: 12, who: 'scelto', memberId: 'p1' });
+    const r = EV().resolveCheck(check, Object.assign(XP().eventCtx(w), { rng: seq(18, 4) }));
+    eq([r.results[0].natural, r.results[0].success, r.results[0].note], [4, false, 'svantaggio: avvelenato']);
+    w.ex.members.p1.conditions = ['paralizzato'];
+    const save = EV().normalizeAction({ kind: 'prova', what: 'DES', save: true, dc: 5, who: 'scelto', memberId: 'p1' });
+    const r2 = EV().resolveCheck(save, Object.assign(XP().eventCtx(w), { rng: seq() }));
+    eq([r2.results[0].success, r2.results[0].total, /automatico/.test(r2.results[0].note)], [false, null, true], 'nessun tiro');
+  });
+
+  test('Condizioni inflitte da azioni e incantesimi, salvataggio, migrazione ed esportazione', () => {
+    const mech = DnD.creature.normalizeMech({ kind: 'attacco', inflict: { type: 'prono', save: { ability: 'FOR', dc: 13 } } });
+    eq([mech.inflict.type, mech.inflict.save, mech.inflict.duration.who], ['prono', { ability: 'FOR', dc: 13 }, 'fonte']);
+    eq(DnD.creature.normalizeMech({ kind: 'salvezza' }).inflict.type, '', 'di base nessuna');
+    const sp = DnD.dati.normalizeSpell({ id: 'veleno', name: 'Nube', concentration: true, inflict: { type: 'avvelenato', duration: { kind: 'round', rounds: 3, who: 'bersaglio' } } });
+    eq([sp.inflict.type, sp.inflict.duration.rounds, sp.inflict.duration.who], ['avvelenato', 3, 'bersaglio']);
+    const src = mkC({ id: 's', name: 'Strega' });
+    const tg = mkHero({ id: 't', name: 'Aria' });
+    const data = CO().inflictData(sp.inflict, src, tg, sp, []);
+    eq([data.source, data.duration.who, data.spellId, data.notes], [{ id: 's', name: 'Strega' }, 't', 'veleno', 'Nube']);
+    eq(CO().apply(tg, data).ok, true);
+    const cust = CO().normalizeCustom({ id: 'cp-maledetto', name: 'Maledetto', effects: ['ts-svantaggio'] });
+    const ci = { type: 'custom', customId: 'cp-maledetto' };
+    eq([CO().inflictData(ci, src, tg, null, [cust]).custom.name, CO().inflictData(ci, src, tg, null, []), CO().inflictName(ci, [cust]), CO().inflictName({ type: 'sfinimento', level: 2 })], ['Maledetto', null, 'Maledetto', 'Sfinimento 2'], 'personalizzata eliminata: nulla, senza errori');
+    CO().apply(tg, CO().inflictData(ci, src, tg, null, [cust]));
+    eq(CO().saveMods(tg, 'SAG').dis, ['maledetto']);
+    // Salvataggio: condizioni, concentrazione, tiri contro la morte e ripristino.
+    Object.assign(tg, { concentration: { spellId: 'scudo', name: 'Scudo della fede', round: 2 }, concentrationAdv: true, deathSaves: { active: true, successes: 1, failures: 2 }, forceActions: true });
+    const back = DnD.dati.normalizeCombatant(JSON.parse(JSON.stringify(tg)));
+    eq([CO().types(back), back.conditions[0].duration.rounds, back.concentration, back.concentrationAdv, back.deathSaves, back.forceActions],
+      [['avvelenato', 'custom'], 3, { spellId: 'scudo', name: 'Scudo della fede', round: 2 }, true, { active: true, successes: 1, failures: 2, stable: false }, true]);
+    // Annulla/ripeti: togliere e rimettere una voce la ripristina identica.
+    const removed = CO().remove(back, 'avvelenato');
+    CO().restore(back, removed);
+    eq(CO().normalizeList(back.conditions).find((x) => x.type === 'avvelenato'), removed);
+    // Migrazione: combattimenti e schede senza condizioni (o con le stringhe di prima) restano validi.
+    const old = DnD.dati.normalizeCombatant({ name: 'Vecchio', conditions: ['prono', 'rallentato'] });
+    eq([old.conditions.map((x) => [x.type, x.duration.kind, x.source.name]), old.concentration, old.dead], [[['prono', 'permanente', 'manuale'], ['rallentato', 'permanente', 'manuale']], null, false]);
+    eq(DnD.dati.normalizeCombatant({ name: 'Nuovo' }).conditions, []);
+    const st = DnD.dati.emptyState();
+    st.customConditions.push(cust);
+    const back2 = DnD.dati.importJSON(DnD.dati.exportJSON(st));
+    eq([back2.version, back2.customConditions.map((x) => x.name)], [DnD.dati.VERSION, ['Maledetto']], 'archivio');
+    const file = JSON.parse(JSON.stringify(S().exportSession(st, S().current(st).id)));
+    const dst = DnD.dati.emptyState();
+    S().importSession(dst, file, DnD.dadi.uid);
+    eq(dst.customConditions.map((x) => x.id), ['cp-maledetto'], 'file di sessione');
+    eq(DnD.dati.normalizeState({ version: 12, races: [], npcs: [], players: [] }).customConditions, [], 'v12 → v13');
   });
 
   async function runTests() {

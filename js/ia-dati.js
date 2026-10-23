@@ -20,6 +20,7 @@
     hp: 3,          // PF attuali bassi (1 = 0 PF, 0 = HP_SCALE o più)
     ac: 1.5,        // CA bassa (1 = CA 10 o meno, 0 = CA 20 o più)
     caster: 1,      // classe incantatrice o creatura con incantesimi
+    advantage: 1.5, // le sue condizioni danno vantaggio a chi lo attacca (prono da vicino, paralizzato…)
     isolated: 1,    // nessun alleato entro 2 caselle
     vulnerable: 2,  // vulnerabile al danno dell'arma usata
   };

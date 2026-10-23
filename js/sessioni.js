@@ -6,7 +6,7 @@
   'use strict';
 
   const OWNED = ['npcs', 'players', 'savedGrids', 'factions', 'parties', 'cities', 'worldNpcs', 'quests'];
-  const LIBRARIES = ['races', 'spells', 'structures', 'equipment', 'mapObjects', 'tilesets', 'biomes', 'events', 'pathTemplates'];
+  const LIBRARIES = ['races', 'spells', 'structures', 'equipment', 'mapObjects', 'tilesets', 'biomes', 'events', 'pathTemplates', 'customConditions'];
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   function newSession(name, id) {
@@ -216,6 +216,8 @@
       mapObjects,
       biomes,
       events: (state.events || []).filter((e) => eventIds.has(e.id)),
+      // Condizioni personalizzate: tutte (libreria piccola, usata da azioni, incantesimi e combattimento).
+      customConditions: state.customConditions || [],
       tilesets: [],
       images: images || {},
     });
@@ -237,6 +239,7 @@
     const norm = {
       races: D.normalizeRace, spells: D.normalizeSpell, structures: D.normalizeStructure, equipment: D.normalizeEquipment,
       mapObjects: D.normalizeMapObject, tilesets: D.normalizeTileset, biomes: DnD.biomi.normalizeBiome, events: DnD.eventi.normalizeEvent, pathTemplates: DnD.percorso.normalizeTemplate,
+      customConditions: DnD.condizioni.normalizeCustom,
     };
     for (const key of LIBRARIES) {
       if (!Array.isArray(state[key])) state[key] = [];

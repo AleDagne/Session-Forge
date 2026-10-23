@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 12;
+  const VERSION = 13;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -143,7 +143,7 @@
     return {
       version: VERSION, races: defaultRaces(), npcs: defaultCreatures(session.id), players: [], structures: defaultStructures(),
       equipment: DnD.attrezzatura.defaults(), mapObjects: defaultMapObjects(), tilesets: [], spells: defaultSpells(), savedGrids: [],
-      biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()],
+      biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()], customConditions: [],
       // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
       factions: DnD.fazioni.builtinFactions(session.id).concat(world.factions), parties: [DnD.party.defaultParty(session.id, [])],
       cities: world.cities, worldNpcs: world.worldNpcs, quests: world.quests,
@@ -262,6 +262,8 @@
         halfOnSave: Boolean(e.halfOnSave),
         addMod: Boolean(e.addMod),
       },
+      // Condizione inflitta ai bersagli (che falliscono la salvezza o sono colpiti).
+      inflict: DnD.condizioni.normalizeInflict(sp.inflict),
     };
   }
 
@@ -712,7 +714,17 @@
       speeds: DnD.movimento.baseSpeeds(c),
       speedOverride: DnD.movimento.normalizeOverride(c.speedOverride),
       moveMode: DnD.movimento.MODES.includes(c.moveMode) ? c.moveMode : 'cammina',
-      conditions: [...new Set(arr(c.conditions).filter((x) => DnD.movimento.conditions().includes(x)))],
+      // Condizioni attive (condizioni.js): le stringhe della versione 12 diventano voci «fino a nuovo ordine».
+      conditions: DnD.condizioni.normalizeList(c.conditions),
+      // Concentrazione su un incantesimo (con l'ultima persa, per «Ripristina») e vantaggio da un tratto.
+      concentration: c.concentration && typeof c.concentration === 'object' && refId(c.concentration.spellId)
+        ? { spellId: refId(c.concentration.spellId), name: str(c.concentration.name, 60), round: int(c.concentration.round, 1, 0, 100000) } : null,
+      concentrationUndo: normalizeConcentrationUndo(c.concentrationUndo),
+      concentrationAdv: Boolean(c.concentrationAdv),
+      // Tiri contro la morte (giocatori a 0 PF), morte e azioni permesse dal master nonostante le condizioni.
+      deathSaves: DnD.condizioni.normalizeDeathSaves(c.deathSaves),
+      dead: Boolean(c.dead),
+      forceActions: Boolean(c.forceActions),
       movement: DnD.movimento.normalizeMovement(c.movement),
       ignoreSpeed: Boolean(c.ignoreSpeed),
       icon: DnD.icone.normalizeIcon(c.icon, false),
@@ -748,6 +760,14 @@
         full: arr(ps.full).slice(0, 10).map((x) => ({ amount: int(obj(x).amount, 0, 0, 100000), type: str(obj(x).type, 40) })),
         half: Boolean(ps.half), applied: int(ps.applied, 0, 0, 100000), magical: Boolean(ps.magical), text: str(ps.text, 200),
       } : null,
+    };
+  }
+
+  function normalizeConcentrationUndo(u) {
+    if (!u || typeof u !== 'object' || !u.concentration || !refId(u.concentration.spellId)) return null;
+    return {
+      concentration: { spellId: refId(u.concentration.spellId), name: str(u.concentration.name, 60), round: int(u.concentration.round, 1, 0, 100000) },
+      removed: arr(u.removed).slice(0, 50).map((r) => ({ targetId: refId(obj(r).targetId), entry: DnD.condizioni.normalizeEntry(obj(r).entry) })).filter((r) => r.targetId && r.entry),
     };
   }
 
@@ -1006,6 +1026,8 @@
       biomes: unique(arr(raw.biomes).map(DnD.biomi.normalizeBiome)),
       events: unique(arr(raw.events).map(DnD.eventi.normalizeEvent)),
       pathTemplates: unique(arr(raw.pathTemplates).map(DnD.percorso.normalizeTemplate)),
+      // Condizioni personalizzate (libreria globale, condizioni.js).
+      customConditions: unique(arr(raw.customConditions).map(DnD.condizioni.normalizeCustom)),
       factions,
       parties: unique(arr(raw.parties).map((p) => owned(DnD.party.normalizeParty(p)))),
       cities: unique(arr(raw.cities).map((c) => owned(DnD.citta.normalizeCity(c)))),

@@ -77,12 +77,14 @@
         kind, range: pick(m.range, K().RANGES, 'mischia'), ability: pick(m.ability, AB(), 'FOR'), toHit: nullableInt(m.toHit, -10, 30),
         reach: num(m.reach, 1.5, 0, 100), rangeNormal: num(m.rangeNormal, 0, 0, 1000), rangeLong: num(m.rangeLong, 0, 0, 2000),
         targets: str(m.targets, 60) || 'un bersaglio', damages: damages.length ? damages : [normalizeDamage({})], magical: Boolean(m.magical),
+        inflict: DnD.condizioni.normalizeInflict(m.inflict),
       };
     }
     if (kind === 'salvezza') {
       return {
         kind, ability: pick(m.ability, AB(), 'DES'), dcAbility: pick(m.dcAbility, AB(), 'COS'), dc: nullableInt(m.dc, 1, 40),
         damages, half: m.half !== false, effect: str(m.effect, 300), area: str(m.area, 80),
+        inflict: DnD.condizioni.normalizeInflict(m.inflict),
       };
     }
     if (kind === 'cura') return { kind, dice: diceOf(m.dice, '2d8'), bonus: int(m.bonus, 0, -20, 100) };
@@ -397,22 +399,24 @@
   }
 
   // Attacco della creatura contro un bersaglio: 20 naturale = critico (dadi raddoppiati), 1 = mancato.
-  function resolveAttack(c, a, target, mode, rng) {
+  function resolveAttack(c, a, target, mode, rng, autoCrit) {
     const m = a.mech;
     const bonus = toHit(c, m);
     const d20 = R().rollD20(mode || 'normale', rng);
-    const crit = d20.natural === 20;
     const fumble = d20.natural === 1;
     const total = d20.natural + bonus;
-    const hit = crit || (!fumble && total >= target.ac);
+    const hit = d20.natural === 20 || (!fumble && total >= target.ac);
+    const crit = d20.natural === 20 || Boolean(autoCrit && hit);
     return { kind: 'attacco', bonus, d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble, parts: hit ? rollParts(c, m, crit, rng) : [] };
   }
 
   // Tiro salvezza del bersaglio contro l'azione: danni pieni se fallisce, metà (o niente) se riesce.
-  function resolveSave(c, a, target, rng, saveMode) {
+  // autoFail: fallimento automatico per una condizione (nessun tiro).
+  function resolveSave(c, a, target, rng, saveMode, autoFail) {
     const m = a.mech;
     const dc = saveDc(c, m);
-    const s = R().rollSave({ bonus: (target.saves && target.saves[m.ability]) || 0, mode: saveMode || 'normale', dc }, rng);
+    const s = autoFail ? { d20Rolls: [], natural: null, total: null, success: false }
+      : R().rollSave({ bonus: (target.saves && target.saves[m.ability]) || 0, mode: saveMode || 'normale', dc }, rng);
     const full = rollParts(c, m, false, rng);
     const parts = full.map((p) => Object.assign({}, p, { amount: s.success ? (m.half ? Math.floor(p.amount / 2) : 0) : p.amount }));
     return { kind: 'salvezza', dc, ability: m.ability, d20Rolls: s.d20Rolls, natural: s.natural, total: s.total, success: s.success, full, parts };

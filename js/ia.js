@@ -206,6 +206,8 @@
       caster: isCaster(t) ? 1 : 0,
       isolated: near ? 0 : 1,
       vulnerable: damageType && t.defenses && t.defenses.vuln.includes(damageType) ? 1 : 0,
+      // Condizioni del bersaglio che danno vantaggio all'attaccante (in mischia, da vicino).
+      advantage: DnD.condizioni.attackMods(attacker, t, { melee: true, distance: 1 }).adv.some((x) => x.startsWith('bersaglio')) ? 1 : 0,
     };
     return { score: Object.keys(W).reduce((s, k) => s + W[k] * terms[k], 0), terms };
   }
@@ -322,6 +324,9 @@
     const plan = { combatantId: mover.id, archetype: arch, temperament: b.temperament, path: mover.pos ? [Object.assign({}, mover.pos)] : [], moveCost: 0, dash: false,
       action: { kind: 'nessuna' }, bonus: null, reason: '', scores: [], reminders: [], fallback: false };
     if (!alive(mover)) return Object.assign(plan, { reason: header + ': è a terra.' });
+    // Condizioni: incapacitato, paralizzato, stordito… = nessuna azione (salvo permesso del master).
+    const blocked = mover.forceActions ? null : DnD.condizioni.actionBlock(mover);
+    if (blocked) return Object.assign(plan, { reason: header + ': ' + blocked + '.' });
     if (!mover.pos) return Object.assign(plan, { reason: header + ': non è sulla griglia.' });
     const map = buildMap(state);
     const others = state.combatants.filter((c) => c.id !== mover.id);
@@ -340,7 +345,8 @@
     const hpPct = mover.hp / mover.maxHp;
     if (P.aborted || now() > deadline) return fallback(state, map, mover, hostiles, plan, header, attacks);
 
-    const seen = hostiles.filter((t) => visible(map, mover, t));
+    // Gli invisibili non si vedono: li attacca solo se non c'è nessun altro (senza sapere bene dove sono).
+    const seen = hostiles.filter((t) => visible(map, mover, t) && !DnD.condizioni.has(t, 'invisibile'));
     const pool = seen.length ? seen : hostiles;
     const dmgType = attacks.length && attacks[0].parts && attacks[0].parts[0] ? attacks[0].parts[0].type : '';
     // Costo per raggiungere una posizione di mischia accanto al bersaglio (o Infinity).

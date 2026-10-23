@@ -248,7 +248,8 @@
               numberInput(mech.rangeLong, { class: 'qty', min: 0, oninput: setNum('rangeLong') }))),
             field('Bersagli', textInput(mech.targets, { oninput: set('targets') }))),
           damageRows(mech, i, a),
-          el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: mech.magical, onchange: set('magical') }), ' Attacco magico (supera le resistenze ai danni non magici)'));
+          el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: mech.magical, onchange: set('magical') }), ' Attacco magico (supera le resistenze ai danni non magici)'),
+          DnD.uiCondizioni.inflictEditor(mech.inflict = mech.inflict || DnD.condizioni.normalizeInflict({}), { save: true, note: 'Si applica a chi viene colpito (se indicata, la salvezza la evita).' }));
       }
       if (mech.kind === 'salvezza') {
         return el('div', { class: 'mech-fields' },
@@ -261,7 +262,8 @@
             field('Area (facoltativa)', textInput(mech.area, { placeholder: 'es. cono di 9 m', oninput: set('area') })),
             field('Effetto se fallisce', textInput(mech.effect, { placeholder: 'es. cade prono', oninput: set('effect') })),
             el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: mech.half, onchange: set('half') }), ' Metà danni se riesce')),
-          damageRows(mech, i, a));
+          damageRows(mech, i, a),
+          DnD.uiCondizioni.inflictEditor(mech.inflict = mech.inflict || DnD.condizioni.normalizeInflict({}), { note: 'Si applica a chi fallisce il tiro salvezza dell\'azione.' }));
       }
       if (mech.kind === 'cura') {
         return el('div', { class: 'mech-fields grid-3 tight' },

@@ -36,6 +36,10 @@
   --hp-mid: #9a6a00;
   --hp-low: #b02a1e;
   --hp-track: #dfe3e9;
+  --conc: #7c3aed;
+  --cond-token-bg: rgba(255, 255, 255, 0.92);
+  --death-ok: #2f9e5b;
+  --death-ko: #c2362b;
   --grid-bg: #e3e6eb;
   --grid-board: #fbfaf6;
   --grid-line: rgba(0, 0, 0, 0.10);
@@ -94,6 +98,10 @@
   --hp-mid: #d9a520;
   --hp-low: #e0574b;
   --hp-track: #14161c;
+  --conc: #b794f6;
+  --cond-token-bg: rgba(20, 22, 28, 0.92);
+  --death-ok: #4cc27a;
+  --death-ko: #ef6b5f;
   --grid-bg: #14161c;
   --grid-board: #1d2129;
   --grid-line: rgba(255, 255, 255, 0.07);
@@ -338,7 +346,9 @@ details.extra summary { cursor: pointer; color: var(--accent); margin-bottom: 0.
 /* ---------- Schede elenco ---------- */
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
-.card-title { display: flex; justify-content: space-between; align-items: start; gap: 0.5rem; }
+.card-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 0.5rem; }
+/* Titolo lungo e distintivi: vanno a capo invece di finire sotto il distintivo a destra. */
+.card-title .title-with-icon { flex-wrap: wrap; }
 .card-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: auto; padding-top: 0.5rem; }
 .ac-badge { background: var(--panel-2); border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 0.05rem 0.45rem; font-weight: 700; font-size: 0.85rem; white-space: nowrap; }
 .stat-line { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.2rem 0.5rem; font-size: 0.85rem; }
@@ -582,6 +592,23 @@ body:has(.combat-screen) .dice-fab { display: none; }
 .move-box.empty > .small { color: var(--muted); }
 .cond-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .tag.cond-tag { background: rgba(232, 131, 42, 0.2); }
+/* Condizioni (ui-condizioni.js): simboli con il colore della condizione, concentrazione, tiri contro la morte. */
+.cond-box { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.cond-chip { display: inline-flex; align-items: center; gap: 0.1rem; min-width: 1.7rem; height: 1.7rem; padding: 0 0.3rem; justify-content: center; border-radius: 999px;
+  background: var(--panel-2); border: 2px solid var(--cond, var(--border)); color: var(--text); font-size: 0.95rem; cursor: pointer; line-height: 1; }
+.cond-chip b { font-size: 0.7rem; }
+.cond-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tag.conc-tag { border-color: var(--conc); color: var(--conc); cursor: pointer; font-weight: 600; }
+.death-saves { display: inline-flex; align-items: center; gap: 0.2rem; }
+.death-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-2); }
+.death-dot.on.ok { background: var(--death-ok); border-color: var(--death-ok); }
+.death-dot.on.ko { background: var(--death-ko); border-color: var(--death-ko); }
+.cond-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.cond-row { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem; align-items: center; padding: 0.3rem 0.4rem; border: 1px solid var(--border);
+  border-left: 3px solid var(--cond, var(--border)); border-radius: var(--radius); background: var(--panel); }
+.cond-row .cond-chip { cursor: default; }
+.cond-preview { color: var(--accent); margin: 0; }
+.inflict-box { margin-top: 0.4rem; }
 .turn-move { margin: 0.2rem 0 0.4rem; }
 .log li.log-movimento { border-left-color: var(--player); }
 .slots-indicator span { padding: 0.05rem 0.4rem; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--border); }
@@ -1043,7 +1070,7 @@ html[data-reduce-motion] .notes-panel, html[data-reduce-motion] .notes-fab { tra
 
 /* ---------- Mondo: fazioni, reputazione, città, NPC, party, quest ---------- */
 .faction-dot { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 1px solid var(--border); vertical-align: middle; flex: none; }
-.faction-tag { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--text); }
+.faction-tag { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--text); white-space: nowrap; }
 .faction-tag canvas { vertical-align: middle; }
 .faction-tag.missing { color: var(--warn); }
 .faction-card { border-top: 3px solid var(--faction, var(--border)); }

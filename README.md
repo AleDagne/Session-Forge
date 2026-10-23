@@ -93,8 +93,9 @@ sempre lo stato; anche Alt+M).
 - **Effetti boss**: barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel
   combattimento (attivi di base). Spenti, i boss funzionano comunque (fasi, log, azioni). Spengono anche i suoni
   di Boss e Leggendario.
-- **Movimento** (diagonali, modalità senza velocità), **Dadi animati** e **Suoni**: gruppi a scomparsa, descritti
-  in [Velocità e movimento](#velocità-e-movimento), [Dadi animati](#dadi-animati) ed [Effetti sonori](#effetti-sonori).
+- **Movimento** (diagonali, modalità senza velocità), **Combattimento** (tiri contro la morte, nemici che a 0 PF
+  muoiono), **Dadi animati** e **Suoni**: gruppi a scomparsa, descritti in [Velocità e movimento](#velocità-e-movimento),
+  [Condizioni e concentrazione](#condizioni-e-concentrazione), [Dadi animati](#dadi-animati) ed [Effetti sonori](#effetti-sonori).
 
 Tutti i colori dell'interfaccia sono variabili CSS (`:root` per il tema chiaro,
 `[data-theme="dark"]` per lo scuro), anche quelli della griglia, che si ridisegna al cambio tema.
@@ -653,7 +654,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 12)
+### Modello dati (versione 13)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -704,12 +705,21 @@ oggetto di mappa piazzato (otype 'npc'): { …, npcId, npcState: { hp, attitude,
            haggle, lastRestockDay, revealed: { name, role, attitude }, dead } }
 nemici e giocatori: { …, factionId, cityId }
 combattente: { …, faction (qualsiasi fazione), hostileTo, npc: { npcId, itemId, cityId, defend, provoke, calmDc, penalty, attitude, roles },
-               joinRound, prevFaction, fled, w, h, speeds: { cammina, scalare, nuotare, volare, scavare } (ft), speedOverride, moveMode, conditions,
+               joinRound, prevFaction, fled, w, h, speeds: { cammina, scalare, nuotare, volare, scavare } (ft), speedOverride, moveMode,
+               conditions: [{ id, type, custom, level, source: { id, name }, duration: { kind, rounds, who, ability, dc }, spellId, notes, auto, hpBase }],
+               concentration: { spellId, name, round } | null, concentrationUndo, concentrationAdv, deathSaves: { active, successes, failures, stable },
+               dead, forceActions,
                movement: { used, dashes, stood, disengaged, start, moves }, ignoreSpeed, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
                boss: { …campi del boss, phase, revealed, defeated },
                legend: { theme, rank, transformations, uses, senses, texts, passive, form: { id, name, hpMode, theme, roundsLeft, prev } } }
+customConditions: [{ id, name, icon, color, description, effects }]   condizioni personalizzate (libreria globale)
+incantesimo e azione delle creature (Attacco, Tiro salvezza): { …, inflict: { type, customId, level, duration, save: { ability, dc } | null } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
 ```
+
+**Migrazione dalla versione 12**: le condizioni dei combattimenti salvati (elenco di nomi) diventano voci
+«fino a nuovo ordine» di origine manuale; schede e combattimenti senza condizioni restano validi; gli incantesimi e le
+azioni ricevono «nessuna condizione inflitta»; la libreria delle condizioni personalizzate parte vuota.
 
 **Migrazione dalla versione 11** (`migrateV12`): le tre fazioni predefinite sostituiscono le parti di prima con gli
 stessi id, quindi ogni combattente tiene Giocatori, Nemici o Neutrali; i giocatori di ogni sessione entrano nel party
@@ -809,9 +819,10 @@ caselle; con celle da 10 ft = 3). Logica in `js/movimento.js`.
 - **Azioni**: **🏃 Scatto** (aggiunge la velocità al residuo, usa l'azione), **↩ Disimpegno** (promemoria: niente
   attacchi di opportunità), **⤒ Rialzati** da prono (costa metà velocità), **↶ Annulla spostamento** (torna alla
   posizione d'inizio turno e restituisce il movimento speso). Anche dal menu della pedina.
-- **Condizioni** (scheda › *Condizioni…*, applicate in automatico): afferrato, trattenuto, paralizzato (e
-  pietrificato, privo di sensi) = velocità 0; prono = striscia, ogni casella costa una in più; **rallentato** =
-  metà velocità. Il motivo compare accanto al valore.
+- **Condizioni** (vedi [Condizioni e concentrazione](#condizioni-e-concentrazione), applicate in automatico):
+  afferrato, trattenuto, paralizzato, stordito, pietrificato, privo di sensi e sfinimento 5 = velocità 0; prono =
+  striscia, ogni casella costa una in più; **rallentato** e sfinimento 2 = metà velocità. Il motivo compare accanto
+  al valore.
 - **Anteprima** mentre si trascina: celle raggiungibili in verde (residuo) e in arancio (con lo Scatto), percorso
   tratteggiato e costo sul cursore («costo 4 · restano 2»).
 - **Master**: *Movimento libero* nella barra della griglia (nessun limite per nessuno) e *🦶 Ignora velocità* per
@@ -820,6 +831,102 @@ caselle; con celle da 10 ft = 3). Logica in `js/movimento.js`.
   della griglia (Ctrl+Z / Ctrl+Y) copre anche il residuo. Il **combattimento simulato** pianifica con il residuo e
   il costo reale del percorso (non la distanza in linea d'aria) e lo consuma.
 - Fuori dal combattimento (editor, esplorazione) valgono le regole di prima e quelle dei biomi.
+
+## Condizioni e concentrazione
+
+Le condizioni sono una **fonte di modificatori** letta dalle funzioni di tiro e di movimento che già esistono.
+La logica è pura e testata (`js/condizioni.js`, con la tabella degli effetti e testi originali in italiano);
+l'interfaccia è in `js/ui-condizioni.js`.
+
+- **Condizioni attive**: ogni combattente ha un elenco di voci. Una voce ha tipo, origine (chi l'ha causata, oppure
+  *manuale*), durata, incantesimo collegato e note; c'è una voce per tipo, e riapplicarla la aggiorna.
+- **Tipi disponibili**:
+  - le condizioni di D&D 5e: accecato, affascinato, assordato, spaventato, afferrato, incapacitato, invisibile,
+    paralizzato, pietrificato, avvelenato, prono, trattenuto, stordito, privo di sensi;
+  - *rallentato*;
+  - lo **sfinimento a 6 livelli**, indicato con il numero;
+  - le **condizioni personalizzate** (⚕ *Condizioni…* › *Condizioni personalizzate…*): nome, icona, colore,
+    descrizione ed effetti scelti dall'elenco dei modificatori. Sono una libreria comune a tutte le sessioni; le
+    copie applicate restano anche se il modello viene eliminato.
+- **Attacchi**: vantaggio e svantaggio si raccolgono dalle condizioni di chi attacca e di chi è attaccato; se ci sono
+  entrambi si annullano.
+  - Bersaglio prono: vantaggio entro 1 cella, svantaggio da più lontano.
+  - Bersaglio paralizzato, stordito, privo di sensi, trattenuto, accecato o pietrificato: vantaggio.
+  - Attaccante accecato, spaventato (con la fonte in vista), avvelenato, prono o trattenuto: svantaggio.
+  - Invisibile: vantaggio quando attacca, svantaggio per chi lo attacca. Affascinato: non può attaccare chi l'ha
+    affascinato.
+  - **Critico automatico** per i colpi in mischia entro 1 cella contro chi è paralizzato o privo di sensi.
+  - La causa compare nel log e nell'anteprima della finestra d'attacco («vantaggio: bersaglio prono, entro 1 cella»).
+- **Tiri salvezza**: paralizzato, stordito, privo di sensi e pietrificato falliscono in automatico quelli di FOR e DES,
+  senza tirare; trattenuto ha svantaggio a DES; lo sfinimento 3 dà svantaggio a tutti.
+- **Prove**: svantaggio da avvelenato, spaventato e sfinimento 1; accecato solo nelle prove di vista. Vale nella
+  Calma degli NPC e nelle prove e salvezze degli eventi dell'esplorazione.
+- **Azioni**: incapacitato, paralizzato, stordito, pietrificato e privo di sensi = nessuna azione, azione bonus o
+  reazione.
+  - Attacca, Lancia incantesimo, le azioni delle creature, Scatto e Disimpegno sono disattivati, con un tooltip che
+    spiega il motivo, e all'inizio del turno compare un promemoria.
+  - Il master può forzare con *Permetti comunque le azioni*.
+- **Velocità**: velocità 0, metà velocità e strisciare (vedi [Velocità e movimento](#velocità-e-movimento));
+  rialzarsi costa metà velocità.
+- **Sfinimento**, livelli cumulativi:
+  1. svantaggio alle prove;
+  2. velocità dimezzata;
+  3. svantaggio ad attacchi e salvezze;
+  4. PF massimi dimezzati (tornano come prima quando scende);
+  5. velocità 0;
+  6. morte.
+
+  Il riposo lungo toglie un livello.
+- **Immunità**: se la scheda della creatura è immune alla condizione (lo sfinimento lì si chiama «indebolimento»),
+  l'applicazione è rifiutata con un avviso nel log.
+- **Durata**:
+  - fino a nuovo ordine;
+  - N round;
+  - fino all'inizio o alla fine del turno di un combattente scelto;
+  - salvezza ripetuta a fine turno (caratteristica e CD: se riesce, la condizione termina);
+  - 1 minuto (10 round);
+  - fino al riposo.
+
+  I round scendono alla fine del turno di chi ha la condizione; a scadenza c'è una voce nel log.
+- **Interfaccia**:
+  - sulla scheda, simboli colorati con tooltip (fonte, durata, effetti);
+  - sulla pedina, al massimo 4 simboli più un contatore «+N»;
+  - la finestra **⚕ Condizioni e concentrazione…** (dalla scheda o dal menu della pedina) per applicare, modificare
+    e togliere, con *↶ Annulla*.
+
+### Concentrazione
+
+- Lanciando un incantesimo con *Concentrazione* (libreria Magie) il combattente si concentra su di esso. Se ne lancia
+  un altro, l'app chiede conferma e termina il precedente.
+- Quando subisce danni tira in automatico la salvezza su COS, con CD pari al maggiore tra 10 e metà del danno. Il
+  vantaggio viene da un tratto (casella nella finestra delle condizioni).
+- Finisce anche a 0 PF, se il combattente è incapacitato, o per scelta.
+- Alla fine **tutte le condizioni collegate a quell'incantesimo** e causate da quel combattente spariscono da tutti
+  i combattenti. Il master può usare *↶ Ripristina* per riportare la concentrazione e i suoi effetti.
+- Indicatore «◎ nome dell'incantesimo» sulla scheda e anello tratteggiato sulla pedina.
+
+### Giocatori e nemici a 0 PF
+
+- *Impostazioni › Combattimento › Tiri contro la morte*, acceso di base. A 0 PF un giocatore è privo di sensi e
+  all'inizio del suo turno tira contro la morte:
+  - 10 o più = successo, 1 naturale = due fallimenti, 20 naturale = torna a 1 PF;
+  - 3 successi = stabile, 3 fallimenti = morto;
+  - i danni a 0 PF contano come fallimenti (due se critici);
+  - i contatori sono sulla scheda e si correggono a mano.
+- *I nemici a 0 PF muoiono*, acceso di base; spento, restano a terra come prima.
+
+### Condizioni inflitte
+
+Nel form delle azioni delle creature (Attacco e Tiro salvezza) e degli incantesimi c'è la sezione **🌀 Condizione
+inflitta**: quale condizione, la durata e la salvezza che la evita.
+
+- La subisce chi fallisce la salvezza, chi viene colpito (con la salvezza indicata, se c'è) o, per gli incantesimi
+  senza tiro, ogni bersaglio.
+- Con un incantesimo a concentrazione la condizione resta legata alla concentrazione.
+- L'IA tiene conto delle condizioni:
+  - un combattente incapacitato non agisce;
+  - un nemico invisibile viene attaccato solo se non c'è nessun altro;
+  - i bersagli che danno vantaggio (prono vicino, paralizzato…) hanno un punteggio di debolezza più alto.
 
 ## Dadi animati
 
@@ -852,7 +959,8 @@ Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, 
 
 - **Eventi** (tabella in `js/suoni-dati.js`: identificatore, etichetta, categoria, volume relativo, acceso/spento di
   base e ricetta): *Dadi* (rotolio, tonfo, 20 e 1 naturali); *Combattimento* (colpo a segno, mancato, critico, danno
-  subito da un giocatore, cura, a terra, incantesimo, tiro salvezza riuscito o fallito, azione bonus o reazione);
+  subito da un giocatore, cura, a terra, incantesimo, tiro salvezza riuscito o fallito, azione bonus o reazione,
+  condizione applicata, concentrazione spezzata);
   *Turno* (inizio del turno di un giocatore manuale, nuovo round, fine combattimento con vittoria o sconfitta);
   *Movimento* (passo, spento di base; movimento rifiutato); *Boss* (evocazione, ingresso in combattimento, cambio di
   fase, sconfitta); *Leggendario* (ascensione, sblocco di un nodo, trasformazione, ritorno alla forma normale);
@@ -1021,6 +1129,21 @@ prove ed esiti; istanze indipendenti dello stesso NPC; città con fazione propag
 mancanti; migrazione v11 → v12 ed esempi validi; esportazione e importazione (archivio e sessione, anche precedente alla
 v12) e duplicazione con il Mondo; azioni evento Reputazione e Quest, obiettivo «completa un evento» e scadenza col tempo.
 
+Per **condizioni e concentrazione**:
+- tabella ed effetti di tutte le condizioni;
+- attacchi con vantaggio e svantaggio da più fonti (anche insieme), prono vicino e a distanza, critico automatico solo
+  in mischia entro 1 cella, paura con la fonte in vista, affascinato;
+- salvezze fallite in automatico e con svantaggio, prove, azioni bloccate e velocità;
+- IA: incapacitato, invisibili, bersagli con vantaggio;
+- sfinimento 1-6 con i PF dimezzati e la morte; immunità;
+- durata: round, inizio e fine turno, salvezza ripetuta, 1 minuto, riposo;
+- concentrazione: CD 10 e metà del danno, cambio di incantesimo, 0 PF e incapacitato, effetti collegati, ripristino,
+  vantaggio;
+- tiri contro la morte (successi, fallimenti, 1 e 20 naturali, danni a 0 PF, stabile) e nemici che muoiono;
+- condizioni inflitte da azioni e incantesimi, condizione personalizzata;
+- annulla, salvataggio, migrazione, esportazione e importazione;
+- prove dell'esplorazione con le condizioni.
+
 Per **velocità e movimento**: conversione piedi/celle con scale diverse e fonti della velocità (razza, oggetti,
 creatura, nodi, trasformazione, sovrascrittura); residuo per turno, azzeramento, limite e fermata all'ultima
 cella; costo con terreno difficile, diagonali con le due regole, pedina 2×2 nello stretto, pedine ostili e alleate;
@@ -1050,6 +1173,7 @@ css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti d
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
+js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
 js/classi.js          tabella delle 12 classi e degli slot incantesimo
@@ -1084,8 +1208,9 @@ js/leggendario.js     logica pura dei leggendari: livelli, punti, effetti nei ca
 js/attrezzatura.js    catalogo dell'Attrezzatura: armi e armature base, bonus, danno, CA, inventario
 js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trappole, contenuto
 js/validazione.js     validazione dei form con messaggi in italiano
-js/dati.js            modello dati, migrazioni (fino alla versione 12), esempi, salvataggio (IndexedDB), import/export
+js/dati.js            modello dati, migrazioni (fino alla versione 13), esempi, salvataggio (IndexedDB), import/export
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
+js/ui-condizioni.js   condizioni: simboli sulla scheda e sulla pedina, finestra, personalizzate, «Condizione inflitta»
 js/ui-tileset.js      disegno delle tilemap, vista con zoom/pan, anteprime, importazione immagini
 js/ui-tile.js         componente «Taglia immagine in tile» (strutture, oggetti di mappa, pannello Tile)
 js/ui-pannello-tile.js  pannello Tile sotto la griglia: palette, strumenti, livelli

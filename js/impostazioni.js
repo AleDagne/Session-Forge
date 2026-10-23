@@ -14,6 +14,7 @@
   const DEFAULTS = {
     theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true,
     diagonals: 'sempre1', missingMode: 'vietato',
+    deathSaves: true, enemiesDie: true,
     diceAnim: true, diceMenu: true, diceCombat: true, diceExploration: true, diceSpeed: 'normale', diceColor: 'rosso',
   };
   const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -29,6 +30,9 @@
       // Movimento: diagonali sempre a 1 casella (come prima) o alternate 1-2-1; modalità senza velocità vietata o doppia.
       diagonals: DIAGONALS.includes(raw.diagonals) ? raw.diagonals : DEFAULTS.diagonals,
       missingMode: MISSING_MODES.includes(raw.missingMode) ? raw.missingMode : DEFAULTS.missingMode,
+      // Combattimento: tiri contro la morte per i giocatori a 0 PF e nemici che a 0 PF muoiono (attivi di base).
+      deathSaves: raw.deathSaves !== false,
+      enemiesDie: raw.enemiesDie !== false,
       // Dadi animati: interruttore generale e per categoria, velocità, colore (chiave della palette).
       diceAnim: raw.diceAnim !== false,
       diceMenu: raw.diceMenu !== false,
@@ -108,5 +112,7 @@
     // Regole del movimento per movimento.js (di base quelle predefinite, anche prima di init).
     movementRules: () => ({ diagonals: (current || DEFAULTS).diagonals, missingMode: (current || DEFAULTS).missingMode }),
     dice: () => normalize(current || DEFAULTS),
+    // Regole dei 0 PF per condizioni.js (tiri contro la morte, nemici che muoiono).
+    combatRules: () => ({ deathSaves: (current || DEFAULTS).deathSaves !== false, enemiesDie: (current || DEFAULTS).enemiesDie !== false }),
   };
 })(globalThis.DnD = globalThis.DnD || {});

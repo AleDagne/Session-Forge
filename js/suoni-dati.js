@@ -62,6 +62,10 @@
       ricetta: notes([440, 330], 0.1, { forma: 'square', dur: 0.25, a: 0.01, g: 0.12, filtro: { tipo: 'lowpass', f: 1500 } }) },
     { id: 'azione-lieve', label: 'Azione bonus o reazione', cat: 'combattimento', vol: 0.4, on: true,
       ricetta: [{ t: 'osc', forma: 'sine', f: 1200, dur: 0.09, a: 0.005, g: 0.18 }] },
+    { id: 'condizione', label: 'Condizione applicata', cat: 'combattimento', vol: 0.6, on: true,
+      ricetta: [{ t: 'osc', forma: 'triangle', f: [660, 440], dur: 0.3, a: 0.01, g: 0.2 }, { t: 'rumore', filtro: { tipo: 'bandpass', f: 1800, q: 2 }, dur: 0.2, a: 0.02, g: 0.08 }] },
+    { id: 'concentrazione-spezzata', label: 'Concentrazione spezzata', cat: 'combattimento', vol: 0.7, on: true, principale: true,
+      ricetta: [{ t: 'osc', forma: 'sine', f: [1320, 330], dur: 0.35, a: 0.005, g: 0.22 }, { t: 'rumore', filtro: { tipo: 'highpass', f: 3000 }, dur: 0.15, a: 0.002, g: 0.12 }] },
     // Turno
     { id: 'turno-giocatore', label: 'Inizio del turno di un giocatore', cat: 'turno', vol: 0.8, on: true, principale: true,
       ricetta: [{ t: 'osc', forma: 'sine', f: 1318, dur: 0.9, a: 0.005, g: 0.35 }, { t: 'osc', forma: 'sine', f: 2636, dur: 0.5, a: 0.005, g: 0.08 }] },
@@ -193,7 +197,8 @@
 
   // ---------- Dagli esiti già calcolati agli eventi sonori ----------
   const COMBAT_LOG = { colpito: 'colpo', critico: 'critico', mancato: 'mancato', 'a-terra': 'a-terra', cura: 'cura', magia: 'incantesimo',
-    'tiro-salvezza': 'ts-riuscito', 'ts-fallito': 'ts-fallito', round: 'round', movimento: 'passo' };
+    'tiro-salvezza': 'ts-riuscito', 'ts-fallito': 'ts-fallito', round: 'round', movimento: 'passo',
+    condizione: 'condizione', concentrazione: 'concentrazione-spezzata' };
   // prima: istantanea prima della modifica (combatSnapshot: fase e { id: { hp, form } }); righe: nuove righe del log;
   // dopo: il combattimento. -> eventi in ordine, senza ripetizioni.
   function fromCombat(prima, righe, dopo) {

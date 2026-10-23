@@ -18,7 +18,6 @@
   const MODE_NAMES = { cammina: 'Camminare', scalare: 'Scalare', nuotare: 'Nuotare', volare: 'Volare', scavare: 'Scavare' };
   const MODE_ICONS = { cammina: '🚶', scalare: '🧗', nuotare: '🏊', volare: '🦅', scavare: '⛏' };
   const CREATURE_KEYS = { cammina: 'walk', scalare: 'climb', nuotare: 'swim', volare: 'fly', scavare: 'burrow' };
-  const STOP = ['afferrato', 'trattenuto', 'paralizzato', 'pietrificato', 'privo di sensi'];
   const DIAGONALS = ['sempre1', 'alternata'];
   const DIAGONAL_NAMES = { sempre1: 'Sempre 1 casella', alternata: 'Alternata 1-2-1' };
   const MISSING = ['vietato', 'doppio'];
@@ -31,8 +30,8 @@
   const int = (v, def, lo, hi) => { const n = Math.round(Number(v)); return v !== null && v !== '' && Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : def; };
   const posOf = (p) => (p && Number.isInteger(p.x) && Number.isInteger(p.y) ? { x: p.x, y: p.y } : null);
 
-  // Condizioni del combattimento: quelle del manuale più «rallentato».
-  const conditions = () => DnD.creatureDati.CONDITIONS.concat('rallentato');
+  // Condizioni del combattimento (condizioni.js): quelle del manuale, «rallentato» e lo sfinimento.
+  const conditions = () => DnD.condizioni.TYPE_IDS;
 
   // ---------- Unità ----------
   const feetFromMeters = (m) => Math.max(0, Math.round(((Number(m) || 0) / 1.5) * 5));
@@ -84,12 +83,12 @@
       if (r.missingMode === 'doppio') { feet = feetIn(c, 'cammina'); extra += 1; reasons.push('senza velocità per ' + MODE_NAMES[mode].toLowerCase() + ': costo doppio'); }
       else { usable = false; feet = 0; reasons.push('non può ' + MODE_NAMES[mode].toLowerCase()); }
     }
-    const conds = Array.isArray(c.conditions) ? c.conditions : [];
-    const stop = STOP.find((x) => conds.includes(x));
-    if (stop) { feet = 0; reasons.push(stop + ': velocità 0'); }
+    // Condizioni: velocità 0, dimezzata (una volta sola, anche con più cause), strisciare.
+    const sp = DnD.condizioni.speedEffects(c);
+    if (sp.zero.length) { feet = 0; reasons.push(sp.zero[0] + ': velocità 0'); }
     else {
-      if (conds.includes('rallentato')) { feet = Math.floor(feet / 2); reasons.push('rallentato: metà velocità'); }
-      if (conds.includes('prono') && !(c.movement && c.movement.stood)) { extra += 1; reasons.push('prono: striscia (costo doppio)'); }
+      if (sp.half.length) { feet = Math.floor(feet / 2); reasons.push(sp.half.join(', ') + ': metà velocità'); }
+      if (sp.crawl.length && !(c.movement && c.movement.stood)) { extra += 1; reasons.push(sp.crawl[0] + ': striscia (costo doppio)'); }
     }
     return { mode, usable, feet, cells: usable ? cellsOf(feet, feetPerCell) : 0, extra, reasons, zero: !usable || feet <= 0 };
   }
@@ -144,8 +143,7 @@
   }
   // Rialzarsi da prono: costa metà della velocità (per eccesso). { ok, cost, reason }. Modifica c se riesce.
   function standUp(c, rules, feetPerCell) {
-    const conds = Array.isArray(c.conditions) ? c.conditions : [];
-    if (!conds.includes('prono')) return { ok: false, reason: c.name + ' non è prono' };
+    if (!DnD.condizioni.has(c, 'prono')) return { ok: false, reason: c.name + ' non è prono' };
     const full = cellsOf(feetIn(c, 'cammina'), feetPerCell);
     const st = speedState(c, rules, feetPerCell);
     if (st.zero || full <= 0) return { ok: false, reason: c.name + ' non può muoversi' };
@@ -155,7 +153,7 @@
     m.used += cost;
     m.stood = true;
     c.movement = m;
-    c.conditions = conds.filter((x) => x !== 'prono');
+    DnD.condizioni.remove(c, 'prono');
     return { ok: true, cost };
   }
   // Annulla gli spostamenti del turno: torna alla posizione d'inizio e restituisce il movimento speso per
@@ -348,7 +346,7 @@
   }
 
   DnD.movimento = {
-    MODES, MODE_NAMES, MODE_ICONS, CREATURE_KEYS, STOP, DIAGONALS, DIAGONAL_NAMES, MISSING, MISSING_NAMES, DEFAULT_RULES, MAX_FEET,
+    MODES, MODE_NAMES, MODE_ICONS, CREATURE_KEYS, DIAGONALS, DIAGONAL_NAMES, MISSING, MISSING_NAMES, DEFAULT_RULES, MAX_FEET,
     conditions, feetFromMeters, metersFromFeet, cellsOf, formatFeet, normalizeRules,
     normalizeSpeeds, speedsFromRace, speedsFromCreature, addFeet, baseSpeeds, normalizeOverride, modeOf, feetIn,
     speedState, speedCells, normalizeMovement, movementOf, budget, left, resetTurn, recordMove, dash, disengage, standUp, undoMoves,

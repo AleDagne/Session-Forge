@@ -61,10 +61,11 @@
   // 1 naturale: fallimento automatico. Altrimenti colpisce se totale >= CA.
   function resolveAttack(p, rng) {
     const d20 = rollD20(p.mode, rng);
-    const crit = d20.natural === 20;
     const fumble = d20.natural === 1;
     const total = d20.natural + p.toHit;
-    const hit = crit || (!fumble && total >= p.targetAC);
+    const hit = d20.natural === 20 || (!fumble && total >= p.targetAC);
+    // Critico: 20 naturale, oppure ogni colpo a segno se la condizione del bersaglio lo rende automatico.
+    const crit = d20.natural === 20 || Boolean(p.autoCrit && hit);
     const result = {
       d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble,
       damageRolls: [], damageDiceCount: 0, damage: 0,
@@ -112,9 +113,11 @@
 
   // In attesa: NPC diventato ostile che entra nell'ordine di iniziativa solo dal round joinRound; o fuggito.
   const waiting = (c, round) => Boolean(c.fled || (c.joinRound && c.joinRound > round));
+  // Saltato nei turni: a terra (salvo chi tira contro la morte) o in attesa.
+  const skipped = (c, round) => (isDown(c) && !DnD.condizioni.dying(c)) || waiting(c, round);
 
   function firstTurn(order, round) {
-    const c = order.find((x) => !isDown(x) && !waiting(x, round || 1));
+    const c = order.find((x) => !skipped(x, round || 1));
     return c ? c.id : null;
   }
 
@@ -125,7 +128,7 @@
       const j = idx + i;
       const r = round + Math.floor(j / order.length);
       const c = order[j % order.length];
-      if (!isDown(c) && !waiting(c, r)) return { currentId: c.id, round: r };
+      if (!skipped(c, r)) return { currentId: c.id, round: r };
     }
     return { currentId, round };
   }
