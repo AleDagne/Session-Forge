@@ -211,7 +211,36 @@
         B().paint(w.grid.biomeMap, w.grid.w, w.grid.h, cells, id);
       },
       enterMap: (gridId, entry) => enterMap(w, gridId, entry),
+      // Mondo: reputazione del party attivo della sessione e quest (avvia, avanza, completa, fallisci).
+      reputation: (factionId, delta, reason) => {
+        const v = worldOf(w);
+        if (!v) return null;
+        return DnD.fazioni.changeReputation({ world: v.world, party: DnD.party.active(v.parties, v.world) }, factionId, delta, reason, 'evento');
+      },
+      quest: (op, questId, objectiveId, n) => questOp(w, op, questId, objectiveId, n),
     }, extra || {});
+  }
+
+  // Mondo della sessione che contiene l'esplorazione (null nei test senza sessioni).
+  function worldOf(w) {
+    if (!w.st || !Array.isArray(w.st.sessions) || !w.st.factions) return null;
+    const se = w.st.sessions.find((s) => s.exploration === w.ex) || DnD.sessioni.current(w.st);
+    return se && se.world ? DnD.fazioni.view(w.st, se.id) : null;
+  }
+  // Operazioni delle azioni «Quest» degli eventi. Restituisce le righe per il registro.
+  function questOp(w, op, questId, objectiveId, n) {
+    const v = worldOf(w);
+    if (!v) return ['⚠ Quest: nessun Mondo nella sessione.'];
+    const q = v.quests.find((x) => x.id === questId);
+    if (!q) return ['⚠ Quest eliminata: azione saltata.'];
+    const Q = DnD.quest;
+    const j = v.world.quests;
+    const party = DnD.party.active(v.parties, v.world);
+    if (op === 'avvia') { Q.offer(j, q); return Q.accept(j, q, w.ex.time.total, party && party.id) ? ['📜 Quest «' + q.title + '» accettata.'] : ['📜 Quest «' + q.title + '» già ' + Q.statusOf(j, q.id) + '.']; }
+    if (op === 'avanza') return Q.advance(j, [q], (q.objectives.find((o) => o.id === objectiveId) || q.objectives[0] || {}).kind, (o) => !objectiveId || o.id === objectiveId, n || 1);
+    if (op === 'fallisci') { Q.fail(j, q, w.ex.time.total); return ['📜 Quest «' + q.title + '» fallita.']; }
+    const r = Q.complete(j, q, w.ex.time.total, true);
+    return [r.ok ? '📜 Quest «' + q.title + '» completata: consegna le ricompense dal diario del party.' : '📜 «' + q.title + '»: ' + r.reason + '.'];
   }
 
   // ---------- Tempo ----------
@@ -227,6 +256,9 @@
     ex.time.day += Math.floor(h / 24);
     ex.time.hour = round2(h % 24);
     const people = ex.parties.reduce((n, p) => n + p.memberIds.length, 0);
+    // Quest con tempo limite: oltre la scadenza diventano Scadute.
+    const v = worldOf(w);
+    if (v) for (const q of DnD.quest.expire(v.world.quests, v.quests, ex.time.total)) log(w, '📜 Quest «' + q.title + '» scaduta.', 'quest');
     if (b) {
       const c = B().consumption(b, hours, people);
       ex.supplies.food = Math.max(0, round2(ex.supplies.food - c.food));
@@ -324,6 +356,9 @@
     party.pos = { x: to.x, y: to.y };
     advanceTime(w, sc.hours);
     reveal(w);
+    // Quest: obiettivi «Raggiungi un luogo» su questa mappa e cella.
+    const qv = worldOf(w);
+    if (qv) for (const l of DnD.quest.onReach(qv.world.quests, qv.quests, w.grid.id, to.x, to.y)) log(w, l, 'quest');
     if (sc.biome && (!before || before.id !== sc.biome.id)) {
       log(w, '🧭 Si entra in: ' + sc.biome.name + '.', 'movimento');
       for (const hz of sc.biome.hazards.filter((x) => x.freq === 'entrata')) {
@@ -475,6 +510,10 @@
     const res = E().run(ev.actions, ctx);
     if (res.pause) {
       w.ex.pending = { kind: 'combattimento', gridId: w.ex.gridId, instanceId: inst.state ? inst.id : '', name: ev.name, action: res.pause.action, rest: res.pause.rest, combatId: '' };
+    } else {
+      // Quest: obiettivi «Completa un evento» (per modello o per copia).
+      const qv = worldOf(w);
+      if (qv) for (const l of DnD.quest.onEvent(qv.world.quests, qv.quests, inst.templateId || ev.id).concat(inst.templateId ? DnD.quest.onEvent(qv.world.quests, qv.quests, inst.id) : [])) log(w, l, 'quest');
     }
     if (inst.state) inst.state.outcomes = inst.state.outcomes.concat('giorno ' + w.ex.time.day + ': ' + (res.pause ? 'combattimento' : 'eseguito')).slice(-20);
     return res;
@@ -494,7 +533,7 @@
   DnD.esplorazione = {
     KINDS, UNITS, UNIT_NAMES, UNIT_KM, SCALE_PRESETS, DEFAULT_SCALE, LOG_MAX,
     normalizeScale, scaleKm, scaleLabel, formatDistance, normalizeFog, normalizeGridExtras, extrasOf, resizeExtras,
-    normalizeState, normalizeParty, normalizeMember, create, biomeAt, activeParty, partyMembers, memberState, placeName, log, queue, eventCtx,
+    normalizeState, normalizeParty, normalizeMember, create, biomeAt, activeParty, partyMembers, memberState, placeName, log, queue, eventCtx, worldOf, questOp,
     advanceTime, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
   };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -1,268 +1,183 @@
-# Ripresa del lavoro — Fase «Personaggio leggendario»
+# Ripresa del lavoro — Fase «NPC, Fazioni, Città e Party»
 
-Data: 22 ottobre 2026. Questo file serve a riprendere il lavoro dal PC desktop.
+Data: 23 ottobre 2026. Questo file serve a riprendere il lavoro da un altro PC.
 
 ## Come ripartire
 
-1. Apri una nuova sessione di Claude Code nella cartella del progetto.
-2. Scrivi: *«Leggi RIPRESA-LAVORO.md e continua la fase Personaggio leggendario dai punti "Da fare"»*.
-3. Per provare l'app e i test serve il server locale: `python -m http.server 8080` nella cartella, poi
-   `http://localhost:8080/index.html` e `http://localhost:8080/test.html`. Il browser tiene in cache gli script:
-   ricarica forzata (Ctrl+F5) dopo ogni modifica.
-4. Attenzione: la cartella **non è un repository git**, quindi non c'è cronologia. Conviene una copia di backup
-   della cartella prima di continuare.
+1. Apri una nuova sessione di Claude Code nella cartella del progetto (meglio con Opus).
+2. Scrivi: *«Leggi RIPRESA-LAVORO.md e continua la fase NPC, Fazioni, Città e Party dai punti "Da fare"»*.
+3. Server locale: `.claude/launch.json` (porta **5617**, `python -m http.server 5617`), poi
+   `http://localhost:5617/index.html` e `http://localhost:5617/test.html` (in una finestra visibile).
+   Il service worker tiene in cache gli script: ricarica forzata (Ctrl+F5) o togli la registrazione del SW.
 
 ## Stato al momento della pausa
 
-- Dal 22 ottobre 2026 (sessione sul PC desktop) la cartella **è un repository git**: la cronologia parte dal commit
-  «Stato iniziale». Claude Code avvia il server da `.claude/launch.json` sulla porta **5617** (la 8080 era occupata).
-- L'app parte e tutti gli script si caricano senza errori di sintassi.
-- `test.html`: **tutti i 188 test passano** (in una finestra visibile: con il pannello nascosto restano su «Esecuzione…»).
-- Versione dei dati: **11** (cache del service worker: `session-forge-v21`).
+- Versione dei dati: **12** (cache del service worker: `session-forge-v22`).
+- L'app parte senza errori in console; la migrazione v11 → v12 funziona sui dati reali.
+- Tutte le schede nuove (Mondo › Fazioni/Città/NPC/Quest, Giocatori › Party, editor NPC con le 5 sotto-schede,
+  form quest) si aprono senza errori (prova automatica via JS, non ancora provate a mano in profondità).
+- `test.html`: prima di aggiornare i 4 test vecchi passavano 184/188; i 4 falliti erano attesi (nuova voce di
+  menù, versione 12) e sono **già stati corretti** in `js/test.js` (non ancora rieseguiti).
+- **I test nuovi della fase NON sono ancora scritti** (vedi «Da fare»).
 
-## Prova a mano dell'interfaccia (22 ottobre 2026, PC desktop)
+## Fatto (file nuovi)
 
-Provati nell'app e funzionanti: elenco Leggendari, «+ Nuovo leggendario» con validazione e animazione di Ascensione,
-scheda con riepilogo ed effetti «da: nodo», Percorso in Sblocca (dettagli, sblocco, linea attiva, punti) e in
-Modifica (aggiungi nodo, collega trascinando, pannello del nodo, Applica, annulla/ripeti, raggiera), Opzioni del
-master (titolo, tema Cosmico, bonus, rimodella), Trasformazioni (da creatura esistente, modifica, salva, duplica,
-ordina, elimina), combattimento (Trasformati, barra boss in alto, vignettatura, ritorno a 0 PF con danno in
-eccesso, pulsante disattivato senza usi).
+- `js/mondo-dati.js` — costanti modificabili: fazioni predefinite (giocatori, nemici, neutrali), livelli di
+  relazione (alleata, amichevole, neutrale, ostile, guerra), relazioni di partenza (Giocatori–Neutrali amichevole,
+  Nemici ostili/in guerra: stesso comportamento dei vecchi «Neutrali/Alleati»), soglie di reputazione, tabelle
+  degli effetti (prezzi, città, atteggiamento, accesso sotto −50), eventi di reputazione, atteggiamenti, ruoli,
+  regole dei combattenti neutrali, mercante, dimensioni città, stati/obiettivi/requisiti quest, dialoghi.
+- `js/fazioni.js` — puro: normalizzazione fazioni e `world` della sessione (party attivo, simmetria, soglie,
+  reputazione per giocatore, registro, diario quest, variabili, provocazioni), `relazione(a, b, fazioni)`,
+  `setRelation`, matrice, asimmetrie, `table`, `relazioneCombattenti` (con ostilità personali `hostileTo` e NPC che
+  «aiutano il party»), `ostili`/`alleati`, `areaWarnings`, `combatOver`, soglie ed effetti, `changeReputation` /
+  `revertReputation`, `view(state)`, `defaultFactionFor`, `variables(session)`.
+- `js/party.js` — puro: party, un solo party per giocatore (`assignPlayer`), ordine di marcia, attivo, fazione del giocatore.
+- `js/citta.js` — puro: città, «Crea città» rapido, atteggiamento, contenuti, evento segnaposto «Entra in una mappa».
+- `js/npc.js` — puro: NPC (scheda Standard/Creatura riusata via `normalizeCreature`), stato delle copie, copia
+  piazzata come oggetto di mappa `otype: 'npc'`, monete (`toCopper`, `fromCopper`, `pay` con resto), mercante
+  (prezzi, offerta, `quote`, `checkout`, `restock`, `haggle`), combattente neutrale (`reactions`, `provoke` con
+  regole solo/fazione/città, `calm`, `countsForXp`), dialoghi (`answersFor`, `choose`, `dialogWarnings`), routine,
+  `statoNpcPerGiocatore`, `missingRefs`, `fromEnemy`.
+- `js/quest.js` — puro: quest, diario (`world.quests`), requisiti, offri/accetta/fallisci/completa, avanzamento
+  (`onKill`, `onTalk`, `onEvent`, `onReach`, `onCollect`), scadenza, `perGiocatore`, `missingRefs`.
+- `js/ui-mondo.js` — sezione **Mondo** (Fazioni con matrice/elenco e simmetria; Città con form, atteggiamento,
+  «+ NPC qui», «+ Nemico qui», «Sulla mappa…»), componenti comuni (`factionBadge`, `factionSelect`,
+  `worldRefsEditor`, `repBar`, `reputationPanel`, `applyReputation`, suoni con l'interruttore dei suoni dei dadi).
+- `js/ui-party.js` — Giocatori › **Party** (elenco, attivo, form con membri e conferma di spostamento, borsa comune,
+  dettaglio con ordine di marcia, reputazione, diario).
+- `js/ui-npc.js` — Mondo › NPC (elenco, «Promuovi da nemico», editor Generale/Scheda/Mercante/Dialogo/Quest e
+  routine), pannello sulla griglia (Parla, Commercia, Quest, Attacca, Entra nell'iniziativa, Scheda, Fazione e
+  stato con Calma e anteprima vista giocatori), dialogo giocabile, finestra di scambio con carrello e contrattazione.
+- `js/ui-quest.js` — Mondo › Quest (elenco, editor), offerta, consegna con ricompense confermate, diario con filtri.
 
-Corretto durante la prova:
-- I PF massimi non salivano quando un nodo aumenta la COS: ora +1 PF per livello per ogni punto di modificatore
-  (`leggendario.effectivePlayer`), con test.
-- «null» scritto come testo da `append` nativo: card leggendari, card boss, card trasformazioni, pannello del
-  Nucleo, schermata dell'iniziativa (sempre visibile!), scheda degli oggetti di mappa.
-- Raggiera: ora è ad albero (spicchio per ramo proporzionale alle foglie, anelli più larghi), con test.
-- Editor della trasformazione: tolti icona e dimensione doppie (ora solo quelle della scheda boss, che erano
-  ignorate); il tema boss della forma non ricolora più la pagina divina; campi Usi/Durata schiacciati; campo di
-  ricerca icone schiacciato nei contenitori stretti.
-- «Duplica» anche per il singolo nodo; titolo del personaggio aggiornato subito nell'intestazione; setup del
-  combattimento con PF/CA effettivi dei leggendari; singolari («1 punto», «1 nodo sbloccato», «1 uso»).
+## Fatto (file modificati)
 
-Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app).
-
-## Grafica divina completa (punto 2 del «Da fare») — FATTA (22 ottobre 2026)
-
-- **Temi unificati con il Boss**: le palette dei 5 temi leggendari stanno in `leggendario.js` (`PALETTES`, stessa
-  forma dei temi di `boss.js`). `boss.theme(id)` risolve sia i temi del Boss sia le chiavi `lg:<id>` dei leggendari
-  (niente confusione tra «divino» del Boss e «divino» leggendario); `boss.normalizeBoss` le accetta.
-  `uiBoss.applyTheme/themeStyle` sono l'unico punto in cui i colori entrano nell'interfaccia: per i temi leggendari
-  aggiungono le variabili `--lg-*`, la classe `legend-theme` e `data-legend-motif`.
-- **Tema della forma unico**: un solo campo «Tema» nelle regole della trasformazione (Tema del personaggio, 5 temi
-  ✦, temi del Boss). `leggendario.formTheme` lo risolve; vale per barra in alto, vignettatura, alone della pedina,
-  lampo, card e scheda del combattente. Nella scheda boss della forma è nascosto il riquadro «Presentazione»
-  (titolo, epiteto, introduzione, tema), che la trasformazione ignorava.
-- **Grafica** (`css/leggendario.css`, `ui-leggendario.js`): vignettatura dorata e bianca, raggi che oscillano,
-  polvere, due sigilli con rune che ruotano, ali a tre file di piume lungo l'arco dell'ala con aureola e raggi,
-  lance di luce al posto delle spade, filigrana sotto le cornici, angoli luminosi, divisori sacri. Motivi per tema:
-  raggi (Divino), nuvole e piume (Angelico), vortice (Abissale), braci e scaglie (Draconico), stelle e nebulosa
-  (Cosmico). Il canvas del Percorso prende i colori dal tema.
-- **Combattimento**: scheda del leggendario con angoli dorati, aureola sopra il bordo e alone (più forte in forma),
-  colori del tema attivo (quello della forma se trasformato); pedina con alone, aureola sotto la barra della vita e,
-  in forma, ali ai lati.
-- Contrasto verificato nel tema scuro e chiaro; «Riduci animazioni» ferma tutto (test nuovo in `test.html`).
-
-## Fatto in questa fase (punti dell'ordine di lavoro)
-
-### 1. Livelli 20-40 e calcoli estesi — FATTO e testato
-- `js/regole.js`: `proficiencyBonus(level, legendary)` → per i leggendari `1 + ⌈livello/4⌉` (fino a +11), invariato
-  per gli standard; `finalAbilities(…, cap)` con tetto configurabile (leggendari 30); `derivedStats` usa tetto e
-  competenza leggendari quando `type === 'leggendario'`.
-- `js/validazione.js`: livello 20-40 e tetto 20-30 per i leggendari.
-- `js/dati.js`: giocatore con `type: 'leggendario'`, `level` 20-40, `abilityCap`, `legend` (percorso, nodi
-  sbloccati, trasformazioni, usi). Giocatore declassato: conserva `legendArchive`. Libreria globale
-  `pathTemplates`. Migrazione `migrateV11`. I combattenti salvano `legend` (anche la forma attiva).
-- I giocatori standard **non hanno il campo type** (sono "standard" per assenza del campo).
-
-### 2. Modello del percorso e funzioni pure — FATTO e testato
-- `js/percorso.js`: nodi, collegamenti, Nucleo, effetti (caratteristica, competenza, bonus numerici, magia, slot,
-  privilegio, trasformazione, testo), sblocco (collegato o tutti i prerequisiti, rango, punti, esclusività),
-  rimodella, irraggiungibili, cicli di esclusività, aggiungi/collega/scollega/elimina/duplica/sposta,
-  disposizione a raggiera, cronologia annulla/ripeti, ricerca, modelli, **percorso d'esempio originale
-  «Ascesa dell'Eterno»** (13 nodi).
-- `js/leggendario.js`: rango, punti (1 per rango, max 20, + bonus del master), somma degli effetti con le fonti
-  («da: nodo»), giocatore effettivo per i calcoli esistenti, privilegi come azioni da creatura (pulsanti nel
-  combattimento), trasformazioni (fusione delle caratteristiche, PF sostitutivi con danno in eccesso al
-  personaggio o PF temporanei, usi, durata, fine anticipata, fasi del boss), promozione/declassamento, riposo.
-- `js/regole.js` `createCombatants`: i leggendari entrano in combattimento con tutti gli effetti.
-
-### 3-6. Interfaccia — SCRITTA, da verificare a mano nell'app (mai provata visivamente)
-- `js/ui-creature.js`: Giocatori con schede **Standard / ✦ Leggendari**; pulsante «✦ Eleva a leggendario» (livello
-  20); il form del giocatore è riusabile in modalità leggendaria (livello 20-40, tetto 30, competenza
-  sovrascrivibile).
-- `js/ui-percorso.js`: editor della mappa a nodi su canvas (zoom, pan, trascina nodi, collega trascinando,
-  scollega, elimina, duplica, Maiusc+trascina per selezione multipla, griglia, raggiera, annulla/ripeti, ricerca,
-  validazione, pannello del nodo con editor degli effetti) e **modalità Sblocca** (nodi che pulsano, linee attive
-  con luce che scorre, sblocco con conferma e animazione).
-- `js/ui-leggendario.js`: elenco dei leggendari, scheda con **Scheda / Percorso / Trasformazioni / Opzioni del
-  master**, modelli di percorso (salva, carica, elimina), esporta/importa JSON del percorso, editor delle
-  trasformazioni (regole + scheda boss completa riusando `uiMostri.monsterForm` e `uiBoss.bossFields`),
-  animazione di Ascensione, riquadro nel combattimento (Trasformati / Torna normale / annulla / ripeti), alone e
-  aureola sulla pedina.
-- `js/ui-combattimento.js`: danno tramite `hurt()` (gestisce l'eccesso della forma), durata della forma che scende
-  a inizio turno, classe `legendary` sulla scheda del combattente, riquadro dei leggendari.
-- `js/ui-mostri.js`: opzione `save` di `monsterForm` (salva altrove invece che nei Nemici).
-- `js/ui-boss.js`: esportato `bossFields`. `js/ui-griglia.js`: alone dei leggendari sulla pedina.
-- `css/leggendario.css`: **versione di base** (temi con variabili `--lg-*`, raggi, polvere, editor del percorso,
-  animazioni, «Riduci animazioni»).
-
-## Fase «Velocità e movimento, dadi animati» — FATTA (22 ottobre 2026)
-
-- `js/movimento.js` (nuovo, logica pura): velocità in piedi per modalità (fonti: razza, creatura, nodi, oggetti
-  con il nuovo campo *Bonus alla velocità*, forma, sovrascrittura), celle = piedi / piedi per cella, residuo per
-  turno, Scatto, Disimpegno, Rialzarsi, annulla spostamento, condizioni (aggiunta «rallentato»), percorso minimo
-  con diagonali 1 o 1-2-1 e costi additivi. L'IA (`ia.paths`) ora usa questo percorso e il residuo.
-- Griglia: aggancio `movement` (anteprima delle celle raggiungibili, percorso, costo, fermata all'ultima cella),
-  misuratore con la regola delle diagonali, residuo nell'istantanea di annulla/ripeti.
-- Dadi: `dadi.registratore` (le funzioni dei tiri annotano vantaggio, scarto e modificatori senza cambiare i
-  risultati), `pianoAnimazione`, `coda`; `ui-dadi.js` riscritto con `mostraTiro` (overlay e area di lancio),
-  `css/dadi.css`; Impostazioni › Movimento e Dadi animati.
-- **Da provare a mano** (in aggiunta all'elenco qui sotto): trascinare pedine con terreno difficile e diagonali
-  1-2-1, cambio di modalità dal menu della pedina, condizioni, Movimento libero e Ignora velocità, turni IA
-  automatici con l'overlay dei dadi, suoni con il volume, esplorazione (prove degli eventi) con i dadi.
-- Limiti noti: nessuna regola di luce/acqua; i biomi non cambiano il costo nel combattimento (solo le tile).
-
-## Effetti dei nodi e README — FATTI (22 ottobre 2026)
-
-- **Abilità**: competenza (×1) e maestria (×2) dei nodi valgono nelle prove degli eventi dell'esplorazione
-  (`leggendario.checkBonus`, usato da `eventi.memberBonus`, che ora usa anche le caratteristiche date dai nodi) e
-  nella Percezione passiva. La scheda le mostra con il bonus.
-- **Sensi**: nella scheda e nel riquadro del combattente, con la Percezione passiva (salvata nel combattente).
-  L'app non ha regole di luce/vista in cui usarli (l'esplorazione lavora in km): restano informativi.
-- **Magie «N al giorno»**: nel combattimento diventano incantesimi senza slot (come gli innati delle creature),
-  con gli usi rimasti; il lancio scala `legend.spellUses` sulla scheda, il riposo lungo li ripristina. Chi non ha
-  una classe da incantatore le lancia con la migliore tra INT, SAG e CAR. Se lo stesso incantesimo è dato anche
-  «sempre preparato», resta normale (con gli slot). L'indicatore sulla scheda mostra slot e usi insieme.
-- Competenze in strumenti/armi/armature: restano testo (nessun calcolo dell'app le usa).
-- **README**: sezione «Personaggi leggendari» (livelli, Percorso, Trasformazioni, grafica), modello dati v11 con
-  la migrazione, test e struttura.
+- `config.js` (voce Mondo dopo Esplorazione), `app.js` (Alt+0 per la decima voce), `index.html`, `test.html`,
+  `sw.js` (script nuovi, cache v22), `css/style.css` (stili del Mondo, solo variabili del tema).
+- `dati.js`: VERSION 12, `factions/parties/cities/worldNpcs/quests` nello stato, `factionId`/`cityId` su nemici e
+  giocatori, fazione libera sui combattenti + `hostileTo`, `npc`, `joinRound`, `fled`, `prevFaction`; `world` nella
+  sessione; `migrateV12` + `addDefaultParties` (party «Gruppo» per sessione con i giocatori visibili); copie NPC
+  negli oggetti piazzati.
+- `sessioni.js`: nuove librerie in OWNED, `remapWorldEntities`, remap di combattimento/world/griglie, export e
+  import di sessione con il Mondo (sessioni < v12 ricevono il party «Gruppo»).
+- `ia.js` / `movimento.js`: ostili e alleati da `fazioni` con `state.relations`; aree mai su alleati o neutrali;
+  NPC in attesa (`joinRound`) ignorati.
+- `regole.js`: `nextTurn`/`firstTurn` saltano chi è in attesa (`joinRound`) o fuggito; `waiting` esportato.
+- `oggetti-mappa.js` / `ui-oggetti-mappa.js`: tipo `npc` (non nei modelli), il pannello degli NPC si apre al doppio clic.
+- `ui-griglia.js`: contorno e pallino della fazione sulle pedine, disegno delle copie NPC (anello, nome, stato),
+  gruppo «NPC del Mondo» nel pannello per trascinarli.
+- `ui-combattimento.js`: fazioni del Mondo nel setup (default da scheda/party/città), «Aggiungi party», NPC con
+  «Entra subito» sulla griglia di partenza, provocazione automatica (attacchi, incantesimi, azioni delle creature)
+  con penalità e annullamento, Calma, cambio fazione con «torna a…», badge fazione/NPC/«entra al round N», avvisi
+  ad area, uccisioni → quest e reputazione, annuncio fine per fazioni, PE dei nemici sconfitti a fine combattimento.
+- `ui-esplorazione.js`: «Aggiungi party» (ordine di marcia, nome e icona), fazioni nei combattimenti da esplorazione,
+  pannello NPC sulle mappe di esplorazione.
+- `esplorazione.js` / `eventi.js` / `ui-eventi.js`: azioni evento **Reputazione** e **Quest**, scadenza quest col
+  tempo, obiettivi «Raggiungi» e «Completa un evento».
+- `ui-creature.js`: form riusabile (`DnD.sezioni.nemici.form` con `save`), campi Mondo nei form, scheda Party,
+  giocatore nuovo nel party attivo. `ui-mostri.js`: campi Mondo (`worldRefs: false` per le trasformazioni).
 
 ## Da fare
 
-1. **Prove a mano** (le fa l'utente), con l'app servita in locale e Ctrl+F5 dopo l'aggiornamento:
-   - Giocatori › Standard: un giocatore di livello 20 → «✦ Eleva a leggendario» (Ascensione), poi Declassa e
-     di nuovo Eleva: il percorso e le trasformazioni devono tornare.
-   - Percorso › Sblocca: sblocco con conferma, linea che si illumina, punti; Opzioni del master → togli
-     «Permetti di rimodellare» e verifica che Rimodella sia bloccato; poi Rimodella con il permesso.
-   - Percorso › Modifica: Collega, Scollega, Elimina (anche con Canc), Duplica di uno e di più nodi
-     (Maiusc+trascina), Griglia, Raggiera, ricerca, Ctrl+Z / Ctrl+Y; nodo esclusivo e «Servono tutti i
-     prerequisiti»; avviso per un nodo scollegato.
-   - Modelli: Salva come modello, Carica modello su un altro leggendario, elimina modello; Esporta JSON e
-     Importa JSON del percorso.
-   - Effetti dei nodi: un nodo con competenza in Percezione e uno con «Nuova magia 2/giorno» → la scheda
-     mostra bonus, Percezione passiva e «Magie al giorno 2/2»; in combattimento la magia si lancia senza slot
-     (anche con un guerriero), gli usi scendono e restano dopo il combattimento; Riposo lungo li ripristina.
-     Un evento d'esplorazione con prova di Percezione deve usare il bonus del leggendario.
-   - Combattimento: «Trasformati» con un privilegio a pulsanti; fasi del boss in forma; «Torna normale» e il
-     pulsante ↶ (annulla) / ↷; fine a durata (10 round con «Prossimo turno»); forma con PF temporanei.
-   - Grafica: i 5 temi nelle Opzioni del master; tema della forma diverso da quello del personaggio (barra,
-     vignettatura, scheda e pedina cambiano); tema chiaro dell'app; Impostazioni › «Riduci animazioni» (tutto
-     fermo, niente Ascensione) ed «Effetti boss» spenti (niente lampo né barra).
-   - Esporta/Importa: archivio completo e singola sessione con un leggendario; Duplica sessione.
-   - Installata come app (PWA): dopo l'aggiornamento parte la nuova versione (cache `session-forge-v21`).
-2. Nota rimasta: lo sblocco chiede conferma due volte (dialogo + `confirm()` nativo, come il resto dell'app).
-3. **Service worker**: ora `session-forge-v21`; aumentarlo di nuovo dopo le prossime modifiche.
-
-## Test già presenti per questa fase (in `js/test.js`, tutti passano)
-
-- Livelli 20-40: bonus competenza, punti caratteristica, tetto 30, PF oltre il 20, punti percorso per rango.
-- Sblocco: collegamento, punti, rango, nodo esclusivo, prerequisiti multipli, rimodella.
-- Effetti applicati ai calcoli e tolti al rimborso; nuove magie, slot extra, CD; incantesimo eliminato.
-- Privilegio creato dall'utente con usi per riposo, come azione nel combattimento.
-- Grafo: collega, scollega, elimina con collegamenti, irraggiungibili, cicli di esclusività, duplicazione, modelli,
-  cronologia.
-- Trasformazioni: fusione, PF con danno in eccesso, PF temporanei, usi, durata, fine anticipata, fasi del boss,
-  barra in alto, nodo che la sblocca.
-- Promozione e declassamento, esportazione e importazione (archivio e sessione), migrazione v10 → v11.
+1. **Test nuovi in `js/test.js`** (prima di `async function runTests`), piano già pronto:
+   matrice e `relazione`; soglie ed effetti (prezzi, città, accessi, atteggiamento); registro reputazione con
+   annullamento e reputazione per giocatore; monete (`pay` con resto); mercante (acquisto/vendita, oggetti
+   sbloccati da reputazione, rifornimento, contrattazione); NPC neutrale che diventa ostile (solo lui, fazione,
+   città), penalità, annullamento, `calm`; `countsForXp`; IA con alleati/neutrali/ostili e NPC che aiuta il party;
+   cambio fazione a metà combattimento e `areaWarnings`; `nextTurn` con `joinRound`; party (un solo party per
+   giocatore); quest (requisiti, obiettivi e contatori, `onKill` per nome/tipo, `onCollect`, `complete`, scadenza);
+   dialogo con condizioni ed esiti; istanze indipendenti dello stesso NPC; città con fazione propagata; migrazione
+   v11 → v12; export/import di sessione e archivio e duplicazione con il Mondo; riferimenti mancanti;
+   `statoNpcPerGiocatore` e `quest.perGiocatore`; `combatOver`; azioni evento Reputazione/Quest e `questOp`.
+2. Eseguire `test.html` e correggere.
+3. **Prove a mano**: creare fazioni e relazioni; party; città e segnaposto; NPC mercante trascinato sulla griglia
+   (Editor, Combattimento, Esplorazione); dialogo; scambio; attacco a un neutrale (provocazione e annullamento);
+   quest offerta/consegnata; diario; reputazione.
+4. Esempi originali (punto 11 del prompt): una fazione, una città, un mercante con dialogo e una quest d'esempio,
+   aggiunti agli archivi nuovi (e con la migrazione v12).
+5. Piccole pulizie note: in `ui-npc.js` `generalTab` la condizione `n.roles.includes('combattente') || true` è da
+   semplificare; la routine è solo un promemoria (non sposta le pedine).
+6. **README** (sezione Mondo, Party, modello dati v12, migrazione, test, struttura, Alt+0) e **CLAUDE.md**
+   (nuovi moduli). Resoconto finale in italiano.
 
 ## Il prompt originale della fase (testo inserito dall'utente)
 
 ```
-# FASE: Personaggio leggendario (livelli 20-40, Percorso leggendario, Trasformazioni)
+# FASE: NPC, Fazioni, Città e Party
 
-Rileggi i file che toccherai prima di modificarli. Riusa la scheda Giocatore, i calcoli di classe, PF, CA, incantesimi e tiri salvezza, la scheda Creatura/Boss (azioni, fasi, tema, barra vita), il combattimento e la UI artistica del Boss (css/boss.css, js/ui-boss.js). Dove questo blocco contraddice i precedenti (limite livello 20, limite caratteristiche a 20), vale questo solo per i leggendari.
+Rileggi i file che toccherai prima di modificarli. Riusa schede Standard/Creature/Boss, Attrezzatura, combattimento, comportamento automatico dei nemici, Esplorazione ed eventi, note, log, dadi e suoni. Dove questo blocco contraddice i precedenti (le tre fazioni fisse), vale questo.
 
 ## 1. Dove vive
-- In **Giocatori** due schede in alto: **Standard** e **Leggendari**. Un giocatore standard si può promuovere con "Eleva a leggendario" (richiede livello 20; resta modificabile e si può declassare con conferma, conservando i dati del percorso).
-- Un leggendario eredita tutto dal giocatore standard (razza, classe, caratteristiche, punti, PF, CA, tiri salvezza, armi, inventario, incantesimi, controllo manuale/IA) e aggiunge due sotto-sezioni: **Percorso leggendario** e **Trasformazioni**.
-- Condivisione tra sessioni, duplicazione ed Esporta/Importa come gli altri giocatori.
+- Nuova voce di menù **Mondo** subito dopo Esplorazione, con le schede **Fazioni, Città, NPC**. Scorciatoia Alt+0. Aggiorna menù, test sull'ordine delle voci e README.
+- In **Giocatori** una nuova scheda **Party**.
+- Fazioni, Città e NPC sono librerie per sessione, con "Condividi con tutte le sessioni" come i nemici. Esporta/Importa, duplicazione di sessione e service worker aggiornati.
 
-## 2. Livelli 20-40
-- Il livello va da 20 (base) a 40. "Rango leggendario" = livello - 20 (0-20).
-- Bonus competenza = 1 + arrotondamento per eccesso di livello/4 (livello 20 = +6, 21-24 = +7, 25-28 = +8, 29-32 = +9, 33-36 = +10, 37-40 = +11). Sovrascrivibile a mano.
-- Punti caratteristica: 2 ogni livello multiplo di 4, come prima, fino al 40 (totale 20). Tetto delle caratteristiche dei leggendari = 30 (campo modificabile, con "ignora limite").
-- PF: dado vita della classe per ogni livello oltre il 20, con le stesse regole di calcolo (media o tiro, mod. COS, minimo 1 per livello).
-- Slot incantesimo: tabella del livello 20 per tutti i livelli leggendari, più slot extra concessi dai nodi del percorso e sovrascrittura manuale. Nessuna progressione di classe inventata: i nuovi privilegi li crea l'utente (sezione 3).
-- Punti Percorso: 1 per ogni rango leggendario (massimo 20), più bonus assegnabili a mano dal master.
+## 2. Fazioni (meccanica reale)
+- Una fazione ha: nome, colore, icona (libreria o immagine), descrizione, note del master.
+- **Relazioni tra fazioni**: per ogni coppia un livello tra Alleata, Amichevole, Neutrale, Ostile, In guerra (matrice modificabile, simmetrica o no a scelta). Vista a matrice o a elenco.
+- **Reputazione** del party (e di ogni giocatore, opzionale) verso ogni fazione: valore da -100 a +100 con soglie modificabili (Nemico giurato, Ostile, Diffidente, Neutrale, Amichevole, Alleato, Eroe). La reputazione cambia da azioni di eventi, quest, combattimenti e a mano.
+- **Effetti automatici**: prezzi dei mercanti, atteggiamento iniziale degli NPC, accesso a quest e città (alcune bloccate se ostili), bersagli dell'IA.
+- Fazioni predefinite non eliminabili: Giocatori, Nemici, Neutrali. I dati esistenti vi migrano senza perdite.
+- Assegnazione della fazione a **giocatore, party, nemico (Standard, Creatura, Boss), NPC e città**. Ogni combattente ha una fazione propria, che per default eredita dal party, dalla città o dal modello.
+- Nel combattimento la relazione decide chi è alleato, neutrale o ostile. Il comportamento automatico attacca solo chi è Ostile o In guerra, supporta Alleati e Amichevoli, ignora i Neutrali. Colore del contorno della pedina e icona della fazione visibili (tooltip).
+- **Cambio di fazione in gioco**: un combattente può cambiare fazione (anche a metà combattimento), con voce nel log e annullabile.
 
-## 3. Percorso leggendario (mappa a nodi)
+## 3. Party
+- Un party ha nome, colore, icona, fazione, giocatori scelti dall'elenco (anche leggendari), ordine di marcia, inventario e monete condivisi (opzionale), reputazione comune, note.
+- Più party per sessione, uno attivo. Nel Combattimento e nell'Esplorazione "Aggiungi party" inserisce tutti i membri. In Esplorazione il party è la pedina del gruppo. Si può dividere e riunire.
+- Un giocatore appartiene a un solo party alla volta (si cambia con conferma).
 
-### 3.1 Concetto
-Il percorso è una **mappa di nodi collegati** (stile albero di abilità a grafo). Un **nodo centrale** (il "Nucleo", sempre sbloccato) si connette ad altri nodi, che si connettono ad altri ancora. Un nodo si può sbloccare solo se è collegato ad almeno un nodo già sbloccato (o, con opzione, a tutti i prerequisiti elencati) e se ho punti sufficienti.
+## 4. Città
+- Una città ha: nome, descrizione, fazione dominante e fazioni presenti, dimensione, bioma, **mappa collegata** (griglia di battaglia o esplorazione, opzionale), posizione sulla mappa di esplorazione (segnaposto), ambiente e regole (armi vietate, coprifuoco, tasse: testo e promemoria).
+- **Atteggiamento della città** verso il party dalla reputazione con la fazione dominante (ostile = porte chiuse, prezzi alti o guardie nemiche).
+- Contenuti: elenco di NPC, mercanti, quest disponibili ed eventi collegati (ingresso, incontri tipici).
+- "Crea città" con modulo rapido: nome, fazione, dimensione, bioma. Assegnare la fazione di una città la propaga come predefinita a NPC e nemici creati lì (modificabile).
+- Una città si piazza sulla mappa come evento "Entra in una mappa", con ritorno.
 
-### 3.2 Il nodo
-Campi: nome, icona (libreria o immagine, palette colori), descrizione, **costo in punti** (1-5), rango leggendario minimo richiesto, categoria con colore, **effetti** (uno o più), eventuale "esclusivo con" un altro nodo (scelta tra due rami).
-Tipi di effetto, con valori modificabili:
-- **Bonus caratteristica** (+N a una caratteristica, tetto 30).
-- **Competenza** in tiro salvezza, abilità (con maestria) o strumento/arma/armatura.
-- **Bonus numerici**: PF massimi, CA, velocità, iniziativa, bonus attacco e danno, CD e bonus attacco incantesimi, bonus competenza, resistenze, immunità, sensi (scurovisione, vista cieca...).
-- **Nuove magie**: incantesimi dalla libreria Magie, anche fuori dalla lista di classe, e/o slot extra (livello e numero), con frequenza (sempre preparato, N/giorno).
-- **Privilegio di classe creato dall'utente**: nome, descrizione, tipo (passivo, azione, azione bonus, reazione), usi (a volontà, N per riposo breve/lungo) e un editor meccanico come per le azioni delle creature (attacco, tiro salvezza, cura, testo, danno aggiuntivo).
-- **Sblocca trasformazione** (collega a una trasformazione della sezione 4).
-- **Solo testo** (per effetti narrativi).
-Gli effetti numerici e le competenze vengono applicati **in automatico** ai calcoli della scheda (con il dettaglio "da: nome del nodo" nel riepilogo), quelli solo testuali compaiono nell'elenco dei privilegi.
+## 5. NPC
+Un NPC è una scheda che **riusa** Standard o Creatura (statistiche, PF, CA, armi, incantesimi) e aggiunge: ruolo, fazione, città, atteggiamento, dialogo, icona, dimensione, note. Si crea da zero o con "Promuovi da nemico/creatura". Non conta nei calcoli di difficoltà e nei PE finché non diventa ostile.
+- **Atteggiamento**: Amichevole, Indifferente, Ostile, con valore base e modificatore dalla reputazione. Cambia con le azioni.
+- **Ruoli** (combinabili):
+  - **Mercante**: inventario in vendita (oggetti dell'Attrezzatura con quantità, prezzo base e rifornimento giornaliero opzionale), monete disponibili per comprare dal party, margine di vendita e acquisto, sconto o rincaro in base a reputazione e atteggiamento, oggetti sbloccati solo da reputazione minima. Finestra di scambio con carrello, totale in monete (mr, ma, me, mo, mp con conversione) e trasferimento all'inventario del giocatore scelto. Prova di Persuasione per contrattare (CD e effetto sul prezzo). Tutto nel log.
+  - **Datore di quest**: elenco di quest (sezione 6), con dialogo di offerta, accettazione e consegna.
+  - **Combattente neutrale**: ha scheda da combattimento ma non attacca. Opzioni: **difende se stesso**, **difende alleati/fazione**, **aiuta il party** se amichevole. Se viene attaccato (o un suo alleato di fazione, o un suo amico) **diventa ostile**: la sua fazione cambia o la relazione scende, secondo la regola scelta (solo lui, tutta la fazione, a cerchi di città). Penalità di reputazione e voce nel log, annullabile dal master. Se più tardi viene calmato (prova o evento) torna neutrale.
+  - **Informatore / Altro**: solo dialogo, informazioni e indizi.
+- **Dialogo**: alberi semplici a scelte (nodo di testo, risposte, condizioni di reputazione/oggetto/variabile, esiti: prova, reputazione, apri quest, apri negozio, avvia combattimento, cambia atteggiamento). Editor a elenco di blocchi come gli eventi.
+- **Routine opzionale**: posizione per ora del giorno sulla mappa o in città.
+- **Sulla griglia** una pedina con icona e nome. Doppio clic apre il pannello NPC (Parla, Commercia, Quest, Attacca, Scheda, Fazione). Gli NPC con ruolo nascosto mostrano solo il nome.
+- NPC modello e NPC istanza come per eventi e oggetti: ogni copia ha stato proprio (PF, inventario del mercante, atteggiamento, quest consegnate).
 
-### 3.3 Editor della mappa
-- Canvas con zoom e pan (stesso componente del resto dell'app dove possibile), nodi trascinabili liberamente, collegamenti disegnati come linee curve o rette tra nodi.
-- Strumenti: aggiungi nodo, collega (trascino da un nodo all'altro), scollega, elimina, duplica, sposta, seleziona più nodi, allinea alla griglia opzionale, "Disposizione automatica a raggiera" attorno al Nucleo.
-- Pannello laterale per modificare il nodo selezionato. Ricerca nodi. Validazione: avviso per nodi irraggiungibili dal Nucleo e per cicli di esclusività.
-- **Modelli di percorso**: salva un percorso come modello riusabile (libreria globale) e importalo su un altro leggendario. Esporta/importa JSON di un singolo percorso. Un percorso di esempio **originale** con circa 12 nodi.
-- Annulla/Ripeti (50 azioni) per l'editor.
+## 6. Quest
+- Quest: titolo, descrizione, datore (NPC o fazione), fazione, requisiti (reputazione, livello, oggetto, evento), **obiettivi** (parlare con, uccidere N creature di un tipo, raccogliere oggetti, raggiungere un luogo, completare un evento) con contatori, tempo limite opzionale, ricompense (PE, monete, oggetti, reputazione, sblocco di negozi o quest).
+- Stati: Disponibile, Attiva, Completata, Fallita, Scaduta. Diario di quest per il party, con ricerca e filtro per fazione.
+- Collegamento con Eventi: eventi possono avviare, avanzare o chiudere quest, e le quest possono attivare eventi. Variabili di sessione condivise.
+- Collegamento con il combattimento: le uccisioni di creature aggiornano gli obiettivi, e la fine del combattimento calcola i PE. Alla consegna si distribuiscono ricompense e reputazione con conferma del master.
+- Le quest non compaiono ai giocatori se non sono state offerte e accettate.
 
-### 3.4 Uso in gioco
-- Modalità **Sblocca**: i nodi raggiungibili e acquistabili pulsano, quelli bloccati sono spenti, quelli acquisiti illuminati con le linee attive. Punti disponibili/spesi visibili. Clic su un nodo = dettagli + "Sblocca" con conferma.
-- **Rimodella** (ripristina i punti) con conferma, o bloccato dopo l'acquisto, scelta del master in impostazioni.
-- Dopo lo sblocco, gli effetti entrano in tutti i calcoli (scheda, combattimento, incantesimi).
+## 7. Reputazione e conseguenze
+- Eventi di reputazione: completare o fallire quest, uccidere o salvare un NPC di una fazione, attaccare un NPC neutrale, doni e furti (registro con motivazione e possibilità di correggere a mano).
+- Soglie con effetti configurabili: sotto -50 la città diventa ostile, sopra +50 sconto del 10%. Valori e tabelle in un file dati.
+- Pannello "Reputazione" del party con barre per fazione e storico delle variazioni.
 
-## 4. Trasformazioni (forma leggendaria)
+## 8. Comportamento automatico e combattimento
+- `relazione(a, b)` come unica fonte di verità (funzione pura) usata da IA, bersagli, effetti ad area (gli incantesimi ad area avvisano se colpiscono neutrali o alleati) e vittoria/sconfitta.
+- NPC neutrali nel combattimento: restano fuori dall'ordine di iniziativa finché non diventano ostili, poi tirano l'iniziativa e entrano al round successivo. Opzione per includerli subito.
+- Condizione di fine combattimento: tutte le fazioni ostili al party sconfitte o in fuga, indipendentemente dal tipo.
+- Effetti di fazione su creature e boss: un boss può avere una fazione e un seguito.
 
-### 4.1 Cos'è
-Una trasformazione porta il **giocatore** in una forma da creatura **Boss** (forma angelica, demoniaca, draconica, elementale, ecc.). Il personaggio resta del giocatore (controllo manuale), ma in forma usa la scheda di una creatura boss. Sezione "Trasformazioni" del leggendario con elenco di forme (aggiungi, duplica, elimina, ordina).
+## 9. Online (compatibilità futura)
+Il giocatore non riceve mai: reputazioni nascoste, ruoli nascosti, atteggiamenti segreti, contenuto dei negozi non scoperti, quest non offerte, note dell'NPC. Vede il nome, l'icona e lo stato che il master rivela. Interfaccia `statoNpcPerGiocatore()` separata dai dati.
 
-### 4.2 Campi di una trasformazione
-- Nome, epiteto, **scheda creatura boss** completa (stesso editor di Creature/Boss: taglia, caratteristiche, CA, PF, velocità, difese, sensi, azioni, multiattacco, azioni leggendarie, tratti, fasi, tema visivo) con "Parti da una creatura esistente".
-- **Regole di fusione** (scelta per ogni trasformazione): caratteristiche fisiche (FOR, DES, COS) dalla forma e INT, SAG, CAR dal personaggio; mantiene o perde competenze, incantesimi, equipaggiamento e privilegi di classe.
-- **PF**: sostituiscono i PF del personaggio (al ritorno, il danno in eccesso passa al personaggio, come nella trasformazione standard) oppure PF temporanei della forma, a scelta.
-- **Costo e durata**: usi per riposo breve/lungo, durata in round o minuti, azione o azione bonus per attivare, può terminare in anticipo. Requisiti: rango leggendario e/o nodo del percorso che la sblocca.
-- Dimensione sulla griglia e icona proprie (con la palette colori), alone sulla pedina.
-- **Entrata e uscita**: testo e animazione di trasformazione.
+## 10. Dati e compatibilità
+- Nuovi dati: fazioni con matrice, reputazione, party, città, NPC con ruoli e stato, dialoghi, quest con stato, diario, cronologia reputazione.
+- Migrazione: i combattenti esistenti ricevono la fazione Giocatori, Nemici o Neutrali secondo il campo precedente. Giocatori esistenti nel party "Gruppo" predefinito. Nulla viene perso.
+- Riferimenti mancanti (oggetto, creatura, mappa eliminati): avviso e voce disattivata, senza errori.
+- Suoni opzionali (se la fase audio esiste): reputazione che cambia, quest accettata o completata, NPC che diventa ostile.
 
-### 4.3 In combattimento
-- Pulsante **Trasformati** (e "Torna normale") nella scheda del combattente, visibile solo se disponibile. Gli usi si scalano e finiscono nel log.
-- In forma: la scheda mostra la creatura boss (azioni come pulsanti, multiattacco, ricarica, azioni leggendarie con punti per turno, fasi che scattano sotto le soglie di PF), con barra della vita **boss in alto** (nome del giocatore + forma), vignettatura e effetti di fase come per i boss. Il controllo resta Manuale (o IA se scelto).
-- Concentrazione e incantesimi seguono la regola di fusione. Fine automatica a fine durata o a 0 PF della forma, con riepilogo nel log. Annulla/Ripeti copre attivazione e ritorno.
-- Interruttore "Effetti boss" nelle impostazioni già previsto vale anche qui.
+## 11. Test (a test.html)
+Matrice delle relazioni e funzione `relazione`; effetti della reputazione su prezzi e accesso; soglie; acquisto e vendita con conversione monete, rifornimento, oggetti sbloccati da reputazione, contrattazione; NPC neutrale che diventa ostile (solo lui, intera fazione, cerchi), penalità e annullamento, ritorno a neutrale; NPC non conteggiato nella difficoltà finché è neutrale; bersagli dell'IA con alleati, neutrali, ostili; cambio di fazione a metà combattimento; party con più membri e un solo party per giocatore; quest con obiettivi e contatori, uccisioni da combattimento, ricompense, scadenza; dialogo con condizioni; istanze indipendenti dello stesso NPC modello; città con fazione propagata; migrazione; esportazione e importazione; riferimenti mancanti; filtro dei dati per il giocatore.
 
-## 5. Grafica: più epica e divina del Boss
-Il leggendario usa lo stesso sistema a temi del Boss, con temi nuovi pensati per il divino. Stesse regole: sempre scuro, CSS/SVG inline, niente immagini esterne, riuso dei componenti.
-- Tema base **Divino**: fondo quasi nero con **vignettatura dorata e bianca**, raggi di luce che scendono dall'alto, polvere luminosa lenta, alone dorato attorno ai pannelli, bordi con cornice ornata (angoli e filigrana), **ali** e **aureola** stilizzate in SVG, spade e lance di luce al posto delle spade conficcate, simboli e rune in sottofondo. Altri temi: Angelico (bianco e azzurro), Abissale (viola e nero), Draconico (oro e rosso), Cosmico (indaco con stelle). Il tema della trasformazione può sostituire quello del personaggio quando è attiva.
-- Titolo del personaggio in maiuscolo spaziato con effetto di luce, grande pulsante **"Ascendi"** con bagliore. Divisori a tratto sottile con motivo sacro/tecnico.
-- **Percorso leggendario**: sfondo cosmico con stelle lontane, nodi come gemme o sigilli luminosi, linee attive con scorrimento di luce, il Nucleo come sole/aureola. Sblocco con un'animazione di luce che corre lungo la linea e un impulso sul nodo.
-- **Animazioni**: al salvataggio di un nuovo leggendario ("Ascensione": colonna di luce, tremolio leggero, comparsa del nome), allo sblocco di un nodo, all'attivazione della trasformazione (lampo e comparsa di ali/aura sulla pedina). Saltabili con un clic.
-- Pedina sulla griglia: alone dorato e aureola o simbolo del tema. Nel combattimento, la scheda del leggendario ha una cornice più ricca di quella degli altri giocatori, ma senza coprire pulsanti e testi.
-- Contrasto sempre buono, nessun colore scritto nei componenti (variabili CSS dedicate), rispetto di "Riduci animazioni" (statico e leggibile).
-- File dedicati (es. `css/leggendario.css`, `js/ui-leggendario.js`, `js/percorso.js` per il grafo).
-
-## 6. Dati e compatibilità
-- Giocatore con campo tipo = "leggendario", livello 20-40, punti percorso, nodi e collegamenti con posizioni, nodi sbloccati, trasformazioni, stato attivo della trasformazione (con PF della forma), usi residui. Giocatori esistenti = tipo "standard", invariati.
-- Esporta/Importa (archivio e singola sessione), modelli di percorso come libreria globale, duplicazione di sessione, service worker e README aggiornati.
-- Riferimenti mancanti (incantesimo o creatura eliminati): avviso e nodo/trasformazione disattivati senza errori.
-
-## 7. Test (a test.html)
-Bonus competenza e punti caratteristica ai livelli 20-40; tetto 30; PF oltre il 20; punti percorso per rango; sblocco di un nodo solo se collegato e con punti sufficienti; nodo esclusivo; prerequisiti multipli; effetti numerici e competenze applicati ai calcoli e rimossi al rimborso; nuovi incantesimi e slot extra; privilegio personalizzato con usi per riposo; modifica del grafo (collega, scollega, elimina nodo con collegamenti), nodi irraggiungibili; modelli di percorso; trasformazione con regole di fusione (caratteristiche, PF che passano al personaggio con danno in eccesso), usi e durata, fine anticipata; fasi del boss in forma trasformata; barra in alto; promozione e declassamento; migrazione; esportazione e importazione; effetti disattivati con "Riduci animazioni".
-
-## 8. Ordine di lavoro
-1. Scheda Leggendari, livelli 20-40 e calcoli estesi con test. 2. Modello dati del percorso e funzioni pure (sblocco, effetti, rimborso). 3. Editor della mappa a nodi. 4. Effetti dei nodi collegati alla scheda. 5. Modalità Sblocca in gioco. 6. Modello e editor delle Trasformazioni (riuso scheda boss). 7. Trasformazione in combattimento. 8. Grafica divina, temi e animazioni. 9. Modelli di percorso, esempi, esporta/importa e test. Dopo ogni punto verifica che l'app parta e che i test passino, poi fai un resoconto in italiano.
+## 12. Ordine di lavoro
+1. Voce Mondo, modello dati delle fazioni, matrice e `relazione` con test e migrazione. 2. Reputazione e soglie. 3. Assegnazione della fazione a giocatori, nemici, creature e boss, e integrazione con IA e combattimento. 4. Scheda Party e uso nel Combattimento e nell'Esplorazione. 5. Città. 6. NPC base con pedina e pannello. 7. Mercanti e finestra di scambio. 8. Combattenti neutrali e conversione in ostili. 9. Dialoghi. 10. Quest e diario, collegamenti con eventi e combattimento. 11. Filtro per giocatore, suoni, esempi originali e test. Dopo ogni punto verifica che l'app parta e che i test passino, poi fai un resoconto in italiano.
 ```

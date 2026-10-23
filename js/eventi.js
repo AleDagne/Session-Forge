@@ -17,12 +17,15 @@
   const COND_KINDS = ['bioma', 'ora', 'meteo', 'oggetto', 'variabile'];
   const COND_NAMES = { bioma: 'Bioma', ora: 'Ora del giorno', meteo: 'Meteo', oggetto: 'Possesso di un oggetto', variabile: 'Variabile' };
   const OPS = ['=', '!=', '>', '>=', '<', '<='];
-  const ACTIONS = ['testo', 'prova', 'combattimento', 'mappa', 'danno', 'ricompensa', 'teletrasporto', 'ambiente', 'variabile', 'tabella', 'riposo', 'attiva', 'nota'];
+  const ACTIONS = ['testo', 'prova', 'combattimento', 'mappa', 'danno', 'ricompensa', 'teletrasporto', 'ambiente', 'variabile', 'tabella', 'riposo', 'attiva', 'nota', 'reputazione', 'quest'];
   const ACTION_NAMES = {
     testo: 'Testo / lettura ai giocatori', prova: 'Prova o tiro salvezza', combattimento: 'Combattimento', mappa: 'Entra in una mappa',
     danno: 'Trappola / danno / cura', ricompensa: 'Ricompensa', teletrasporto: 'Teletrasporto', ambiente: 'Cambia ambiente',
     variabile: 'Variabile', tabella: 'Tabella casuale', riposo: 'Riposo', attiva: 'Attiva altro evento', nota: 'Nota',
+    reputazione: 'Reputazione con una fazione', quest: 'Quest (avvia, avanza, completa, fallisci)',
   };
+  const QUEST_OPS = ['avvia', 'avanza', 'completa', 'fallisci'];
+  const QUEST_OP_NAMES = { avvia: 'Avvia (accetta)', avanza: 'Avanza un obiettivo', completa: 'Completa', fallisci: 'Fallisci' };
   const WHO = ['gruppo', 'scelto', 'migliore', 'turno'];
   const WHO_NAMES = { gruppo: 'Tutto il gruppo', scelto: 'Un personaggio scelto', migliore: 'Il migliore', turno: 'A turno' };
   const COINS = ['mr', 'ma', 'me', 'mo', 'mp'];
@@ -84,6 +87,8 @@
       case 'riposo': Object.assign(out, { long: Boolean(a.long) }); break;
       case 'attiva': Object.assign(out, { eventId: str(a.eventId, 64) }); break;
       case 'nota': Object.assign(out, { text: str(a.text, 2000), toNotes: Boolean(a.toNotes) }); break;
+      case 'reputazione': Object.assign(out, { factionId: str(a.factionId, 64), delta: int(a.delta, 5, -200, 200), reason: str(a.reason, 200) }); break;
+      case 'quest': Object.assign(out, { questId: str(a.questId, 64), op: pick(a.op, QUEST_OPS, 'avvia'), objectiveId: str(a.objectiveId, 64), n: int(a.n, 1, 1, 999) }); break;
       default: break;
     }
     return out;
@@ -405,6 +410,18 @@
         ctx.log(msg, msg.startsWith('⚠') ? 'avviso' : 'mappa');
         return null;
       }
+      case 'reputazione': {
+        if (!ctx.reputation) { ctx.log('⚠ Reputazione: non disponibile qui.', 'avviso'); return null; }
+        const e = ctx.reputation(a.factionId, a.delta, a.reason || 'evento');
+        const f = (ctx.st.factions || []).find((x) => x.id === a.factionId);
+        ctx.log(f ? '⚑ Reputazione con «' + f.name + '»: ' + (e ? (e.delta > 0 ? '+' : '') + e.delta + ' (' + e.after + ')' : 'invariata') + '.' : '⚠ Reputazione: fazione eliminata.', 'reputazione');
+        return null;
+      }
+      case 'quest': {
+        if (!ctx.quest) { ctx.log('⚠ Quest: non disponibile qui.', 'avviso'); return null; }
+        for (const l of ctx.quest(a.op, a.questId, a.objectiveId, a.n)) ctx.log(l, 'quest');
+        return null;
+      }
       case 'combattimento': {
         const missing = a.foes.filter((f) => !ctx.st.npcs.some((n) => n.id === f.npcId));
         if (missing.length) ctx.log('⚠ Combattimento: ' + missing.length + ' creature non più presenti (saltate).', 'avviso');
@@ -435,6 +452,8 @@
         if (a.kind === 'mappa' && a.gridId && !grids.has(a.gridId)) out.push('mappa collegata eliminata');
         if (a.kind === 'ricompensa' || (a.kind === 'testo' && a.reward)) for (const it of (a.reward || a).items || []) if (!st.equipment.some((e) => e.id === it.equipmentId)) out.push('oggetto eliminato dall\'Attrezzatura');
         if (a.kind === 'ambiente' && a.biomeId && !(st.biomes || []).some((b) => b.id === a.biomeId)) out.push('bioma eliminato');
+        if (a.kind === 'reputazione' && a.factionId && st.factions && !st.factions.some((f) => f.id === a.factionId)) out.push('fazione eliminata');
+        if (a.kind === 'quest' && a.questId && st.quests && !st.quests.some((q) => q.id === a.questId)) out.push('quest eliminata');
         if (a.kind === 'prova') { visit(a.success); visit(a.failure); }
         if (a.kind === 'tabella') for (const r of a.rows) visit(r.actions);
       }
@@ -514,7 +533,7 @@
   }
 
   DnD.eventi = {
-    TRIGGERS, TRIGGER_NAMES, VISIBILITY, VISIBILITY_NAMES, REPEATS, REPEAT_NAMES, COND_KINDS, COND_NAMES, OPS, ACTIONS, ACTION_NAMES, WHO, WHO_NAMES, COINS,
+    TRIGGERS, TRIGGER_NAMES, VISIBILITY, VISIBILITY_NAMES, REPEATS, REPEAT_NAMES, COND_KINDS, COND_NAMES, OPS, ACTIONS, ACTION_NAMES, WHO, WHO_NAMES, COINS, QUEST_OPS, QUEST_OP_NAMES,
     normalizeEvent, normalizeAction, normalizeCondition, normalizeReward, normalizeInstance, instantiate, updateFromTemplate,
     inCells, isVisible, memberBonus, resolveCheck, compare, conditionsMet, canFire, movementTriggers, timeTriggers, tryDiscover,
     interpolate, run, markFired, missingRefs, refs, examples,

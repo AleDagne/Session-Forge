@@ -341,6 +341,12 @@
       commit((d) => d.grid.items.push(placed));
       return placed;
     }
+    // Copia di un NPC del Mondo: stato proprio (PF, merce, atteggiamento), ingombro dalla scheda.
+    function placeNpc(npc, p) {
+      const placed = DnD.dati.normalizePlacedItem(Object.assign(DnD.npc.placedItem(npc, DnD.dadi.uid(), p.x, p.y), p), dims());
+      commit((d) => d.grid.items.push(placed));
+      return placed;
+    }
     // Oggetto dell'Attrezzatura posato "a terra": un oggetto di mappa che lo contiene.
     function placeGround(eq, p) {
       const placed = DnD.dati.normalizePlacedItem(Object.assign(DnD.oggettiMappa.groundItem(eq, DnD.dadi.uid()), G.squareShape(1), p), dims());
@@ -544,6 +550,30 @@
       if (down) { ctx.globalAlpha = 0.45; ctx.filter = 'grayscale(1)'; }
       DnD.icone.drawIconRect(ctx, t.icon, px + pad, py + pad, dw - 2 * pad, dh - 2 * pad, requestDraw);
       ctx.restore();
+      // Fazione: contorno sottile del colore della fazione e pallino in alto a sinistra (tratteggiato se l'NPC è
+      // in attesa di entrare nell'iniziativa; rosso se è ostile per una provocazione).
+      const fac = factionOf(t.faction);
+      if (fac && !down) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, dw / 2 - pad * 0.45, dh / 2 - pad * 0.45, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = (t.hostileTo && t.hostileTo.length) ? '#d4453a' : fac.color;
+        ctx.lineWidth = Math.max(1.5, s * 0.05);
+        if (t.joinRound) ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        if (s >= 18) {
+          const r = Math.max(3, s * 0.09);
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.arc(px + pad + r * 0.6, py + pad + r * 1.6, r, 0, Math.PI * 2);
+          ctx.fillStyle = fac.color;
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = colors().board;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       // Sopra la pedina: corona del boss (il leggendario, anche in forma, ha l'aureola sotto la barra della vita).
       if (t.boss && !t.legend && DnD.uiBoss) DnD.uiBoss.drawCrown(ctx, t, cx, py + pad, Math.min(dw, dh), s);
       if (o.current) {
@@ -607,6 +637,53 @@
         ctx.strokeText(t.name, cx, ty, dw + s);
         ctx.fillStyle = down ? colors().label : colors().text;
         ctx.fillText(t.name, cx, ty, dw + s);
+      }
+    }
+
+    // Fazioni della sessione per colore e nome (contorno delle pedine e degli NPC).
+    let factionCache = null;
+    function factionOf(id) {
+      if (!id) return null;
+      const st = DnD.store && DnD.store.state;
+      if (!st || !st.factions) return null;
+      if (!factionCache || factionCache.list !== st.factions) factionCache = { list: st.factions, map: new Map(st.factions.map((f) => [f.id, f])) };
+      return factionCache.map.get(id) || null;
+    }
+
+    // Copia di un NPC del Mondo: icona nel suo ingombro, anello della fazione, nome sotto e stato (ostile, morto).
+    function drawNpcItem(ctx, it, s) {
+      const px = view.panX + it.x * s;
+      const py = view.panY + it.y * s;
+      const dw = it.w * s;
+      const dh = it.h * s;
+      const pad = Math.min(dw, dh) * 0.12;
+      const info = DnD.uiNpc ? DnD.uiNpc.itemInfo(it) : { faction: null, missing: false };
+      ctx.save();
+      if (it.npcState && it.npcState.dead) { ctx.globalAlpha *= 0.45; ctx.filter = 'grayscale(1)'; }
+      if (info.missing) DnD.icone.drawIcon(ctx, { kind: 'shape', shape: 'cerchio', color: colors().missing }, px + dw / 2, py + dh / 2, Math.min(dw, dh) * 0.3);
+      else DnD.icone.drawIconRect(ctx, it.icon, px + pad, py + pad, dw - 2 * pad, dh - 2 * pad, requestDraw);
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(px + dw / 2, py + dh / 2, dw / 2 - pad * 0.45, dh / 2 - pad * 0.45, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = it.npcState && it.npcState.hostile ? '#d4453a' : info.faction ? info.faction.color : colors().missing;
+      ctx.lineWidth = Math.max(1.5, s * 0.05);
+      ctx.setLineDash([Math.max(2, s * 0.12), Math.max(2, s * 0.08)]);
+      ctx.stroke();
+      ctx.restore();
+      if (s >= 22) {
+        const fs = Math.max(9, Math.min(13, s * 0.3));
+        ctx.save();
+        ctx.font = 'italic 600 ' + fs + 'px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = colors().board;
+        const label = (info.roleIcon ? info.roleIcon + ' ' : '') + it.name + (it.npcState && it.npcState.hostile ? ' ⚔' : '');
+        ctx.strokeText(label, px + dw / 2, py + dh - pad + 1, dw + s);
+        ctx.fillStyle = colors().text;
+        ctx.fillText(label, px + dw / 2, py + dh - pad + 1, dw + s);
+        ctx.restore();
       }
     }
 
@@ -777,6 +854,7 @@
         }
       }
       for (const it of d.grid.items) {
+        if (it.otype === 'npc') { drawNpcItem(ctx, it, s); continue; }
         ctx.save();
         if (it.hidden) ctx.globalAlpha = 0.5;
         if (it.tiles) {
@@ -1188,6 +1266,15 @@
             onClick: canInsert('item') ? () => chooseTemplate('item', tpl.id) : null,
             chooseHint: canInsert('item'),
           }, chosen('item', tpl.id))), 'Crea oggetti di mappa in Asset › Oggetti.'),
+        st.worldNpcs ? group('NPC del Mondo', DnD.sessioni.visible(st, 'worldNpcs').map((n) => {
+          const dm = DnD.griglia.gridSizeFor(n.stats.gridSize, n.stats.size || null);
+          const shape = { w: dm.w, h: dm.h, cells: '1'.repeat(dm.w * dm.h) };
+          return paletteEntry(DnD.icone.iconCanvas(n.stats.icon, 22), n.name, {
+            footprint: shape,
+            isValid: (x, y) => G.canPlaceItem(board(), shape, false, x, y),
+            place: (p) => select({ kind: 'item', id: placeNpc(n, p).id }),
+          });
+        }), 'Crea NPC in Mondo › NPC.', false) : null,
         group('Attrezzatura (a terra)', st.equipment.map((eq) => paletteEntry(
           DnD.icone.iconCanvas(eq.icon, 22), eq.name,
           {

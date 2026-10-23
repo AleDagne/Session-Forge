@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 11;
+  const VERSION = 12;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -143,6 +143,8 @@
       version: VERSION, races: defaultRaces(), npcs: defaultCreatures(session.id), players: [], structures: defaultStructures(),
       equipment: DnD.attrezzatura.defaults(), mapObjects: defaultMapObjects(), tilesets: [], spells: defaultSpells(), savedGrids: [],
       biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()],
+      // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
+      factions: DnD.fazioni.builtinFactions(session.id), parties: [DnD.party.defaultParty(session.id, [])], cities: [], worldNpcs: [], quests: [],
       sessions: [session], currentSessionId: session.id, diceHistory: [],
     };
   }
@@ -276,7 +278,7 @@
         // Comportamento nel combattimento simulato (IA): temperamento, archetipo, opzioni avanzate.
         behavior: DnD.ia.normalizeBehavior(c.behavior),
         notes: str(c.notes, 5000),
-      }, DnD.creature.normalizeMonster(c), boss, ownership(c));
+      }, DnD.creature.normalizeMonster(c), boss, worldRefs(c), ownership(c));
     }
     const abilities = {};
     for (const ab of AB()) abilities[ab] = int(obj(c.abilities)[ab], 10, 1, 30);
@@ -355,8 +357,15 @@
         out.legendArchive = DnD.leggendario.normalizeLegend(c.legendArchive);
       }
     }
-    Object.assign(out, ownership(c));
+    Object.assign(out, worldRefs(c), ownership(c));
     return out;
+  }
+
+  // Fazione (vuota = predefinita: Nemici, quella della città o del party) e città d'origine.
+  const REF = /^[\w-]{1,64}$/;
+  const refId = (v) => (typeof v === 'string' && REF.test(v) ? v : '');
+  function worldRefs(c) {
+    return { factionId: refId(c.factionId), cityId: refId(c.cityId) };
   }
 
   // Appartenenza a una sessione: sessionId della sessione proprietaria, shared = visibile in tutte.
@@ -552,7 +561,9 @@
     return Object.assign({
       id: id(it.id), sourceId: str(it.sourceId, 64), name: str(it.name, 60) || 'Oggetto', icon: DnD.icone.normalizeIcon(it.icon, true),
       mode: tiles ? 'tiles' : 'icon',
-    }, clampTo(pos(it) || { x: 0, y: 0 }, shape.w, shape.h, d || G().dims(null)), shape, DnD.oggettiMappa.normalizeFields(it), { tiles });
+    }, clampTo(pos(it) || { x: 0, y: 0 }, shape.w, shape.h, d || G().dims(null)), shape, DnD.oggettiMappa.normalizeFields(it), { tiles },
+    // Copia di un NPC del Mondo: modello e stato proprio (PF, merce, atteggiamento, ostilità, quest consegnate).
+    it.otype === 'npc' ? { npcId: refId(it.npcId), npcState: DnD.npc.normalizeState(it.npcState, null) } : {});
   }
 
   function normalizeLabel(l, d) {
@@ -715,7 +726,16 @@
       legend: normalizeCombatLegend(c.legend),
       // Combattimento simulato: chi lo controlla (persona o IA), fazione, comportamento e dati per i punteggi.
       control: DnD.iaDati.CONTROLS.includes(c.control) ? c.control : DnD.ia.defaultControl(c.kind === 'player' ? 'player' : 'npc'),
-      faction: DnD.iaDati.FACTIONS.includes(c.faction) ? c.faction : DnD.ia.defaultFaction(c.kind === 'player' ? 'player' : 'npc'),
+      // Fazione del Mondo (fazioni.js): qualsiasi fazione; le tre predefinite sono quelle di prima.
+      faction: refId(c.faction) || DnD.ia.defaultFaction(c.kind === 'player' ? 'player' : 'npc'),
+      // Ostilità personali (NPC provocati): fazioni o combattenti verso cui è ostile.
+      hostileTo: [...new Set(arr(c.hostileTo).filter((x) => typeof x === 'string' && REF.test(x)))].slice(0, 20),
+      // NPC del Mondo: modello, copia sulla griglia, regole del combattente neutrale e atteggiamento.
+      npc: c.npc && typeof c.npc === 'object' ? normalizeCombatNpc(c.npc) : null,
+      // Entra nell'ordine di iniziativa solo da questo round (NPC diventati ostili), o è fuggito.
+      joinRound: int(c.joinRound, 0, 0, 100000),
+      prevFaction: refId(c.prevFaction),
+      fled: Boolean(c.fled),
       behavior: DnD.ia.normalizeBehavior(c.behavior),
       abilities: Object.fromEntries(AB().map((ab) => [ab, int(obj(c.abilities)[ab], 10, 1, 30)])),
       classId: str(c.classId, 40),
@@ -726,6 +746,17 @@
         full: arr(ps.full).slice(0, 10).map((x) => ({ amount: int(obj(x).amount, 0, 0, 100000), type: str(obj(x).type, 40) })),
         half: Boolean(ps.half), applied: int(ps.applied, 0, 0, 100000), magical: Boolean(ps.magical), text: str(ps.text, 200),
       } : null,
+    };
+  }
+
+  function normalizeCombatNpc(n) {
+    const M = DnD.mondoDati;
+    return {
+      npcId: refId(n.npcId), itemId: refId(n.itemId), cityId: refId(n.cityId),
+      defend: M.DEFENDS.includes(n.defend) ? n.defend : 'se', provoke: M.PROVOKE_RULES.includes(n.provoke) ? n.provoke : 'solo',
+      calmDc: int(n.calmDc, 15, 1, 40), penalty: int(n.penalty, -10, -100, 0),
+      attitude: M.ATTITUDES.includes(n.attitude) ? n.attitude : 'indifferente',
+      roles: arr(n.roles).filter((r) => M.ROLES.includes(r)),
     };
   }
 
@@ -802,6 +833,8 @@
       gridDraft: normalizeGridDraft(se.gridDraft),
       // Esplorazione in corso: gruppo, tempo, meteo, scorte, variabili, pila delle mappe, registro.
       exploration: DnD.esplorazione.normalizeState(se.exploration),
+      // Mondo: party attivo, matrice simmetrica, soglie, reputazioni personali e registro, diario delle quest.
+      world: DnD.fazioni.normalizeWorld(se.world),
     };
   }
 
@@ -906,11 +939,31 @@
     return raw;
   }
 
+  // Versione 12: fazioni, party, città, NPC e quest (per sessione). I combattenti tengono la fazione che avevano
+  // (Giocatori, Nemici o Neutrali, ora fazioni del Mondo); i giocatori di ogni sessione entrano nel party
+  // predefinito «Gruppo». Funziona anche sui file di una singola sessione.
+  function migrateV12(raw) {
+    if (!raw || typeof raw !== 'object' || raw.version >= 12) return raw;
+    raw.addDefaultParties = true;
+    return raw;
+  }
+
+  // Party «Gruppo» per ogni sessione che non ne ha, con i giocatori visibili nella sessione.
+  function addDefaultParties(st) {
+    for (const se of st.sessions) {
+      if (st.parties.some((p) => p.sessionId === se.id || p.shared)) continue;
+      const members = st.players.filter((p) => p.shared || p.sessionId === se.id).map((p) => p.id);
+      const party = DnD.party.defaultParty(se.id, members);
+      st.parties.push(party);
+      se.world.activePartyId = party.id;
+    }
+  }
+
   function normalizeState(raw) {
     // Versioni 6, 7 e 8: immagini "stirate" -> tilemap su tileset, TileSet con sorgenti e livelli generici,
     // poi Attrezzatura, oggetti di mappa e creature (sui dati grezzi, prima di tutto); 9: boss d'esempio;
     // 10: biomi ed eventi.
-    raw = migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))));
+    raw = migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw)))))))));
     const { sessions, currentSessionId } = normalizeSessions(raw);
     // Chi non appartiene a una sessione esistente (es. dati precedenti) va nella prima.
     const ids = new Set(sessions.map((x) => x.id));
@@ -920,7 +973,8 @@
     if (raw.addExampleCreatures) for (const c of defaultCreatures(sessions[0].id)) if (!npcs.some((n) => n.id === c.id)) npcs.push(c);
     if (raw.addExampleBoss) for (const c of defaultCreatures(sessions[0].id)) if (c.type === 'boss' && !npcs.some((n) => n.id === c.id)) npcs.push(c);
     const unique = (list) => list.filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i);
-    return {
+    const factions = DnD.fazioni.ensureBuiltins(unique(arr(raw.factions).map((f) => owned(DnD.fazioni.normalizeFaction(f)))), sessions[0].id);
+    const out = {
       version: VERSION,
       races: arr(raw.races).map(normalizeRace),
       npcs,
@@ -936,6 +990,11 @@
       biomes: unique(arr(raw.biomes).map(DnD.biomi.normalizeBiome)),
       events: unique(arr(raw.events).map(DnD.eventi.normalizeEvent)),
       pathTemplates: unique(arr(raw.pathTemplates).map(DnD.percorso.normalizeTemplate)),
+      factions,
+      parties: unique(arr(raw.parties).map((p) => owned(DnD.party.normalizeParty(p)))),
+      cities: unique(arr(raw.cities).map((c) => owned(DnD.citta.normalizeCity(c)))),
+      worldNpcs: unique(arr(raw.worldNpcs).map((n) => owned(DnD.npc.normalizeNpc(n)))),
+      quests: unique(arr(raw.quests).map((q) => owned(DnD.quest.normalizeQuest(q)))),
       sessions,
       currentSessionId,
       diceHistory: arr(raw.diceHistory).slice(0, DICE_HISTORY_MAX).map((h) => {
@@ -943,6 +1002,8 @@
         return { expr: str(h.expr, 40), rolls: arr(h.rolls).slice(0, 100).map((n) => int(n, 0, 0, 1000)), total: int(h.total, 0, -100000, 100000) };
       }),
     };
+    if (raw.addDefaultParties) addDefaultParties(out);
+    return out;
   }
 
   // --- Import / export ---
@@ -1145,7 +1206,7 @@
     VERSION, emptyState, defaultRaces, defaultStructures, defaultSpells, defaultMapObjects, defaultCreatures, makeBonuses,
     normalizeState, normalizeRace, normalizeCreature, normalizeWeapon, normalizeGridSize, normalizeStructure, normalizeEquipment, normalizeMapObject, normalizeSpell,
     normalizePlacedStructure, normalizePlacedItem, normalizeLabel, normalizeZone, normalizeBackground, normalizeGridContent, normalizeSavedGrid, normalizeGridDraft,
-    migrateV8, migrateV9, migrateV10, migrateV11, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
+    migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, addDefaultParties, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
     normalizeSession, DEFAULT_SESSION_NAME, normalizeTileset, normalizeSource, normalizeTileProps, normalizeTiles,
     exportJSON, importJSON, parseSaved, openStore, saveErrorMessage, pushDiceHistory, pushLog,
   };

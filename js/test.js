@@ -647,10 +647,10 @@
   };
 
   test('ordine e gruppi delle voci di menù', () => {
-    eq(DnD.config.MENU.map((m) => m.label), ['Editor griglie', 'Combattimento', 'Esplorazione', 'Nemici', 'Giocatori', 'Magie', 'Asset', 'Razze', 'Dadi']);
-    eq(DnD.config.MENU.map((m) => m.id), ['editor', 'combattimento', 'esplorazione', 'nemici', 'giocatori', 'magie', 'asset', 'razze', 'dadi'], 'Esplorazione dopo Combattimento');
-    eq(DnD.config.MENU.map((m) => m.group), ['mappa', 'mappa', 'mappa', 'personaggi', 'personaggi', 'libreria', 'libreria', 'libreria', 'strumenti']);
-    eq(DnD.config.MENU.length, 9, 'scorciatoie Alt+1…Alt+9');
+    eq(DnD.config.MENU.map((m) => m.label), ['Editor griglie', 'Combattimento', 'Esplorazione', 'Mondo', 'Nemici', 'Giocatori', 'Magie', 'Asset', 'Razze', 'Dadi']);
+    eq(DnD.config.MENU.map((m) => m.id), ['editor', 'combattimento', 'esplorazione', 'mondo', 'nemici', 'giocatori', 'magie', 'asset', 'razze', 'dadi'], 'Esplorazione dopo Combattimento, Mondo dopo Esplorazione');
+    eq(DnD.config.MENU.map((m) => m.group), ['mappa', 'mappa', 'mappa', 'mappa', 'personaggi', 'personaggi', 'libreria', 'libreria', 'libreria', 'strumenti']);
+    eq(DnD.config.MENU.length, 10, 'scorciatoie Alt+1…Alt+9 e Alt+0');
     ok(DnD.config.MENU.every((m) => m.icon.length > 0), 'ogni voce ha un\'icona');
     ok(!DnD.config.SECTIONS.includes('oggetti'), 'gli Oggetti sono dentro Strutture');
     eq(DnD.config.APP_NAME, 'Session Forge');
@@ -1781,7 +1781,7 @@
       sessions: [{ id: 's', name: 'S', combat: { combatants: [{ id: 'c', name: 'Goblin', size: 2, pos: { x: 1, y: 1 } }], grid: {} } }],
     };
     const s = DnD.dati.importJSON(JSON.stringify(raw));
-    eq(s.version, 11);
+    eq(s.version, DnD.dati.VERSION);
     const gob = s.npcs.find((n) => n.id === 'gob');
     eq([gob.type, gob.maxHp, gob.gridSize.auto], ['standard', 7, true], 'nemico esistente: Standard, Automatica');
     eq(s.npcs.filter((n) => n.type === 'creatura').length, 3, 'creature d\'esempio aggiunte');
@@ -3133,7 +3133,7 @@
     const v9 = { version: 9, races: [], players: [], npcs: [], savedGrids: [{ id: 'g', name: 'Cripta', w: 20, h: 20 }] };
     const s = DnD.dati.normalizeState(v9);
     const g = s.savedGrids[0];
-    eq([s.version, g.kind, g.biomeMap, g.events, g.fog.enabled, g.w], [11, 'battaglia', null, [], false, 20]);
+    eq([s.version, g.kind, g.biomeMap, g.events, g.fog.enabled, g.w], [DnD.dati.VERSION, 'battaglia', null, [], false, 20]);
     eq([s.biomes.length, s.events.length], [9, 8], 'esempi originali');
     eq(S().current(s).exploration, null);
     eq(DnD.dati.normalizeState({ version: 10, races: [], players: [], npcs: [], biomes: [], events: [] }).biomes.length, 0, 'librerie vuote rispettate');
@@ -3407,7 +3407,7 @@
     S().importSession(dst, file, DnD.dadi.uid);
     ok(dst.players.some((x) => x.type === 'leggendario' && x.name === 'Aria'), 'sessione');
     const mig = DnD.dati.normalizeState({ version: 10, races: [], npcs: [], players: [{ id: 'z', name: 'Zed', level: 20 }] });
-    eq([mig.version, mig.players[0].type, mig.pathTemplates.length], [11, undefined, 1], 'v10 → v11: giocatori standard, modello d\'esempio');
+    eq([mig.version, mig.players[0].type, mig.pathTemplates.length], [DnD.dati.VERSION, undefined, 1], 'v10 → v11: giocatori standard, modello d\'esempio');
   });
 
   test('Leggendari UI: temi unificati con il Boss, lance di luce, scheda del combattente a tema, «Riduci animazioni»', () => {

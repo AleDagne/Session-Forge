@@ -125,6 +125,12 @@
       painter: tools.painter,
       onSelect: (id) => { if (id && ex() && ex().parties.some((p) => p.id === id) && ex().activeParty !== id) { DnD.store.update(() => { ex().activeParty = id; }); render(); } },
       tokenActions: (id) => [{ text: '⭐ Rendi attiva', onclick: () => { DnD.store.update(() => { ex().activeParty = id; }); render(); } }],
+      // Copie degli NPC del Mondo sulla mappa: pannello NPC (Parla, Commercia, Quest, Attacca…).
+      onObject: (id) => DnD.uiOggettiMappa.openPanel({
+        getItem: () => { const w = world(); return w && w.grid ? w.grid.items.find((x) => x.id === id) : null; },
+        update: (fn) => { DnD.store.update((s) => { const w = world(s); if (w && w.grid) fn(w.grid.items.find((x) => x.id === id), s); }); render(); },
+        log: (text) => { DnD.store.update((s) => { const w = world(s); if (w && w.grid) X.log(w, text, 'npc'); }); render(); },
+      }),
       underlay: (ctx, view, s, W, H) => {
         const w = world();
         if (!w || !w.grid) return;
@@ -311,6 +317,10 @@
     const combatants = R.createCombatants(players, entries, st.races, DnD.dadi.randomInt, st.spells, st.equipment);
     // PF dei personaggi: quelli dell'esplorazione.
     for (const c of combatants) if (c.kind === 'player' && w.ex.members[c.sourceId]) c.hp = Math.min(c.maxHp, w.ex.members[c.sourceId].hp);
+    // Fazioni del Mondo: della scheda, del party (giocatori) o della città (nemici).
+    const wv = DnD.fazioni.view(st);
+    const fctx = { parties: wv.parties, cities: wv.cities, factions: wv.factions };
+    for (const c of combatants) c.faction = DnD.fazioni.defaultFactionFor(c.kind === 'player' ? players.find((p) => p.id === c.sourceId) : st.npcs.find((n) => n.id === c.sourceId), c.kind === 'player' ? 'player' : 'npc', fctx);
     const combat = {
       id: DnD.dadi.uid(), phase: 'iniziativa', round: 1, currentId: null, combatants, log: [],
       ai: { simulated: false, mode: 'passo', delay: 1, seed: DnD.dadi.randomInt(2147483646) },
@@ -431,8 +441,11 @@
       return;
     }
     if (!setup.gridId || !maps.some((m) => m.id === setup.gridId)) setup.gridId = maps[0].id;
-    if (!setup.players.size) players.forEach((p) => setup.players.add(p.id));
-    const icon = DnD.uiIcone.iconPicker(setup.icon || { kind: 'library', icon: 'cavaliere', color: '#c9a227' }, false, 'Icona della pedina del gruppo');
+    // Party attivo del Mondo: di base i suoi membri, con il suo nome e la sua icona sulla pedina del gruppo.
+    const wv = DnD.fazioni.view(st);
+    const party = DnD.party.active(wv.parties, wv.world);
+    if (!setup.players.size) (party && party.memberIds.length ? players.filter((p) => party.memberIds.includes(p.id)) : players).forEach((p) => setup.players.add(p.id));
+    const icon = DnD.uiIcone.iconPicker(setup.icon || (party ? party.icon : null) || { kind: 'library', icon: 'cavaliere', color: '#c9a227' }, false, 'Icona della pedina del gruppo');
     root.append(
       el('div', { class: 'section-head' }, el('h1', { text: 'Esplorazione' })),
       el('div', { class: 'grid-2' },
@@ -441,7 +454,13 @@
             el('input', { type: 'radio', name: 'mappa-esplorazione', checked: m.id === setup.gridId, onchange: () => { setup.gridId = m.id; render(); } }),
             DnD.uiGriglia.gridThumbnail(m, 110), el('b', { text: m.name }),
             el('span', { class: 'muted small', text: m.w + '×' + m.h + ' · ' + X.scaleLabel(m.scale) + ' · ' + m.events.length + ' eventi' }))))),
-        el('section', { class: 'panel' }, el('h2', { text: 'Gruppo' }),
+        el('section', { class: 'panel' }, el('div', { class: 'history-head' }, el('h2', { text: 'Gruppo' }),
+          party && party.memberIds.length ? el('button', { class: 'btn small', text: '⚑ Aggiungi party «' + party.name + '»', onclick: () => {
+            setup.players.clear();
+            party.marchOrder.forEach((id) => { if (players.some((p) => p.id === id)) setup.players.add(id); });
+            setup.icon = party.icon;
+            render();
+          } }) : null),
           players.length ? el('ul', { class: 'pick-list' }, players.map((p) => el('li', {}, el('label', { class: 'check' },
             el('input', { type: 'checkbox', checked: setup.players.has(p.id), onchange: (ev) => { if (ev.target.checked) setup.players.add(p.id); else setup.players.delete(p.id); } }),
             ' ', el('b', { text: p.name }), el('span', { class: 'muted small', text: ' · PF ' + p.maxHp }))))) : el('p', { class: 'empty', text: 'Nessun giocatore nella sessione: crealo in Giocatori.' }),
@@ -451,10 +470,13 @@
           const r = icon.read();
           setup.icon = r.icon || null;
           const map = maps.find((m) => m.id === setup.gridId);
-          const chosen = players.filter((p) => setup.players.has(p.id));
+          // Ordine di marcia del party (se c'è), poi gli altri.
+          const order = party ? party.marchOrder : [];
+          const chosen = players.filter((p) => setup.players.has(p.id)).sort((a, b) => (order.includes(a.id) ? order.indexOf(a.id) : 999) - (order.includes(b.id) ? order.indexOf(b.id) : 999));
           DnD.store.update((s) => {
             const e = X.create(map, chosen, DnD.dadi.randomInt(2147483646));
             if (setup.icon) e.parties[0].icon = setup.icon;
+            if (party && chosen.length && chosen.every((p) => party.memberIds.includes(p.id))) e.parties[0].name = party.name;
             session(s).exploration = e;
             const w = { st: s, ex: e, grid: gridOf(s, map.id) };
             X.reveal(w);

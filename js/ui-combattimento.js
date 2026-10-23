@@ -148,6 +148,195 @@
   const IA = DnD.ia;
   const KI = DnD.iaDati;
   const clone = (v) => JSON.parse(JSON.stringify(v));
+
+  // ---------- Mondo: fazioni, NPC neutrali, uccisioni per le quest, fine del combattimento ----------
+  // La relazione tra fazioni (fazioni.relazioneCombattenti) è l'unica fonte di verità per IA, bersagli, avvisi
+  // degli effetti ad area, provocazione degli NPC neutrali e fine del combattimento.
+  const FZ = DnD.fazioni;
+  const NP = DnD.npc;
+  const worldView = (st) => FZ.view(st || DnD.store.state);
+  const relTable = (st) => FZ.table(worldView(st).factions);
+  const factionName = (id) => { const f = worldView().factions.find((x) => x.id === id); return f ? f.name : 'fazione eliminata'; };
+  const partyFaction = (st) => { const v = worldView(st); const p = DnD.party.active(v.parties, v.world); return p ? p.factionId : 'giocatori'; };
+  let pendingAggr = null;   // { attackerId, targetIds } dell'azione ostile in corso (provocazioni, uccisioni)
+  let overNotified = null;  // id del combattimento per cui si è già annunciata la fine
+  const noteAggression = (attackerId, targetIds) => { pendingAggr = { attackerId, targetIds: targetIds.filter(Boolean) }; };
+
+  // Copia di un NPC piazzata sulla griglia -> combattente (stessa posizione, PF e stato della copia).
+  function npcItemToCombatant(st, it, hostile) {
+    const npc = (st.worldNpcs || []).find((n) => n.id === it.npcId);
+    if (!npc) return null;
+    const v = worldView(st);
+    const source = Object.assign(clone(npc.stats), { id: npc.id, name: it.name || npc.name, icon: clone(it.icon) });
+    const x = R.createCombatants([], [{ npc: source, quantity: 1 }], st.races, dice(), st.spells, st.equipment)[0];
+    const fid = NP.factionOf(npc, it.npcState, v.cities);
+    const party = DnD.party.active(v.parties, v.world);
+    const att = hostile ? 'ostile' : NP.attitudeOf(npc, it.npcState, FZ.reputationOf(v.world, party, fid));
+    Object.assign(x, {
+      faction: fid, pos: { x: it.x, y: it.y }, w: it.w, h: it.h, control: 'ia',
+      npc: NP.combatData(npc, it.npcState, it.id, att),
+      hostileTo: hostile ? [party ? party.factionId : 'giocatori'] : (it.npcState.hostileTo || []).slice(),
+    });
+    if (it.npcState.hp !== null) x.hp = Math.min(x.maxHp, it.npcState.hp);
+    return x;
+  }
+  // Toglie la copia dalla griglia e mette il combattente; ostile = entra al round successivo (se il combattimento è attivo).
+  function joinFromItem(c, st, it, hostile) {
+    const x = npcItemToCombatant(st, it, hostile);
+    if (!x) return null;
+    c.grid.items = c.grid.items.filter((y) => y.id !== it.id);
+    if (hostile && c.phase === 'attivo') x.joinRound = c.round + 1;
+    c.combatants.push(x);
+    return x;
+  }
+
+  // Provocazione: gli NPC non ostili colpiti (o che difendono la fazione o il party) diventano ostili secondo la
+  // loro regola; con «fazione» e «città» anche le copie sulla griglia della stessa fazione o città entrano
+  // ostili al round successivo. Penalità di reputazione e voce annullabile (world.provocations).
+  function provocationFor(c, st, attacker, targets) {
+    const t = relTable(st);
+    const npcs = [];
+    for (const tg of targets) for (const x of NP.reactions(attacker, tg, c.combatants, t)) if (!npcs.includes(x)) npcs.push(x);
+    if (!npcs.length) return [];
+    const v = worldView(st);
+    const before = c.combatants.filter((x) => x.npc).map((x) => ({ id: x.id, hostileTo: (x.hostileTo || []).slice(), attitude: x.npc.attitude }));
+    const res = NP.provoke(npcs, { combatants: c.combatants, factions: v.factions, symmetric: v.world.symmetric, attackerFaction: attacker.faction, attackerId: attacker.id });
+    const lines = res.lines.slice();
+    // Copie ancora sulla griglia: la città (o la fazione) intera si unisce, ostile, al round successivo.
+    const joined = [];
+    for (const x of npcs) {
+      const rule = x.npc.provoke;
+      if (rule !== 'citta' && rule !== 'fazione') continue;
+      for (const it of c.grid.items.filter((y) => y.otype === 'npc' && !y.npcState.dead)) {
+        const npc = (st.worldNpcs || []).find((n) => n.id === it.npcId);
+        if (!npc) continue;
+        const same = rule === 'citta' ? npc.cityId && npc.cityId === x.npc.cityId : NP.factionOf(npc, it.npcState, v.cities) === x.faction;
+        if (!same) continue;
+        const y = joinFromItem(c, st, it, true);
+        if (y) { y.hostileTo = [attacker.faction]; joined.push(y.name); }
+      }
+    }
+    if (joined.length) lines.push('⚠ Si uniscono ostili' + (c.phase === 'attivo' ? ' dal round ' + (c.round + 1) : '') + ': ' + joined.join(', ') + '.');
+    // Penalità di reputazione solo se chi attacca è dalla parte del party.
+    const repIds = [];
+    if (attacker.faction === partyFaction(st) || attacker.kind === 'player') {
+      const party = DnD.party.active(v.parties, v.world);
+      for (const r of res.reputation) {
+        const e = FZ.changeReputation({ world: v.world, party }, r.factionId, r.delta, r.reason, 'combattimento');
+        if (e) { repIds.push(e.id); lines.push('⚑ Reputazione con «' + factionName(r.factionId) + '»: ' + e.delta + ' (' + e.after + ').'); }
+      }
+    }
+    v.world.provocations.push({ id: DnD.dadi.uid(), at: new Date().toISOString(), text: lines[0] || '', combatId: c.id,
+      factions: Object.fromEntries(res.factionsBefore.map((f) => [f.id, f.relations])), combatants: before, repIds, reverted: false });
+    if (v.world.provocations.length > 50) v.world.provocations.splice(0, v.world.provocations.length - 50);
+    provoked = true;
+    return lines;
+  }
+  let provoked = false;
+
+  // Annulla l'ultima provocazione che ha toccato il combattente (decisione del master).
+  function revertProvocation(x) {
+    const v = worldView();
+    const pr = v.world.provocations.slice().reverse().find((p) => !p.reverted && p.combatId === combat().id && (p.combatants || []).some((b) => b.id === x.id));
+    if (!pr) { toast('Nessuna provocazione da annullare.'); return; }
+    mutate((c, st) => {
+      const w = worldView(st);
+      for (const [fid, rel] of Object.entries(pr.factions || {})) { const f = w.factions.find((y) => y.id === fid); if (f) f.relations = clone(rel); }
+      for (const b of pr.combatants || []) { const y = c.combatants.find((z) => z.id === b.id); if (y && y.npc) { y.hostileTo = b.hostileTo; y.npc.attitude = b.attitude; } }
+      for (const id of pr.repIds || []) FZ.revertReputation(w.world, st.parties, id);
+      const p = w.world.provocations.find((y) => y.id === pr.id);
+      if (p) p.reverted = true;
+      aiPlan = null;
+      log(c, 'sistema', '↶ Il master annulla la provocazione: ' + (pr.text || '') + ' (relazioni, ostilità e reputazione ripristinate).');
+    });
+  }
+  // Calma (prova di Persuasione del giocatore scelto): l'NPC torna neutrale.
+  function calmDialog(x) {
+    const players = order().filter((y) => y.kind === 'player' && !R.isDown(y));
+    const src = (y) => DnD.store.state.players.find((p) => p.id === y.sourceId);
+    if (!players.length) { toast('Nessun giocatore in piedi per calmarlo.', 'error'); return; }
+    const sel = el('select', {}, players.map((y) => el('option', { value: y.id, text: y.name })));
+    openDialog('Calma ' + x.name, el('div', { class: 'form' }, field('Chi parla', sel), el('p', { class: 'muted small', text: 'Persuasione contro CD ' + x.npc.calmDc + '. Riuscita: torna neutrale (resta nell\'iniziativa ma non attacca).' })), [
+      { text: 'Annulla' },
+      { text: '🕊 Prova', class: 'primary', onclick: () => {
+        const who = byId(sel.value);
+        const p = src(who);
+        beginDice();
+        mutate((c) => {
+          const t = c.combatants.find((y) => y.id === x.id);
+          const r = R.rollSave({ bonus: p ? DnD.leggendario.checkBonus(p, 'Persuasione', false, DnD.store.state) : 0, mode: 'normale', dc: t.npc.calmDc }, dice());
+          log(c, r.success ? 'successo' : 'fallimento', who.name + ' prova a calmare ' + t.name + ': Persuasione ' + r.total + ' contro CD ' + t.npc.calmDc + ' → ' + (r.success ? NP.calm(t) : 'non ci riesce.'));
+          aiPlan = null;
+        });
+        endDice('Calma ' + x.name, '');
+      } },
+    ]);
+  }
+
+  // Dopo ogni modifica: provocazioni, uccisioni (quest e reputazione), fine del combattimento per fazioni.
+  function worldAfter(c, st, beforeHp, aggr) {
+    const lines = [];
+    const attacker = aggr ? c.combatants.find((x) => x.id === aggr.attackerId) : null;
+    if (attacker) lines.push(...provocationFor(c, st, attacker, aggr.targetIds.map((id) => c.combatants.find((x) => x.id === id)).filter(Boolean)));
+    const v = worldView(st);
+    const pf = partyFaction(st);
+    for (const x of c.combatants) {
+      if (!(beforeHp.get(x.id) > 0 && x.hp === 0)) continue;
+      lines.push(...DnD.quest.onKill(v.world.quests, v.quests, x));
+      // Uccidere un NPC di una fazione: la reputazione con quella fazione scende (se è stato il party).
+      if (x.npc && attacker && (attacker.faction === pf || attacker.kind === 'player') && x.faction !== pf) {
+        const e = FZ.changeReputation({ world: v.world, party: DnD.party.active(v.parties, v.world) }, x.faction, DnD.mondoDati.REP_EVENTS.uccidiMembro, 'ucciso ' + x.name, 'combattimento');
+        if (e) lines.push('⚑ Reputazione con «' + factionName(x.faction) + '»: ' + e.delta + ' (' + e.after + ').');
+      }
+    }
+    if (c.phase === 'attivo' && overNotified !== c.id) {
+      const over = FZ.combatOver(c.combatants, relTable(st), pf);
+      if (over.over) {
+        overNotified = c.id;
+        lines.push('🏁 Tutte le fazioni ostili al party sono sconfitte o in fuga: il combattimento può terminare.');
+      }
+    }
+    for (const l of lines) log(c, l.startsWith('📜') ? 'quest' : 'sistema', l);
+    return lines;
+  }
+
+  // Cambio di fazione in gioco (anche a metà combattimento), con la fazione precedente per l'annullamento.
+  function factionDialog(x) {
+    const sel = el('select', {}, worldView().factions.map((f) => el('option', { value: f.id, text: f.name, selected: f.id === x.faction })));
+    openDialog('Fazione di ' + x.name, el('div', { class: 'form' }, field('Fazione', sel),
+      el('p', { class: 'muted small', text: 'La relazione tra le fazioni decide chi è alleato, neutrale o ostile (Mondo › Fazioni).' })), [
+      { text: 'Annulla' },
+      { text: 'Cambia', class: 'primary', onclick: () => {
+        if (sel.value === x.faction) return undefined;
+        mutate((c) => {
+          const t = c.combatants.find((y) => y.id === x.id);
+          t.prevFaction = t.faction;
+          t.faction = sel.value;
+          aiPlan = null;
+          log(c, 'sistema', '⚑ ' + t.name + ' cambia fazione: ' + factionName(t.prevFaction) + ' → ' + factionName(t.faction) + '.');
+        });
+        return undefined;
+      } },
+    ]);
+  }
+  function undoFaction(id) {
+    mutate((c) => {
+      const t = c.combatants.find((y) => y.id === id);
+      if (!t || !t.prevFaction) return;
+      const from = t.faction;
+      t.faction = t.prevFaction;
+      t.prevFaction = '';
+      aiPlan = null;
+      log(c, 'sistema', '↶ ' + t.name + ' torna alla fazione ' + factionName(t.faction) + ' (era ' + factionName(from) + ').');
+    });
+  }
+  // Effetto ad area: chiede conferma se colpisce chi non è ostile a chi lo usa.
+  function confirmArea(casterId, targetIds) {
+    const caster = byId(casterId);
+    if (!caster) return true;
+    const warn = FZ.areaWarnings(caster, targetIds.map(byId).filter(Boolean), relTable());
+    return !warn.length || confirm('Attenzione: l\'area colpisce anche ' + warn.map((w) => w.name + ' (' + DnD.mondoDati.LEVEL_NAMES[w.level].toLowerCase() + ')').join(', ') + '. Continuare?');
+  }
   let aiPlan = null;          // { forId, round, plan } del turno in corso
   let aiPaused = false;       // modalità automatica in pausa
   let aiBusy = false;         // esecuzione in corso (animazione)
@@ -157,10 +346,10 @@
   function aiState() {
     const st = DnD.store.state;
     const c = combat();
-    return { combatants: c.combatants, grid: c.grid, catalog: st.equipment, tilesets: DnD.tilemap.tilesetIndex(st.tilesets), round: c.round, seed: c.ai.seed, rules: rules() };
+    return { combatants: c.combatants, grid: c.grid, catalog: st.equipment, tilesets: DnD.tilemap.tilesetIndex(st.tilesets), round: c.round, seed: c.ai.seed, rules: rules(), relations: relTable(st) };
   }
   // Impronta di ciò che cambia il piano: posizioni, PF, ingombri, controllo, fazioni e oggetti della griglia.
-  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.freeMovement, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden, x.movement, x.conditions, x.moveMode]),
+  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.freeMovement, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden, x.movement, x.conditions, x.moveMode, x.hostileTo, x.joinRound]),
     c.grid.items.map((it) => [it.id, it.x, it.y, it.state]), c.grid.structures.length, c.grid.ignoreCollisions]);
   // Piano del combattente di turno, se è controllato dall'IA: si ricalcola quando cambia il turno o la griglia,
   // o su richiesta (Ricalcola, Cambia bersaglio: il bersaglio scelto resta finché non si ricalcola).
@@ -375,6 +564,34 @@
           DnD.uiIa.drawPlan(ctx, view, s, aiPlan.plan, c.combatants, { current: col.accent, bad: '#d4453a' });
         },
         onObject: (id) => DnD.uiOggettiMappa.openPanel({
+          // Copie degli NPC: Attacca (diventa ostile, entra al round successivo) o Entra nell'iniziativa (neutrale).
+          combat: {
+            attack: (itemId) => {
+              beginDice();
+              mutate((c, st) => {
+                const it = c.grid.items.find((x) => x.id === itemId);
+                if (!it) return;
+                const x = joinFromItem(c, st, it, false);
+                if (!x) return;
+                log(c, 'sistema', '⚔ Il party attacca ' + x.name + '.');
+                const probe = { id: '__party', faction: partyFaction(st), kind: 'player' };
+                for (const l of provocationFor(c, st, probe, [x])) log(c, 'sistema', l);
+                if (c.phase === 'attivo') { x.joinRound = c.round + 1; log(c, 'sistema', x.name + ' tira l\'iniziativa (' + x.initiative + ') ed entra al round ' + x.joinRound + '.'); }
+                aiPlan = null;
+              });
+              endDice('Iniziativa', '');
+              document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+            },
+            join: (itemId) => {
+              beginDice();
+              mutate((c, st) => {
+                const it = c.grid.items.find((x) => x.id === itemId);
+                const x = it ? joinFromItem(c, st, it, false) : null;
+                if (x) log(c, 'sistema', x.name + ' entra nel combattimento (neutrale, iniziativa ' + x.initiative + ').');
+              });
+              endDice('Iniziativa', '');
+            },
+          },
           getItem: () => combat() && combat().grid.items.find((x) => x.id === id),
           update: (fn) => { DnD.store.update((st) => fn(session(st).combat.grid.items.find((x) => x.id === id), st)); render(); },
           log: (text) => { DnD.store.update(() => log(combat(), 'sistema', text)); render(); },
@@ -447,12 +664,10 @@
         aiPlan = null;
         log(c, 'sistema', t.name + ': controllo ' + (t.control === 'ia' ? 'IA' : 'manuale') + '.');
       }) },
-      { text: '⚑ Fazione: ' + KI.FACTION_NAMES[x.faction] + ' → ' + KI.FACTION_NAMES[KI.FACTIONS[(KI.FACTIONS.indexOf(x.faction) + 1) % KI.FACTIONS.length]], onclick: () => mutate((c) => {
-        const t = c.combatants.find((y) => y.id === id);
-        t.faction = KI.FACTIONS[(KI.FACTIONS.indexOf(t.faction) + 1) % KI.FACTIONS.length];
-        aiPlan = null;
-        log(c, 'sistema', t.name + ': fazione ' + KI.FACTION_NAMES[t.faction] + '.');
-      }) },
+      { text: '⚑ Fazione: ' + factionName(x.faction) + '…', onclick: () => factionDialog(byId(id)) },
+      x.prevFaction ? { text: '↶ Torna a ' + factionName(x.prevFaction), onclick: () => undoFaction(id) } : null,
+      x.npc && x.hostileTo && x.hostileTo.length ? { text: '🕊 Calma ' + x.name + '…', onclick: () => calmDialog(byId(id)) } : null,
+      x.npc && x.hostileTo && x.hostileTo.length ? { text: '↶ Annulla la provocazione', onclick: () => revertProvocation(byId(id)) } : null,
       { text: x.hidden ? '👁 Non più nascosto' : '🙈 Nascosto (l\'IA non lo vede)', onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === id); t.hidden = !t.hidden; aiPlan = null; }) },
     ].filter(Boolean);
   }
@@ -497,14 +712,22 @@
 
   function mutate(fn) {
     let events = [];
+    const aggr = pendingAggr;
+    pendingAggr = null;
+    provoked = false;
     DnD.store.update((st) => {
+      const pre = session(st).combat;
+      const beforeHp = new Map(pre ? pre.combatants.map((x) => [x.id, x.hp]) : []);
       fn(session(st).combat, st);
       if (hurtLines.length && session(st).combat) for (const line of hurtLines) log(session(st).combat, 'sistema', line);
       hurtLines = [];
-      // Boss: passaggi di fase e sconfitte (anche più fasi con un solo colpo), con le note nel log.
+      // Mondo: provocazioni degli NPC neutrali, uccisioni (quest, reputazione) e fine per fazioni.
       const c = session(st).combat;
+      if (c) worldAfter(c, st, beforeHp, aggr);
+      // Boss: passaggi di fase e sconfitte (anche più fasi con un solo colpo), con le note nel log.
       if (c && c.phase === 'attivo') events = DnD.boss.checkCombat(c, (type, text) => log(c, type, text));
     });
+    if (provoked) { aiPlan = null; if (DnD.uiMondo) DnD.uiMondo.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
     if (events.some((e) => e.kind === 'fase')) aiPlan = null;
     render();
     DnD.uiBoss.playEvents(events, root && root.querySelector('.combat-layout'));
@@ -559,15 +782,21 @@
     const qtyInputs = {};
     const errorBox = el('div', { class: 'error', 'aria-live': 'polite' });
     // Controllo (Manuale o IA) e fazione per riga: di base giocatori Manuale, nemici IA.
+    // Fazione di partenza: quella della scheda, del party (giocatori) o della città (nemici).
+    const wv = worldView(st);
+    const fctx = { parties: wv.parties, cities: wv.cities, factions: wv.factions };
+    const sourceOf = (id) => vPlayers.find((p) => p.id === id) || vNpcs.find((n) => n.id === id);
+    const defaultFactionOf = (id, kind) => FZ.defaultFactionFor(sourceOf(id), kind, fctx);
     function controlPickers(id, kind) {
       const control = setup.control[id] || IA.defaultControl(kind);
-      const faction = setup.faction[id] || IA.defaultFaction(kind);
+      const faction = setup.faction[id] || defaultFactionOf(id, kind);
       return el('span', { class: 'control-pickers' },
         el('select', { class: 'small-select', 'aria-label': 'Controllo', onchange: (e) => { setup.control[id] = e.target.value; } },
           el('option', { value: 'manuale', text: '👤 Manuale', selected: control === 'manuale' }), el('option', { value: 'ia', text: '🤖 IA', selected: control === 'ia' })),
         el('select', { class: 'small-select', 'aria-label': 'Fazione', onchange: (e) => { setup.faction[id] = e.target.value; } },
-          KI.FACTIONS.map((f) => el('option', { value: f, text: KI.FACTION_NAMES[f], selected: f === faction }))));
+          wv.factions.map((f) => el('option', { value: f.id, text: f.name, selected: f.id === faction }))));
     }
+    const activeParty = DnD.party.active(wv.parties, wv.world);
 
     const playersBox = vPlayers.length
       ? el('ul', { class: 'pick-list' }, vPlayers.map((p) => el('li', {},
@@ -611,7 +840,7 @@
       endDice('Iniziativa', '');
       for (const x of combatants) {
         if (setup.control[x.sourceId]) x.control = setup.control[x.sourceId];
-        if (setup.faction[x.sourceId]) x.faction = setup.faction[x.sourceId];
+        x.faction = setup.faction[x.sourceId] || defaultFactionOf(x.sourceId, x.kind === 'player' ? 'player' : 'npc');
       }
       const startGrid = vGrids.find((g) => g.id === gridSelect.value);
       let unplaced = [];
@@ -622,6 +851,12 @@
           grid: Object.assign({ structures: [], items: [], labels: [], zones: [], tileMap: null, ignoreCollisions: false, sourceGridId: null }, G.gridProps({})),
         };
         if (startGrid) unplaced = DnD.griglia.applySavedGrid(session(s).combat, startGrid, DnD.dadi.uid);
+        // NPC del Mondo sulla griglia con «Entra subito»: combattenti (neutrali) fin dall'iniziativa.
+        const cb = session(s).combat;
+        for (const it of cb.grid.items.filter((y) => y.otype === 'npc')) {
+          const npc = (s.worldNpcs || []).find((n) => n.id === it.npcId);
+          if (npc && npc.combat.joinNow && !it.npcState.dead) joinFromItem(cb, s, it, Boolean(it.npcState.hostile));
+        }
       });
       if (unplaced.length) toast('Non entrano nelle zone di partenza: ' + unplaced.map((x) => x.name).join(', ') + '. Trascinali dal pannello.', 'error');
       setup.players.clear();
@@ -653,7 +888,10 @@
         el('section', { class: 'panel' },
           el('div', { class: 'history-head' },
             el('h2', { text: 'Giocatori' }),
-            vPlayers.length ? el('button', { class: 'btn small', text: 'Tutti', onclick: () => { vPlayers.forEach((p) => setup.players.add(p.id)); render(); } }) : null),
+            el('div', { class: 'head-actions' },
+              activeParty && activeParty.memberIds.length ? el('button', { class: 'btn small', text: '⚑ Aggiungi party', title: 'Tutti i membri di «' + activeParty.name + '»',
+                onclick: () => { activeParty.memberIds.forEach((id) => { if (vPlayers.some((p) => p.id === id)) setup.players.add(id); }); render(); } }) : null,
+              vPlayers.length ? el('button', { class: 'btn small', text: 'Tutti', onclick: () => { vPlayers.forEach((p) => setup.players.add(p.id)); render(); } }) : null)),
           playersBox),
         el('section', { class: 'panel' },
           el('div', { class: 'history-head' },
@@ -747,6 +985,8 @@
       if (res.currentId === c.currentId && res.round === c.round) return;
       const newRound = res.round !== c.round;
       if (newRound) log(c, 'round', '— Round ' + res.round + ' —');
+      // NPC diventati ostili: entrano nell'ordine di iniziativa da questo round.
+      if (newRound) for (const x of c.combatants.filter((y) => y.joinRound && y.joinRound <= res.round)) { x.joinRound = 0; log(c, 'sistema', x.name + ' entra nell\'ordine di iniziativa.'); }
       const prev = c.currentId;
       c.round = res.round;
       c.currentId = res.currentId;
@@ -756,9 +996,18 @@
     endDice(cur ? 'Ricarica di ' + cur.name : 'Ricarica', '');
   }
 
+  // PE dei nemici sconfitti (creature dal GS; gli NPC contano solo se ostili al party).
+  function defeatedXp(c) {
+    const t = relTable();
+    const pf = partyFaction();
+    return c.combatants.filter((x) => R.isDown(x) && x.creature && x.faction !== pf && NP.countsForXp(x, t, pf) && FZ.ostili({ id: '__p', faction: pf }, x, t))
+      .reduce((n, x) => n + M.xpForCr(x.creature.cr), 0);
+  }
   function endCombat() {
     if (!confirm('Terminare il combattimento? Il log e lo stato dei combattenti verranno cancellati.')) return;
+    const xp = defeatedXp(combat());
     const ended = JSON.parse(JSON.stringify(combat()));
+    if (xp) toast('PE dei nemici sconfitti: ' + xp + ' (da dividere tra il party).', 'success');
     mutate((c, st) => { session(st).combat = null; });
     toast('Combattimento terminato.');
     // Combattimento preparato da un evento dell'esplorazione: esito e ritorno all'esplorazione.
@@ -822,6 +1071,7 @@
     let summaryType = 'info';
     const names = [byId(attackerId), byId(targetId)].map((x) => (x ? x.name : ''));
     beginDice();
+    noteAggression(attackerId, [targetId]);
     mutate((c) => {
       const a = byId(attackerId);
       const t = byId(targetId);
@@ -978,6 +1228,7 @@
         const targets = readTargets();
         if (sp.effect.type !== 'nessuno' && !targets.length) { toast('Scegli almeno un bersaglio.', 'error'); return false; }
         const inn = innateOf(sc, sp);
+        if (sp.area && sp.effect.type !== 'cura' && !confirmArea(caster.id, targets)) return false;
         if (inn ? inn.freq === 'giorno' && inn.left <= 0 : sp.level > 0 && !DnD.magie.castableLevels(sp, sc.slotsTotal, sc.slotsUsed).includes(Number(slotSel.value))) {
           toast(inn ? 'Usi giornalieri esauriti.' : 'Nessuno slot disponibile per questo incantesimo.', 'error');
           return false;
@@ -996,6 +1247,8 @@
   function performCast(casterId, spellId, slotLevel, targetIds, mode) {
     let summaryText = '';
     beginDice();
+    const spell = byId(casterId) && byId(casterId).spellcasting && byId(casterId).spellcasting.spells.find((x) => x.id === spellId);
+    if (spell && !['cura', 'nessuno'].includes(spell.effect.type)) noteAggression(casterId, targetIds);
     mutate((c, st) => {
       const a = byId(casterId);
       const sc = a && a.spellcasting;
@@ -1258,6 +1511,7 @@
       { text: '▶ Esegui', class: 'primary', onclick: () => {
         const targets = read();
         if (targets.some((t) => !t.length)) { toast('Scegli un bersaglio per ogni attacco.', 'error'); return false; }
+        if (steps.some((sub) => sub.mech.kind === 'salvezza' && sub.mech.area) && !confirmArea(x.id, [].concat(...targets))) return false;
         performCreatureAction(x.id, a.id, targets, currentMode());
         return undefined;
       } },
@@ -1271,6 +1525,7 @@
     const who = byId(attackerId);
     const act = who && who.creature ? M.allActions(who.creature).find((y) => y.id === actionId) : null;
     beginDice();
+    if (act && act.mech.kind !== 'cura' && act.mech.kind !== 'testo') noteAggression(attackerId, [].concat(...targetIds));
     mutate((c) => {
       const x = byId(attackerId);
       const st = x && x.creature;
@@ -1403,7 +1658,11 @@
         el('div', {},
           el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(x.icon, 28), el('h3', { text: x.name })),
           el('span', { class: 'muted small', text: (x.kind === 'player' ? 'Giocatore' : x.boss ? 'Boss (GS ' + x.creature.cr + ')' : x.creature ? 'Creatura (GS ' + x.creature.cr + ')' : 'Nemico') + ' · Iniziativa ' + x.initiative +
-            ' · ' + G.tokenDims(x).w + '×' + G.tokenDims(x).h + (aiOn() ? ' · ' + (x.control === 'ia' ? '🤖 IA' : '👤 Manuale') + ' · ' + KI.FACTION_NAMES[x.faction] : '') + (x.hidden ? ' · nascosto' : '') }),
+            ' · ' + G.tokenDims(x).w + '×' + G.tokenDims(x).h + (aiOn() ? ' · ' + (x.control === 'ia' ? '🤖 IA' : '👤 Manuale') : '') + (x.hidden ? ' · nascosto' : '') }),
+          DnD.uiMondo ? DnD.uiMondo.factionBadge(x.faction) : null,
+          x.npc ? el('span', { class: 'tag att-' + x.npc.attitude, title: 'NPC del Mondo', text: '👤 ' + DnD.mondoDati.ATTITUDE_NAMES[x.npc.attitude] }) : null,
+          x.hostileTo && x.hostileTo.length ? el('span', { class: 'tag danger', title: 'Ostile per una provocazione', text: '⚔ provocato' }) : null,
+          x.joinRound ? el('span', { class: 'badge', text: 'ENTRA AL ROUND ' + x.joinRound }) : null,
           down ? el('span', { class: 'badge down-badge', text: 'A TERRA' }) : null,
           current ? el('span', { class: 'badge turn-badge', text: 'TURNO' }) : null),
         el('div', { class: 'ac-shield', title: 'Classe Armatura' }, el('small', { text: 'CA' }), el('b', { text: String(x.ac) }))),

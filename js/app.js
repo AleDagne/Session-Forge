@@ -22,7 +22,7 @@
         group = item.group;
         navList.append(el('li', { class: 'nav-group', role: 'presentation' }, el('span', { class: 'nav-label', text: C.GROUPS[group] })));
       }
-      const shortcut = 'Alt+' + (i + 1);
+      const shortcut = 'Alt+' + ((i + 1) % 10);
       navList.append(el('li', {}, el('button', {
         type: 'button', 'data-section': item.id, title: item.label + ' (' + shortcut + ')', 'aria-label': item.label,
         'aria-keyshortcuts': shortcut, onclick: () => show(item.id),
@@ -105,11 +105,12 @@
       if (sidebar) sidebar.toggle();
       return;
     }
-    // Alt+1…Alt+9: voci del menù nell'ordine.
-    const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
-    if (e.altKey && !e.ctrlKey && !e.metaKey && m && C.MENU[Number(m[1]) - 1]) {
+    // Alt+1…Alt+9 e Alt+0 (decima voce): voci del menù nell'ordine.
+    const m = /^(?:Digit|Numpad)([0-9])$/.exec(e.code);
+    const item = m ? C.MENU[(Number(m[1]) + 9) % 10] : null;
+    if (e.altKey && !e.ctrlKey && !e.metaKey && item) {
       e.preventDefault();
-      show(C.MENU[Number(m[1]) - 1].id);
+      show(item.id);
     }
   });
 

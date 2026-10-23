@@ -1,16 +1,16 @@
 // Sessioni di gioco (funzioni pure sullo stato normalizzato).
-// Razze, magie, strutture, attrezzatura, oggetti di mappa, TileSet, biomi ed eventi sono librerie globali. Nemici, giocatori e griglie appartengono
-// a una sessione (sessionId) oppure sono condivisi con tutte (shared: true).
+// Razze, magie, strutture, attrezzatura, oggetti di mappa, TileSet, biomi ed eventi sono librerie globali. Nemici, giocatori, griglie e il
+// Mondo (fazioni, party, città, NPC e quest) appartengono a una sessione (sessionId) oppure sono condivisi con tutte (shared: true).
 // Ogni sessione ha anche descrizione, note del master, combattimento in corso e bozza dell'editor.
 (function (DnD) {
   'use strict';
 
-  const OWNED = ['npcs', 'players', 'savedGrids'];
+  const OWNED = ['npcs', 'players', 'savedGrids', 'factions', 'parties', 'cities', 'worldNpcs', 'quests'];
   const LIBRARIES = ['races', 'spells', 'structures', 'equipment', 'mapObjects', 'tilesets', 'biomes', 'events', 'pathTemplates'];
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   function newSession(name, id) {
-    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null };
+    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}) };
   }
 
   function current(state) {
@@ -54,6 +54,32 @@
   function remapGridEvents(grid, idMap) {
     const map = (id) => (idMap.has(id) ? idMap.get(id) : id);
     for (const inst of grid.events || []) remapActions(inst.event.actions, map);
+    // Copie degli NPC piazzate: modello e fazione della copia.
+    for (const it of grid.items || []) if (it.otype === 'npc') { it.npcId = map(it.npcId); if (it.npcState && it.npcState.factionId) it.npcState.factionId = map(it.npcState.factionId); }
+  }
+
+  // Riferimenti del Mondo tra elementi della stessa sessione (fazioni, città, party, NPC, quest, giocatori).
+  function remapWorldEntities(state, sessionId, idMap) {
+    const map = (id) => (id && idMap.has(id) ? idMap.get(id) : id);
+    const mine = (key) => (state[key] || []).filter((x) => x.sessionId === sessionId && !x.shared);
+    const keys = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [map(k), v]));
+    for (const f of mine('factions')) f.relations = keys(f.relations);
+    for (const p of mine('parties')) { p.factionId = map(p.factionId); p.memberIds = p.memberIds.map(map); p.marchOrder = p.marchOrder.map(map); p.reputation = keys(p.reputation); }
+    for (const c of mine('cities')) { c.factionId = map(c.factionId); c.presentFactionIds = c.presentFactionIds.map(map); c.questIds = c.questIds.map(map); if (c.place) c.place.gridId = map(c.place.gridId); c.gridId = map(c.gridId); }
+    for (const n of mine('worldNpcs')) {
+      n.factionId = map(n.factionId); n.cityId = map(n.cityId); n.questIds = n.questIds.map(map);
+      for (const r of n.routine) r.gridId = map(r.gridId);
+      for (const node of n.dialog.nodes) for (const a of node.answers) for (const o of a.outcomes) { if (o.factionId) o.factionId = map(o.factionId); if (o.questId) o.questId = map(o.questId); }
+    }
+    for (const q of mine('quests')) {
+      q.giver.npcId = map(q.giver.npcId); q.giver.factionId = map(q.giver.factionId); q.factionId = map(q.factionId);
+      for (const r of q.requirements) r.factionId = map(r.factionId);
+      for (const o of q.objectives) { o.npcId = map(o.npcId); o.npcSourceId = map(o.npcSourceId); o.gridId = map(o.gridId); }
+      for (const r of q.rewards.reputation) r.factionId = map(r.factionId);
+      q.rewards.unlockQuestIds = q.rewards.unlockQuestIds.map(map);
+      q.rewards.unlockMerchantIds = q.rewards.unlockMerchantIds.map(map);
+    }
+    for (const key of ['npcs', 'players']) for (const x of mine(key)) { if (x.factionId) x.factionId = map(x.factionId); if (x.cityId) x.cityId = map(x.cityId); }
   }
 
   // Aggiorna i riferimenti interni di una sessione dopo che nemici/giocatori/griglie hanno cambiato id.
@@ -73,6 +99,22 @@
       if (session.combat.grid.sourceGridId) session.combat.grid.sourceGridId = map(session.combat.grid.sourceGridId);
     }
     if (session.gridDraft && session.gridDraft.gridId) session.gridDraft.gridId = map(session.gridDraft.gridId);
+    if (session.combat) {
+      for (const c of session.combat.combatants) {
+        c.faction = map(c.faction);
+        c.hostileTo = (c.hostileTo || []).map(map);
+        if (c.npc) { c.npc.npcId = map(c.npc.npcId); c.npc.cityId = map(c.npc.cityId); }
+      }
+      remapGridEvents(session.combat.grid, idMap);
+    }
+    if (session.gridDraft) remapGridEvents(session.gridDraft.grid, idMap);
+    const w = session.world;
+    if (w) {
+      w.activePartyId = map(w.activePartyId);
+      w.quests = Object.fromEntries(Object.entries(w.quests || {}).map(([k, v]) => [map(k), Object.assign(v, { partyId: map(v.partyId) })]));
+      w.playerRep = Object.fromEntries(Object.entries(w.playerRep || {}).map(([k, v]) => [map(k), Object.fromEntries(Object.entries(v).map(([f, n]) => [map(f), n]))]));
+      for (const e of w.repLog || []) { e.partyId = map(e.partyId); e.playerId = map(e.playerId); e.factionId = map(e.factionId); }
+    }
   }
 
   // Duplica una sessione: copia i suoi nemici, giocatori e griglie (non quelli condivisi, che restano unici).
@@ -90,6 +132,7 @@
     }
     remapSession(copy, idMap, newId);
     for (const g of state.savedGrids.filter((x) => x.sessionId === copy.id)) remapGridEvents(g, idMap);
+    remapWorldEntities(state, copy.id, idMap);
     state.sessions.push(copy);
     state.currentSessionId = copy.id;
     return copy;
@@ -124,7 +167,8 @@
     const npcs = visible(state, 'npcs', sessionId);
     const players = visible(state, 'players', sessionId);
     const savedGrids = visible(state, 'savedGrids', sessionId);
-    const creatures = npcs.concat(players);
+    const world = Object.fromEntries(['factions', 'parties', 'cities', 'worldNpcs', 'quests'].map((k) => [k, (state[k] || []).filter((x) => isVisible(x, sessionId))]));
+    const creatures = npcs.concat(players).concat(world.worldNpcs.map((n) => n.stats));
     const grids = savedGrids.concat(session.combat ? [session.combat.grid] : [], session.gridDraft ? [session.gridDraft.grid] : []);
     const used = (list, ids) => list.filter((x) => ids.has(x.id));
     const sources = (key) => new Set(grids.flatMap((g) => g[key].map((x) => x.sourceId)));
@@ -137,6 +181,11 @@
       ...mapObjects.flatMap((o) => o.contents.map((x) => x.equipmentId)),
       ...mapObjects.map((o) => o.lock && o.lock.keyId),
       ...grids.flatMap((g) => g.items.map((it) => it.lock && it.lock.keyId)),
+      // Mondo: merce dei mercanti (modelli e copie), ricompense e obiettivi delle quest, inventari dei party.
+      ...world.worldNpcs.flatMap((n) => n.merchant.stock.map((x) => x.equipmentId)),
+      ...grids.flatMap((g) => g.items.filter((it) => it.npcState).flatMap((it) => it.npcState.stock.map((x) => x.equipmentId))),
+      ...world.quests.flatMap((q) => q.rewards.items.map((x) => x.equipmentId).concat(q.objectives.map((o) => o.equipmentId))),
+      ...world.parties.flatMap((p) => p.inventory.map((x) => x.equipmentId)),
     ].filter(Boolean));
     // Biomi (con i loro "padri") ed eventi usati dalle mappe di esplorazione e dalle tabelle degli incontri.
     const biomeIds = new Set(grids.flatMap((g) => DnD.biomi.usedIds(g.biomeMap)));
@@ -154,6 +203,11 @@
       npcs,
       players,
       savedGrids,
+      factions: world.factions,
+      parties: world.parties,
+      cities: world.cities,
+      worldNpcs: world.worldNpcs,
+      quests: world.quests,
       races: used(state.races, new Set(creatures.map((c) => c.raceId))),
       spells: used(state.spells, new Set(creatures.flatMap((c) => (c.spellcasting ? c.spellcasting.known : [])
         .concat(c.innate ? c.innate.spells.map((s) => s.spellId) : [])))),
@@ -177,6 +231,7 @@
   function importSession(state, raw, newId) {
     if (!isSessionFile(raw) || !raw.session || typeof raw.session !== 'object') throw new Error('Il file non contiene una sessione.');
     if (typeof raw.version === 'number' && raw.version > DnD.dati.VERSION) throw new Error('La sessione proviene da una versione più recente dell\'app.');
+    const before12 = !(typeof raw.version === 'number' && raw.version >= 12);
     raw = DnD.dati.migrateV8(DnD.tileset.migrateRaw(clone(raw)));
     const D = DnD.dati;
     const norm = {
@@ -194,10 +249,15 @@
     session.id = newId();
     session.name = uniqueName(state, session.name);
     const idMap = new Map();
-    const normOwned = { npcs: (x) => D.normalizeCreature(x, false), players: (x) => D.normalizeCreature(x, true), savedGrids: D.normalizeSavedGrid };
+    const normOwned = {
+      npcs: (x) => D.normalizeCreature(x, false), players: (x) => D.normalizeCreature(x, true), savedGrids: D.normalizeSavedGrid,
+      factions: DnD.fazioni.normalizeFaction, parties: DnD.party.normalizeParty, cities: DnD.citta.normalizeCity, worldNpcs: DnD.npc.normalizeNpc, quests: DnD.quest.normalizeQuest,
+    };
     for (const key of OWNED) {
+      if (!Array.isArray(state[key])) state[key] = [];
       for (const x of Array.isArray(raw[key]) ? raw[key] : []) {
         const n = normOwned[key](x);
+        if (n.builtin) continue; // fazioni predefinite: sempre presenti
         if (n.shared && state[key].some((e) => e.id === n.id && e.shared)) continue; // modello condiviso già presente
         const fresh = newId();
         idMap.set(n.id, fresh);
@@ -206,13 +266,20 @@
     }
     remapSession(session, idMap, newId);
     for (const g of state.savedGrids.filter((x) => x.sessionId === session.id)) remapGridEvents(g, idMap);
+    remapWorldEntities(state, session.id, idMap);
+    // Sessioni precedenti alla versione 12: i giocatori importati entrano nel party «Gruppo».
+    if (before12 && !state.parties.some((p) => p.sessionId === session.id)) {
+      const party = DnD.party.defaultParty(session.id, state.players.filter((p) => p.sessionId === session.id || p.shared).map((p) => p.id), newId());
+      state.parties.push(party);
+      session.world.activePartyId = party.id;
+    }
     state.sessions.push(session);
     state.currentSessionId = session.id;
     return session;
   }
 
   DnD.sessioni = {
-    OWNED, LIBRARIES, newSession, current, isVisible, visible, uniqueName,
+    OWNED, LIBRARIES, newSession, current, isVisible, visible, uniqueName, remapWorldEntities,
     addSession, duplicateSession, deleteSession, exportSession, isSessionFile, importSession,
   };
 })(globalThis.DnD = globalThis.DnD || {});

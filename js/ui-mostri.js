@@ -377,7 +377,7 @@
       el('div', { class: 'grid-3' }, field('Nome', name, 'name'), field('Taglia', size), field('Tipo', ctype),
         field('Sottotipo', subtype), el('div', { class: 'field' }, el('label', { text: 'Allineamento' }), alignment, alignList), field('Grado di sfida', cr, 'cr')),
       el('p', { class: 'muted small' }, out(() => 'Competenza ' + signed(M.prof(m)) + ' · ' + M.formatXp(M.xpForCr(m.cr)) + ' PE · dado vita d' + M.hitDieFor(m.size))),
-      icon.node, gridSize.node, behavior.node,
+      icon.node, gridSize.node, opts.worldRefs === false ? null : DnD.uiMondo.worldRefsEditor(m, { live: true }).node, behavior.node,
       el('fieldset', {}, el('legend', { text: 'Difesa e punti ferita' }),
         el('div', { class: 'grid-3 tight' },
           field('Classe Armatura', num(m.ac, { min: 1, max: 40, 'data-key': 'ac' }, (v) => { m.ac = v; }), 'ac'),

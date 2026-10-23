@@ -223,7 +223,7 @@
     const extra = o.extra === undefined ? st.extra : o.extra;
     const ignoreTerrain = o.ignoreTerrain === undefined ? st.mode === 'volare' : o.ignoreTerrain;
     const alt = rules.diagonals === 'alternata';
-    const hostile = o.hostile || ((a, b) => (a.faction === 'nemici') !== (b.faction === 'nemici'));
+    const hostile = o.hostile || ((a, b) => DnD.fazioni.ostili(a, b, state.relations));
     const d = G().tokenDims(mover);
     const hostileCells = new Set();
     const otherCells = new Set();

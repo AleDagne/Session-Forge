@@ -165,6 +165,21 @@
           return [el('textarea', { rows: 3, value: a.text, placeholder: 'Testo da leggere ai giocatori (le variabili tra graffe: {nome})', oninput: set('text') }),
             el('label', { class: 'check small' }, rw, ' Con ricompensa'), a.reward ? rewardFields(a.reward) : null];
         }
+        // Mondo: reputazione del party attivo con una fazione e operazioni sulle quest della sessione.
+        case 'reputazione': return [el('div', { class: 'input-row' },
+          DnD.uiMondo.factionSelect(a.factionId, { empty: '— scegli —', onchange: set('factionId') }),
+          el('label', { class: 'inline small' }, 'variazione', numberInput(a.delta, { class: 'qty', min: -200, max: 200, oninput: set('delta', (t) => readNumber(t) || 0) })),
+          textInput(a.reason, { placeholder: 'motivazione (registro)', oninput: set('reason') }))];
+        case 'quest': {
+          const quests = DnD.fazioni.view(s).quests;
+          const q = quests.find((x) => x.id === a.questId);
+          return [el('div', { class: 'input-row' },
+            el('select', { 'aria-label': 'Quest', onchange: (e) => { a.questId = e.target.value; a.objectiveId = ''; draw(); } }, opt('', '— scegli —', !a.questId), missingOpt(a.questId, quests), quests.map((x) => opt(x.id, x.title, x.id === a.questId))),
+            el('select', { 'aria-label': 'Operazione', onchange: (e) => { a.op = e.target.value; draw(); } }, E.QUEST_OPS.map((k) => opt(k, E.QUEST_OP_NAMES[k], k === a.op))),
+            a.op === 'avanza' && q ? el('select', { 'aria-label': 'Obiettivo', onchange: set('objectiveId') }, opt('', '— tutti quelli del tipo del primo —', !a.objectiveId),
+              q.objectives.map((o) => opt(o.id, DnD.quest.objectiveText(o), o.id === a.objectiveId))) : null,
+            a.op === 'avanza' ? el('label', { class: 'inline small' }, 'di', numberInput(a.n, { class: 'qty', min: 1, max: 999, oninput: set('n', (t) => readNumber(t) || 1) })) : null)];
+        }
         case 'nota': return [textInput(a.text, { placeholder: 'Riga del registro', oninput: set('text') }),
           el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: a.toNotes, onchange: (e) => { a.toNotes = e.target.checked; } }), ' Anche nelle note del master')];
         case 'prova': return [

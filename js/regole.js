@@ -110,19 +110,22 @@
       b.initiative - a.initiative || b.dexMod - a.dexMod || a.name.localeCompare(b.name, 'it'));
   }
 
-  function firstTurn(order) {
-    const c = order.find((x) => !isDown(x));
+  // In attesa: NPC diventato ostile che entra nell'ordine di iniziativa solo dal round joinRound; o fuggito.
+  const waiting = (c, round) => Boolean(c.fled || (c.joinRound && c.joinRound > round));
+
+  function firstTurn(order, round) {
+    const c = order.find((x) => !isDown(x) && !waiting(x, round || 1));
     return c ? c.id : null;
   }
 
-  // Passa al prossimo combattente non a terra; incrementa il round quando l'ordine ricomincia.
+  // Passa al prossimo combattente non a terra (né in attesa); incrementa il round quando l'ordine ricomincia.
   function nextTurn(order, currentId, round) {
-    if (!order.some((c) => !isDown(c))) return { currentId, round };
     const idx = order.findIndex((c) => c.id === currentId);
-    for (let i = 1; i <= order.length; i++) {
+    for (let i = 1; i <= order.length * 2; i++) {
       const j = idx + i;
+      const r = round + Math.floor(j / order.length);
       const c = order[j % order.length];
-      if (!isDown(c)) return { currentId: c.id, round: round + (j >= order.length ? 1 : 0) };
+      if (!isDown(c) && !waiting(c, r)) return { currentId: c.id, round: r };
     }
     return { currentId, round };
   }
@@ -405,7 +408,7 @@
     ABILITIES, ABILITY_NAMES, MODES,
     modifier, formatModifier, racialBonus, finalAbilities, asiPointsAvailable, asiPointsAssigned, spellStats,
     rollD20, resolveAttack, applyDamage, heal, hpLevel, isDown,
-    sortByInitiative, firstTurn, nextTurn, rollInitiative, createCombatants,
+    sortByInitiative, firstTurn, nextTurn, waiting, rollInitiative, createCombatants,
     STANDARD_ARRAY, roll4d6DropLowest, shuffle, resolvePriority, randomizeAbilities,
     hitDieAverage, computeHp, ARMOR_TYPES, ARMOR_NAMES, ARMOR_BASE, computeAc,
     proficiencyBonus, savingThrowTotal, savingThrows, rollSave, derivedStats, autoAc, toCombatant,

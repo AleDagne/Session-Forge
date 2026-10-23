@@ -588,6 +588,7 @@
       if (!cfg.isPlayer && tab === 'creature') { renderTabs(); DnD.uiMostri.render(root.appendChild(el('div', { role: 'tabpanel' }))); return; }
       if (!cfg.isPlayer && tab === 'boss') { renderTabs(); DnD.uiBoss.render(root.appendChild(el('div', { role: 'tabpanel' }))); return; }
       if (cfg.isPlayer && tab === 'leggendari') { renderTabs(); DnD.uiLeggendario.render(root.appendChild(el('div', { role: 'tabpanel' })), api); return; }
+      if (cfg.isPlayer && tab === 'party') { renderTabs(); DnD.uiParty.render(root.appendChild(el('div', { role: 'tabpanel' }))); return; }
       if (editing) renderForm();
       else renderList();
     }
@@ -596,10 +597,11 @@
     function renderTabs() {
       if (cfg.isPlayer) {
         root.append(el('div', { class: 'section-head' }, el('h1', { text: cfg.title })),
-          DnD.uiAsset.tabBar([{ id: 'standard', label: 'Standard' }, { id: 'leggendari', label: '✦ Leggendari' }], tab, 'Tipo di giocatore', 'scheda-giocatori-', (id) => {
+          DnD.uiAsset.tabBar([{ id: 'standard', label: 'Standard' }, { id: 'leggendari', label: '✦ Leggendari' }, { id: 'party', label: '⚑ Party' }], tab, 'Tipo di giocatore', 'scheda-giocatori-', (id) => {
             tab = id;
             editing = null;
             DnD.uiLeggendario.reset();
+            DnD.uiParty.reset();
             render();
           }));
         return;
@@ -695,7 +697,8 @@
             [{ text: '+ Nuovo ' + cfg.singular.toLowerCase(), primary: true, onclick: () => { editing = 'new'; render(); } }]));
     }
 
-    // opts (leggendari): { player, host, wrap(head, form) -> nodo, onDone(salvato | null), heading, submitText }
+    // opts (leggendari, NPC del Mondo): { player, host, wrap(head, form) -> nodo, onDone(salvato | null), heading, submitText,
+    //   save(salvato) per salvare altrove (es. la scheda di un NPC) }
     function renderForm(opts) {
       opts = opts || {};
       const races = DnD.store.state.races;
@@ -765,6 +768,8 @@
         combatant: () => { const f = finalNow(); return f ? { id: 'anteprima', abilities: f, weapons: weapons.read(), spellcasting: null, creature: null } : null; },
       });
       const inventory = cfg.isPlayer ? inventoryEditor(c) : null;
+      // Mondo: fazione (vuota = del party per i giocatori, della città o Nemici per i nemici) e città d'origine.
+      const worldRefs = DnD.uiMondo.worldRefsEditor(c, { player: cfg.isPlayer });
       inp.raceId.addEventListener('change', refresh);
       inp.level.addEventListener('input', refresh);
       if (inp.abilityCap) inp.abilityCap.addEventListener('input', refresh);
@@ -794,6 +799,7 @@
         cls.customBox,
         icon.node,
         gridSize.node,
+        worldRefs.node,
         behavior ? behavior.node : null,
         abilities.node,
         el('div', { class: 'grid-2 combat-stats' }, hp.node, ac.node),
@@ -822,7 +828,7 @@
           abilities: abilities.read(),
           weapons: weapons.read(),
           notes: inp.notes.value.trim(),
-        }, abilities.readAsi(), cls.read(), hp.read(), ac.read(), saves.read(), gridSize.read(), behavior ? behavior.read() : {}, { spellcasting: spells.read() }, inventory ? inventory.read() : {});
+        }, abilities.readAsi(), cls.read(), hp.read(), ac.read(), saves.read(), gridSize.read(), behavior ? behavior.read() : {}, { spellcasting: spells.read() }, inventory ? inventory.read() : {}, worldRefs.read());
         if (cfg.isPlayer) data.playerName = inp.playerName.value.trim();
         // Leggendari: tipo, tetto e dati del percorso e delle trasformazioni restano quelli della scheda.
         if (legendary) Object.assign(data, { type: 'leggendario', abilityCap: readNumber(inp.abilityCap), legend: c.legend });
@@ -836,12 +842,19 @@
         }
         if (!showErrors(form, errors)) return;
         const saved = DnD.dati.normalizeCreature(data, cfg.isPlayer);
-        save((st) => {
+        if (opts.save) opts.save(saved);
+        else save((st) => {
           const i = st[cfg.key].findIndex((x) => x.id === saved.id);
           if (i >= 0) st[cfg.key][i] = saved;
-          else st[cfg.key].push(saved);
+          else {
+            st[cfg.key].push(saved);
+            // Un giocatore nuovo entra nel party attivo della sessione (se c'è).
+            const v = DnD.fazioni.view(st);
+            const party = cfg.isPlayer ? DnD.party.active(v.parties, v.world) : null;
+            if (party && !DnD.party.partyOf(v.parties, saved.id)) DnD.party.assignPlayer(v.parties, party.id, saved.id);
+          }
         });
-        toast(cfg.singular + ' salvato.', 'success');
+        toast(opts.savedText || cfg.singular + ' salvato.', 'success');
         done(saved);
       });
 
@@ -859,6 +872,8 @@
     return {
       title: cfg.title,
       render,
+      // Form della scheda riusabile altrove (NPC del Mondo): vedi renderForm.
+      form: (o) => renderForm(o),
       reset: () => { editing = null; if (!cfg.isPlayer && DnD.uiMostri) DnD.uiMostri.reset(); },
       // Azioni rapide dalle schermate vuote (es. "Aggiungi nemici").
       open: (action) => { if (action === 'nuovo') { editing = 'new'; tab = 'standard'; } },

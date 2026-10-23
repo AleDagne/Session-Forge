@@ -1026,3 +1026,78 @@ html[data-reduce-motion] .notes-panel, html[data-reduce-motion] .notes-fab { tra
 .pick-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .pick-card input { position: absolute; opacity: 0; pointer-events: none; }
 .event-window .title-with-icon { gap: 0.6rem; }
+
+/* ---------- Mondo: fazioni, reputazione, città, NPC, party, quest ---------- */
+.faction-dot { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 1px solid var(--border); vertical-align: middle; flex: none; }
+.faction-tag { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--text); }
+.faction-tag canvas { vertical-align: middle; }
+.faction-tag.missing { color: var(--warn); }
+.faction-card { border-top: 3px solid var(--faction, var(--border)); }
+.party-card { border-top: 3px solid var(--party, var(--border)); }
+.party-card.active-party { box-shadow: 0 0 0 2px var(--accent); }
+.danger-text { color: var(--danger-text); }
+.tag.danger { color: var(--danger-text); border-color: var(--danger-border); }
+.relation-matrix { border-collapse: collapse; font-size: 0.85rem; }
+.relation-matrix th, .relation-matrix td { border: 1px solid var(--border); padding: 0.25rem 0.4rem; text-align: left; white-space: nowrap; }
+.relation-matrix thead th { background: var(--panel-2); }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.rel-select { width: auto; font-size: 0.8rem; padding: 0.15rem 0.3rem; }
+.relation-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+.relation-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.rel-legend { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.6rem; }
+.rel-alleata, .att-amichevole, .city-att-accogliente, .q-completata { color: var(--ok-text); border-color: var(--ok); }
+.rel-amichevole { color: var(--ok-text); }
+.rel-ostile, .att-ostile, .city-att-ostile, .q-fallita, .q-scaduta { color: var(--danger-text); border-color: var(--danger-border); }
+.rel-guerra { color: var(--danger-text); border-color: var(--bad); font-weight: 700; }
+.city-att-diffidente { color: var(--warn); border-color: var(--warn); }
+.q-attiva { color: var(--accent); border-color: var(--accent); }
+.rep-bar { display: flex; align-items: center; gap: 0.5rem; min-width: 10rem; }
+.rep-track { position: relative; flex: 1; height: 0.55rem; background: var(--hp-track); border-radius: 999px; overflow: hidden; min-width: 6rem; }
+.rep-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.rep-fill { position: absolute; top: 0; bottom: 0; }
+.rep-fill.pos { background: var(--hp-high); }
+.rep-fill.neg { background: var(--hp-low); }
+.rep-value { white-space: nowrap; min-width: 7.5rem; }
+.rep-list { list-style: none; padding: 0; margin: 0.25rem 0; display: grid; gap: 0.35rem; }
+.rep-list li { display: grid; grid-template-columns: minmax(7rem, 11rem) 1fr auto; align-items: center; gap: 0.5rem; }
+.rep-log li { padding: 0.15rem 0; border-bottom: 1px dashed var(--border); }
+.rep-log li.reverted { opacity: 0.55; text-decoration: line-through; }
+.city-rules { margin: 0.25rem 0; padding-left: 1.1rem; }
+.march-order, .march-edit { margin: 0.25rem 0; padding-left: 1.3rem; }
+.march-edit li { display: flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0; }
+.march-edit .head-actions { margin-left: auto; }
+.party-purse { margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.npc-head { display: flex; gap: 0.75rem; align-items: flex-start; }
+.npc-head .tag { margin-right: 0.2rem; }
+.npc-actions { margin: 0.75rem 0; flex-wrap: wrap; }
+.npc-editor { margin-top: 0.75rem; }
+.dialog-node { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; margin: 0.5rem 0; background: var(--panel); }
+.dialog-node > summary { cursor: pointer; font-weight: 600; }
+.dialog-answer { border-left: 3px solid var(--accent); padding: 0.35rem 0 0.35rem 0.6rem; margin: 0.5rem 0; display: grid; gap: 0.3rem; }
+.cond-list { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.cond-chip { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; padding: 0.15rem 0.35rem; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.cond-chip select, .cond-chip input { width: auto; max-width: 11rem; }
+input.short { max-width: 8rem; }
+.dialog-runner { display: grid; gap: 0.6rem; }
+.dialog-transcript { max-height: 45vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; background: var(--panel-2); }
+.dialog-transcript p { margin: 0.3rem 0; }
+.dialog-transcript .npc-line { font-style: italic; }
+.dialog-transcript .player-line { color: var(--accent); font-weight: 600; }
+.dialog-answers { display: grid; gap: 0.35rem; }
+.dialog-choice { text-align: left; }
+.trade-window { display: grid; gap: 0.6rem; }
+.trade-table { width: 100%; border-collapse: collapse; }
+.trade-table td { padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.trade-table tr.muted td { color: var(--muted); }
+.trade-table .tag { margin-left: 0.3rem; }
+.trade-total { padding: 0.5rem 0.75rem; background: var(--panel-2); border-radius: var(--radius); }
+.quest-journal { margin-top: 1rem; }
+.journal-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+.journal-entry { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; }
+.journal-entry li.done { color: var(--ok-text); }
+.player-view { white-space: pre-wrap; background: var(--panel-2); padding: 0.5rem; border-radius: 6px; max-height: 14rem; overflow: auto; }
+.world-refs .grid-2 { margin-bottom: 0.25rem; }
+@media (max-width: 760px) {
+  .rep-list li { grid-template-columns: 1fr auto; }
+  .rep-list li .rep-bar { grid-column: 1 / -1; }
+}

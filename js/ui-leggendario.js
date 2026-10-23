@@ -517,7 +517,7 @@
     host.append(formHost);
     // Icona e dimensione sulla griglia della forma si scelgono nella scheda boss (un solo posto).
     DnD.uiMostri.monsterForm(formHost, Object.assign(clone(t.creature), { id: t.creature.id || DnD.dadi.uid(), type: 'boss', icon: t.icon, gridSize: t.gridSize }), {
-      kind: 'boss', heading: 'Scheda della forma (creatura boss)', submitText: '🜂 Salva la trasformazione', submitClass: 'legend-ascend-btn', savedText: 'Trasformazione salvata.',
+      kind: 'boss', worldRefs: false, heading: 'Scheda della forma (creatura boss)', submitText: '🜂 Salva la trasformazione', submitClass: 'legend-ascend-btn', savedText: 'Trasformazione salvata.',
       // Il tema della forma si sceglie solo nelle regole (vale per barra, vignettatura, pedina e lampo).
       extra: (m, ctx) => DnD.uiBoss.bossFields(m, ctx, el('div'), { presentation: false }),
       wrap: (head, form) => frame('Forma', [head, form], { sideSwords: true }),

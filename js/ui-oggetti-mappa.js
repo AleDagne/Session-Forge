@@ -95,7 +95,7 @@
     let cut = o.tiles && o.tiles.kind === 'immagine' ? { tilesetId: o.tiles.tilesets[0], srcId: o.tiles.source, selection: o.tiles.sel } : null;
     const inp = {
       name: textInput(o.name, { maxlength: 60 }),
-      otype: el('select', {}, OM.TYPES.map((t) => el('option', { value: t, text: OM.TYPE_NAMES[t], selected: t === o.otype }))),
+      otype: el('select', {}, OM.TYPES.filter((t) => t !== 'npc').map((t) => el('option', { value: t, text: OM.TYPE_NAMES[t], selected: t === o.otype }))),
       description: el('textarea', { rows: 2, value: o.description }),
       container: el('input', { type: 'checkbox', checked: o.container }),
       interactive: el('input', { type: 'checkbox', checked: o.interactive }),
@@ -203,6 +203,9 @@
   // ctx: { getItem() -> oggetto piazzato, update(fn(item, state)), log(text), combatants() -> [combattente] (facoltativo),
   //        applyDamage(targetId, amount, type, text) (facoltativo, nel combattimento) }
   function openPanel(ctx) {
+    // Copie degli NPC del Mondo: pannello NPC (Parla, Commercia, Quest, Attacca, Scheda, Fazione).
+    const first = ctx.getItem();
+    if (first && first.otype === 'npc') return DnD.uiNpc.openPanel(ctx);
     const body = el('div', { class: 'object-panel' });
     let dialog = null;
     const st = () => DnD.store.state;

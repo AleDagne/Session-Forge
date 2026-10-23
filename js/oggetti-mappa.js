@@ -7,10 +7,11 @@
 (function (DnD) {
   'use strict';
 
-  const TYPES = ['forziere', 'porta', 'leva', 'trappola', 'barile', 'altare', 'cassa', 'altro', 'a-terra'];
+  // «npc»: copia di un NPC del Mondo piazzata sulla griglia (non è un modello della libreria, vedi npc.js).
+  const TYPES = ['forziere', 'porta', 'leva', 'trappola', 'barile', 'altare', 'cassa', 'altro', 'a-terra', 'npc'];
   const TYPE_NAMES = {
     forziere: 'Forziere', porta: 'Porta', leva: 'Leva', trappola: 'Trappola', barile: 'Barile', altare: 'Altare', cassa: 'Cassa',
-    altro: 'Altro', 'a-terra': 'Oggetto a terra',
+    altro: 'Altro', 'a-terra': 'Oggetto a terra', npc: 'NPC',
   };
   const TYPE_ICONS = { forziere: 'forziere', porta: 'porta', leva: 'leva', trappola: 'trappola', barile: 'barile', altare: 'gemma', cassa: 'forziere', altro: 'borsa', 'a-terra': 'borsa' };
 
@@ -67,6 +68,7 @@
   function normalizeTemplate(o, normalizeTiles) {
     o = obj(o);
     const tiles = normalizeTiles ? normalizeTiles(o.tiles) : null;
+    if (o.otype === 'npc') o = Object.assign({}, o, { otype: 'altro' }); // i modelli non sono NPC
     return Object.assign({
       id: typeof o.id === 'string' && /^[\w-]{1,64}$/.test(o.id) ? o.id : DnD.dadi.uid(),
       name: str(o.name, 60) || 'Oggetto di mappa',

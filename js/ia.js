@@ -33,10 +33,13 @@
   }
   const defaultControl = (kind) => (kind === 'player' ? 'manuale' : 'ia');
   const defaultFaction = (kind) => (kind === 'player' ? 'giocatori' : 'nemici');
-  // Giocatori e Neutrali/Alleati stanno dalla stessa parte; i Nemici sono ostili a entrambi.
+  // Fazioni del Mondo: l'IA attacca solo chi è Ostile o In guerra, supporta Alleati e Amichevoli e ignora i
+  // Neutrali (fazioni.relazioneCombattenti, con le ostilità personali degli NPC provocati). rel = state.relations
+  // (istantanea delle fazioni della sessione); senza, valgono le relazioni di partenza delle tre predefinite
+  // (Giocatori e Neutrali dalla stessa parte, Nemici ostili a entrambi, come prima).
   const side = (c) => (c.faction === 'nemici' ? 'nemici' : 'giocatori');
-  const isHostile = (a, b) => a.id !== b.id && side(a) !== side(b);
-  const isAlly = (a, b) => side(a) === side(b);
+  const isHostile = (a, b, rel) => DnD.fazioni.ostili(a, b, rel);
+  const isAlly = (a, b, rel) => DnD.fazioni.alleati(a, b, rel);
   const alive = (c) => c.hp > 0;
 
   // ---------- Armi e azioni ----------
@@ -194,9 +197,9 @@
 
   // ---------- Punteggi ----------
   const isCaster = (c) => Boolean(c.spellcasting && c.spellcasting.spells.length) || K().CASTER_CLASSES.includes(c.classId);
-  function weakness(t, attacker, combatants, damageType) {
+  function weakness(t, attacker, combatants, damageType, rel) {
     const W = K().WEAKNESS;
-    const near = combatants.some((o) => o.id !== t.id && alive(o) && isAlly(o, t) && G().tokenDistance(o, t) !== null && G().tokenDistance(o, t) <= 2);
+    const near = combatants.some((o) => o.id !== t.id && alive(o) && isAlly(o, t, rel) && G().tokenDistance(o, t) !== null && G().tokenDistance(o, t) <= 2);
     const terms = {
       hp: 1 - Math.min(1, t.hp / K().HP_SCALE),
       ac: Math.min(1, Math.max(0, (20 - t.ac) / 10)),
@@ -287,7 +290,7 @@
   // Dijkstra con l'ingombro w×h, terreno difficile, strisciare e modalità di movimento del combattente e la
   // regola delle diagonali (state.rules): vedi movimento.js. Le pedine ostili bloccano, quelle alleate (o a
   // terra) si attraversano ma non ci si ferma sopra. opts: { deadline, now, maxCost }.
-  const paths = (map, state, mover, opts) => DnD.movimento.reach(map, state, mover, Object.assign({ rules: state.rules, hostile: (a, b) => alive(b) && isHostile(a, b) }, opts));
+  const paths = (map, state, mover, opts) => DnD.movimento.reach(map, state, mover, Object.assign({ rules: state.rules, hostile: (a, b) => alive(b) && isHostile(a, b, state.relations) }, opts));
   const pathTo = (P, k) => P.path(k);
   // Tronca un percorso al budget di movimento, fermandosi sull'ultima cella dove si può stare.
   function truncate(P, path, budget) {
@@ -307,7 +310,7 @@
   const speedCells = (c, state) => DnD.movimento.speedCells(c, state && state.rules, state && state.grid && state.grid.feetPerCell);
   const moveLeft = (c, state) => DnD.movimento.left(c, state && state.rules, state && state.grid && state.grid.feetPerCell);
 
-  // state: { combatants, grid, catalog, tilesets, round, seed }; opts: { forceTargetId, now, timeLimit }.
+  // state: { combatants, grid, catalog, tilesets, round, seed, relations (fazioni.table) }; opts: { forceTargetId, now, timeLimit }.
   function pianificaTurno(state, mover, opts) {
     const o = opts || {};
     const now = o.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
@@ -322,8 +325,10 @@
     if (!mover.pos) return Object.assign(plan, { reason: header + ': non è sulla griglia.' });
     const map = buildMap(state);
     const others = state.combatants.filter((c) => c.id !== mover.id);
-    const hostiles = others.filter((c) => alive(c) && c.pos && isHostile(mover, c));
-    const allies = others.filter((c) => alive(c) && c.pos && isAlly(mover, c));
+    // Gli NPC neutrali ancora fuori dall'iniziativa (joinRound nel futuro) non contano.
+    const active = (c) => alive(c) && c.pos && !(c.joinRound && c.joinRound > (state.round || 1));
+    const hostiles = others.filter((c) => active(c) && isHostile(mover, c, state.relations));
+    const allies = others.filter((c) => active(c) && isAlly(mover, c, state.relations));
     if (!hostiles.length) return Object.assign(plan, { reason: header + ': nessun avversario rimasto.' });
     const rng = rngFor(state.seed || 0, state.round || 1, mover.id);
     // Movimento: il residuo del turno; con lo Scatto si aggiunge la velocità piena.
@@ -349,7 +354,7 @@
       }
       return { cost: best, key: bestK };
     };
-    const info = pool.map((t) => ({ t, path: reachCost(t, 1).cost, weak: weakness(t, mover, state.combatants, dmgType), thr: threat(t, state.catalog), line: G().tokenDistance(mover, t) }));
+    const info = pool.map((t) => ({ t, path: reachCost(t, 1).cost, weak: weakness(t, mover, state.combatants, dmgType, state.relations), thr: threat(t, state.catalog), line: G().tokenDistance(mover, t) }));
     plan.scores = info.map((x) => ({ id: x.t.id, name: x.t.name, percorso: x.path === Infinity ? null : x.path, distanza: x.line,
       debolezza: Math.round(x.weak.score * 100) / 100, minaccia: Math.round(x.thr.score * 10) / 10 }));
     if (!seen.length) plan.reminders.push('Non vede nessun avversario: si avvicina al più vicino.');
@@ -413,11 +418,12 @@
           } else ok = dd <= (op.reach || 1);
           if (!ok) continue;
           let value = expectedDamage(op, target, dis);
-          // Area: conta i nemici vicini al bersaglio; mai se ci sono alleati nell'area.
+          // Area: conta i nemici vicini al bersaglio; mai se ci sono alleati o neutrali nell'area.
           let areaTargets = [target.id];
           if (op.area) {
             const inArea = (c) => G().tokenDistance(c, target) <= K().PLANNER.areaRadius;
-            if (allies.some(inArea) || inArea(at(mover, pos))) continue; // chi attacca conta dalla posizione d'arrivo
+            const bystanders = others.filter((c) => alive(c) && c.pos && !isHostile(mover, c, state.relations));
+            if (bystanders.some(inArea) || inArea(at(mover, pos))) continue; // chi attacca conta dalla posizione d'arrivo
             const hit = hostiles.filter(inArea);
             if (op.source === 'incantesimo' && hit.length < 2) continue;
             areaTargets = hit.map((h) => h.id);

@@ -8,10 +8,12 @@
   const GROUPS = { mappa: 'Mappa', personaggi: 'Personaggi', libreria: 'Libreria', strumenti: 'Strumenti' };
 
   // Icone SVG 24×24 a tratto (stroke = currentColor): un elenco di path "d".
+  // Scorciatoie Alt+1…Alt+9 nell'ordine, Alt+0 per la decima voce.
   const MENU = [
     { id: 'editor', label: 'Editor griglie', group: 'mappa', icon: ['M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z', 'M9 3v15', 'M15 6v15'] },
     { id: 'combattimento', label: 'Combattimento', group: 'mappa', icon: ['M4 4l11 11', 'M20 4L9 15', 'M4 4h4', 'M4 4v4', 'M20 4h-4', 'M20 4v4', 'M13 17l4 4', 'M11 17l-4 4', 'M15 19l2-2', 'M9 19l-2-2'] },
     { id: 'esplorazione', label: 'Esplorazione', group: 'mappa', icon: ['M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z', 'M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z'] },
+    { id: 'mondo', label: 'Mondo', group: 'mappa', icon: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M3.6 9h16.8', 'M3.6 15h16.8', 'M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9', 'M12 3c-2.5 2.7-3.8 5.7-3.8 9s1.3 6.3 3.8 9'] },
     { id: 'nemici', label: 'Nemici', group: 'personaggi', icon: ['M12 3c-4.4 0-8 3.1-8 7 0 2.4 1.3 4.5 3.3 5.7V19h9.4v-3.3c2-1.2 3.3-3.3 3.3-5.7 0-3.9-3.6-7-8-7z', 'M9 10.5h.01', 'M15 10.5h.01', 'M10 19v2', 'M14 19v2'] },
     { id: 'giocatori', label: 'Giocatori', group: 'personaggi', icon: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', 'M9 12l2 2 4-4'] },
     { id: 'magie', label: 'Magie', group: 'libreria', icon: ['M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z', 'M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z'] },
