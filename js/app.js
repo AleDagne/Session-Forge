@@ -17,12 +17,12 @@
   // Menù costruito da DnD.config.MENU: voci nell'ordine indicato, separatori tra i gruppi.
   function buildNav() {
     let group = null;
-    C.MENU.forEach((item, i) => {
+    C.MENU.forEach((item) => {
       if (item.group !== group) {
         group = item.group;
         navList.append(el('li', { class: 'nav-group', role: 'presentation' }, el('span', { class: 'nav-label', text: C.GROUPS[group] })));
       }
-      const shortcut = 'Alt+' + ((i + 1) % 10);
+      const shortcut = 'Alt+' + item.key;
       navList.append(el('li', {}, el('button', {
         type: 'button', 'data-section': item.id, title: item.label + ' (' + shortcut + ')', 'aria-label': item.label,
         'aria-keyshortcuts': shortcut, onclick: () => show(item.id),
@@ -105,9 +105,9 @@
       if (sidebar) sidebar.toggle();
       return;
     }
-    // Alt+1…Alt+9 e Alt+0 (decima voce): voci del menù nell'ordine.
+    // Alt+cifra: la voce del menù con quella scorciatoia (config.js).
     const m = /^(?:Digit|Numpad)([0-9])$/.exec(e.code);
-    const item = m ? C.MENU[(Number(m[1]) + 9) % 10] : null;
+    const item = m ? C.MENU.find((x) => x.key === m[1]) : null;
     if (e.altKey && !e.ctrlKey && !e.metaKey && item) {
       e.preventDefault();
       show(item.id);

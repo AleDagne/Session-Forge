@@ -40,7 +40,7 @@
     root.append(el('div', { class: 'section-head' }, el('h2', { text: 'Party' }),
       el('div', { class: 'head-actions' }, el('button', { class: 'btn primary', text: '+ Nuovo party', onclick: () => { editing = 'new'; render(); } }))),
     el('p', { class: 'muted small', text: 'Il party attivo è quello usato da «Aggiungi party» nel Combattimento e nell\'Esplorazione, dai mercanti e dalla reputazione. Un giocatore sta in un solo party.' }),
-    free.length ? el('p', { class: 'small warn-text', text: 'Senza party: ' + free.map((p) => p.name).join(', ') + '.' }) : null,
+    free.length ? el('p', { class: 'small warn-text', text: 'Senza party: ' + free.map((p) => p.name).join(', ') + '.' }) : '',
     w.parties.length ? el('div', { class: 'card-grid' }, w.parties.map((p) => {
       const m = P.members(p, players());
       return el('article', { class: 'card party-card' + (active && active.id === p.id ? ' active-party' : ''), style: '--party:' + p.color },

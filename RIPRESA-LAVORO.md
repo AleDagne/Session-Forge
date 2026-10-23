@@ -12,13 +12,11 @@ Data: 23 ottobre 2026. Questo file serve a riprendere il lavoro da un altro PC.
 
 ## Stato al momento della pausa
 
-- Versione dei dati: **12** (cache del service worker: `session-forge-v22`).
-- L'app parte senza errori in console; la migrazione v11 → v12 funziona sui dati reali.
-- Tutte le schede nuove (Mondo › Fazioni/Città/NPC/Quest, Giocatori › Party, editor NPC con le 5 sotto-schede,
-  form quest) si aprono senza errori (prova automatica via JS, non ancora provate a mano in profondità).
-- `test.html`: prima di aggiornare i 4 test vecchi passavano 184/188; i 4 falliti erano attesi (nuova voce di
-  menù, versione 12) e sono **già stati corretti** in `js/test.js` (non ancora rieseguiti).
-- **I test nuovi della fase NON sono ancora scritti** (vedi «Da fare»).
+- Versione dei dati: **12** (cache del service worker: `session-forge-v24`).
+- `test.html`: **213/213** passati (16 test nuovi del Mondo, più la verifica delle scorciatoie).
+- L'app parte senza errori; le schede Mondo › Fazioni/Città/NPC/Quest, l'editor NPC (5 sotto-schede) e
+  Giocatori › Party si aprono senza errori (prova automatica, senza toccare i dati).
+- La fase audio (commit `33c3f5a`) è unita al Mondo: i suoni del Mondo passano da `DnD.audio` (categoria «Mondo»).
 
 ## Fatto (file nuovi)
 
@@ -78,28 +76,31 @@ Data: 23 ottobre 2026. Questo file serve a riprendere il lavoro da un altro PC.
 - `ui-creature.js`: form riusabile (`DnD.sezioni.nemici.form` con `save`), campi Mondo nei form, scheda Party,
   giocatore nuovo nel party attivo. `ui-mostri.js`: campi Mondo (`worldRefs: false` per le trasformazioni).
 
+## Fatto in questa ripresa
+
+1. Test nuovi in `js/test.js` (sezione «Mondo»): relazioni, reputazione ed effetti, registro, monete, mercante,
+   NPC provocato e calma, IA con fazioni, cambio di fazione/avvisi ad area/fine/`joinRound`, party, quest,
+   dialoghi, istanze, città, vista giocatori, riferimenti mancanti, migrazione ed esempi, export/import/duplicazione,
+   azioni evento Reputazione e Quest.
+2. Corretto in `quest.js`: l'avviso «tutti gli obiettivi completati, da consegnare» si ripeteva a ogni uccisione o
+   dialogo successivo; ora compare solo quando l'azione fa avanzare la quest.
+3. Suoni del Mondo: nuova categoria «Mondo» in `suoni-dati.js` (reputazione su/giù, quest accettata/completata,
+   NPC ostile); `ui-mondo.js` non usa più la vecchia impostazione `diceSound` (era sempre muto).
+4. Esempi originali (`mondo-dati.js` › `EXAMPLES`, `dati.defaultWorld`): Compagnia della Lanterna, Pontegrigio,
+   Orsola Tre Monete (mercante con dialogo), «Le lanterne spente». Negli archivi nuovi e in quelli migrati da v11.
+5. Pulizie: `ui-npc.js` senza `|| true`; scorciatoie con cifra fissa (`key` in `MENU`): **Mondo = Alt+0**, le
+   altre come prima (prima Alt+0 apriva Dadi e Nemici…Dadi erano slittati di uno); «null» scritto per sbaglio in
+   alcuni pannelli (`append` nativo con `null`: Party, NPC, scambio, Boss, Oggetti di mappa).
+6. README (sezione Mondo, navigazione, IA, suoni, modello dati v12, migrazione, test, struttura) e CLAUDE.md.
+
 ## Da fare
 
-1. **Test nuovi in `js/test.js`** (prima di `async function runTests`), piano già pronto:
-   matrice e `relazione`; soglie ed effetti (prezzi, città, accessi, atteggiamento); registro reputazione con
-   annullamento e reputazione per giocatore; monete (`pay` con resto); mercante (acquisto/vendita, oggetti
-   sbloccati da reputazione, rifornimento, contrattazione); NPC neutrale che diventa ostile (solo lui, fazione,
-   città), penalità, annullamento, `calm`; `countsForXp`; IA con alleati/neutrali/ostili e NPC che aiuta il party;
-   cambio fazione a metà combattimento e `areaWarnings`; `nextTurn` con `joinRound`; party (un solo party per
-   giocatore); quest (requisiti, obiettivi e contatori, `onKill` per nome/tipo, `onCollect`, `complete`, scadenza);
-   dialogo con condizioni ed esiti; istanze indipendenti dello stesso NPC; città con fazione propagata; migrazione
-   v11 → v12; export/import di sessione e archivio e duplicazione con il Mondo; riferimenti mancanti;
-   `statoNpcPerGiocatore` e `quest.perGiocatore`; `combatOver`; azioni evento Reputazione/Quest e `questOp`.
-2. Eseguire `test.html` e correggere.
-3. **Prove a mano**: creare fazioni e relazioni; party; città e segnaposto; NPC mercante trascinato sulla griglia
-   (Editor, Combattimento, Esplorazione); dialogo; scambio; attacco a un neutrale (provocazione e annullamento);
-   quest offerta/consegnata; diario; reputazione.
-4. Esempi originali (punto 11 del prompt): una fazione, una città, un mercante con dialogo e una quest d'esempio,
-   aggiunti agli archivi nuovi (e con la migrazione v12).
-5. Piccole pulizie note: in `ui-npc.js` `generalTab` la condizione `n.roles.includes('combattente') || true` è da
-   semplificare; la routine è solo un promemoria (non sposta le pedine).
-6. **README** (sezione Mondo, Party, modello dati v12, migrazione, test, struttura, Alt+0) e **CLAUDE.md**
-   (nuovi moduli). Resoconto finale in italiano.
+1. **Prove a mano** (non automatizzabili senza toccare i dati veri): fazioni e relazioni; party; città e
+   segnaposto; NPC mercante trascinato sulla griglia (Editor, Combattimento, Esplorazione); dialogo; scambio e
+   contrattazione; attacco a un neutrale (provocazione e annullamento); quest offerta/consegnata; diario; reputazione.
+2. Note: un archivio **già alla v12** non riceve gli esempi del Mondo (solo archivi nuovi o migrati da v11). La
+   regola «blocca se ostile» (`world.blockHostile`) è sempre attiva: non c'è ancora un interruttore nell'interfaccia.
+   La routine degli NPC resta un promemoria (non sposta le pedine).
 
 ## Il prompt originale della fase (testo inserito dall'utente)
 

@@ -507,7 +507,7 @@
         b.phases.push({ id: DnD.dadi.uid(), threshold: Math.max(1, Math.round((last.threshold || 100) / 2)), name: 'Fase ' + (b.phases.length + 1), note: '', effect: 'lampo', temperament: '', enable: [], disable: [] });
         drawPhases();
         ctx.refresh();
-      } }) : null);
+      } }) : '');
     }
     drawPhases();
     const scale = el('input', { type: 'checkbox', checked: b.scaleByPlayers, onchange: (e) => { b.scaleByPlayers = e.target.checked; ctx.refresh(); } });

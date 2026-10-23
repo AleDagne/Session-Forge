@@ -168,7 +168,8 @@
         field('Città', UM().citySelect(n.cityId, { onchange: (e) => { n.cityId = e.target.value; render(); } })),
         field('Atteggiamento di base', el('select', { onchange: set('attitude') }, K.ATTITUDES.map((a) => opt(a, K.ATTITUDE_NAMES[a], a === n.attitude))), null,
           'Si somma al modificatore della reputazione del party con la sua fazione.')),
-      n.roles.includes('combattente') || true ? el('fieldset', {}, el('legend', { text: '🛡 Nel combattimento (combattente neutrale)' }),
+      // Sempre visibile: qualunque NPC può essere attaccato (le regole valgono anche senza il ruolo).
+      el('fieldset', {}, el('legend', { text: '🛡 Nel combattimento (combattente neutrale)' }),
         el('div', { class: 'grid-3 tight' },
           field('Comportamento', el('select', { onchange: (e) => { n.combat.defend = e.target.value; } }, K.DEFENDS.map((d) => opt(d, K.DEFEND_NAMES[d], d === n.combat.defend)))),
           field('Se provocato diventa ostile', el('select', { onchange: (e) => { n.combat.provoke = e.target.value; } }, K.PROVOKE_RULES.map((d) => opt(d, K.PROVOKE_NAMES[d], d === n.combat.provoke)))),
@@ -176,7 +177,7 @@
         el('div', { class: 'grid-2 tight' },
           field('CD per calmarlo', numberInput(n.combat.calmDc, { min: 1, max: 40, oninput: (e) => { n.combat.calmDc = readNumber(e.target) || 15; } })),
           el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: n.combat.joinNow, onchange: (e) => { n.combat.joinNow = e.target.checked; } }), ' Entra subito nell\'iniziativa (anche se neutrale)')),
-        el('p', { class: 'muted small', text: 'Un NPC neutrale non attacca e resta fuori dall\'iniziativa finché non diventa ostile: se viene attaccato (o lo è un alleato che difende) diventa ostile, tira l\'iniziativa ed entra al round successivo.' })) : null,
+        el('p', { class: 'muted small', text: 'Un NPC neutrale non attacca e resta fuori dall\'iniziativa finché non diventa ostile: se viene attaccato (o lo è un alleato che difende) diventa ostile, tira l\'iniziativa ed entra al round successivo.' })),
       field('Note del master', el('textarea', { rows: 3, value: n.notes, oninput: set('notes') })),
       el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: n.shared, onchange: set('shared') }), ' Condividi con tutte le sessioni')));
   }
@@ -365,7 +366,7 @@
           ctx.combat && !state.hostile && !state.dead ? b('↪ Entra nell\'iniziativa', () => { ctx.combat.join(it.id); if (dialog) dialog.dismiss(); }, false, '', 'Lo include subito nel combattimento, ancora neutrale') : null,
           b('📄 Scheda', () => sheet(npc)),
           b('⚑ Fazione e stato…', () => factionDialog(ctx, draw))),
-        npc.notes ? el('details', {}, el('summary', { text: 'Note del master' }), el('p', { class: 'small', text: npc.notes })) : null);
+        npc.notes ? el('details', {}, el('summary', { text: 'Note del master' }), el('p', { class: 'small', text: npc.notes })) : '');
     };
     draw();
     const it = ctx.getItem();
@@ -631,7 +632,7 @@
         el('div', { class: 'trade-total' },
           el('span', { text: 'Acquisti ' + N.formatCopper(q.buyTotal) + ' · vendite ' + N.formatCopper(q.sellTotal) + ' · ' }),
           el('b', { text: q.total >= 0 ? 'da pagare: ' + N.formatCopper(q.total) : 'da ricevere: ' + N.formatCopper(-q.total) })),
-        q.errors.length && (cartObj.buy.length || cartObj.sell.length) ? el('ul', { class: 'small warn-text' }, q.errors.map((x) => el('li', { text: x }))) : null,
+        q.errors.length && (cartObj.buy.length || cartObj.sell.length) ? el('ul', { class: 'small warn-text' }, q.errors.map((x) => el('li', { text: x }))) : '',
         el('div', { class: 'head-actions' },
           el('button', { type: 'button', class: 'btn', text: '🗣 Contratta (Persuasione)', disabled: !b || !b.player, title: 'Prova di Persuasione contro la CD del mercante: una volta per visita', onclick: () => {
             const p = b.player;

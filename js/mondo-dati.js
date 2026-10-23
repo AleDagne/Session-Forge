@@ -113,11 +113,88 @@
 
   const REP_LOG_MAX = 300;
 
+  // Esempi originali (condivisi con tutte le sessioni, modificabili ed eliminabili): una fazione, una città,
+  // un mercante con dialogo e una quest. Dati grezzi: li normalizza dati.js (defaultWorld).
+  const EXAMPLE_FACTION = 'fazione-lanterna';
+  const EXAMPLE_CITY = 'citta-pontegrigio';
+  const EXAMPLE_NPC = 'npc-orsola';
+  const EXAMPLE_QUEST = 'quest-lanterne-spente';
+  const EXAMPLES = {
+    factions: [{
+      id: EXAMPLE_FACTION, name: 'Compagnia della Lanterna', color: '#c9a227', icon: { kind: 'shape', shape: 'esagono', color: '#c9a227' },
+      description: 'Mercanti e guide che tengono accese le lanterne lungo le strade tra i villaggi, in cambio di un pedaggio.',
+      notes: 'Esempio: amichevole con i Giocatori, ostile ai Nemici. Una quest e un mercante sono collegati.',
+      relations: { giocatori: 'amichevole', nemici: 'ostile', neutrali: 'neutrale' },
+    }],
+    cities: [{
+      id: EXAMPLE_CITY, name: 'Pontegrigio', factionId: EXAMPLE_FACTION, size: 'cittadina', biomeId: 'bioma-pianura',
+      icon: { kind: 'shape', shape: 'quadrato', color: '#c9a227' },
+      description: 'Una cittadina di pietra grigia costruita attorno a un ponte a sette arcate. Di notte le lanterne della Compagnia illuminano ogni strada.',
+      environment: 'Mercato sul ponte al mattino, taverne affollate la sera, nebbia dal fiume all\'alba.',
+      rules: { weapons: 'Armi legate nel fodero dentro le mura.', curfew: 'Coprifuoco a mezzanotte, tranne per le guide.', taxes: '1 ma a persona per attraversare il ponte.' },
+      questIds: [EXAMPLE_QUEST],
+    }],
+    worldNpcs: [{
+      id: EXAMPLE_NPC, name: 'Orsola Tre Monete', title: 'Mercante della Compagnia', base: 'standard', roles: ['mercante', 'quest'],
+      factionId: EXAMPLE_FACTION, cityId: EXAMPLE_CITY, attitude: 'indifferente', questIds: [EXAMPLE_QUEST],
+      stats: { level: 3, classId: 'ladro', abilities: { FOR: 10, DES: 14, COS: 12, INT: 13, SAG: 12, CAR: 16 }, icon: { kind: 'library', icon: 'umano', color: '#c9a227' } },
+      merchant: {
+        stock: [
+          { equipmentId: 'eq-pugnale', qty: 4, restock: 1, max: 6 },
+          { equipmentId: 'eq-balestra-leggera', qty: 1 },
+          { equipmentId: 'eq-dardo', qty: 20, restock: 5, max: 20 },
+          { equipmentId: 'eq-arco-lungo', qty: 1, minRep: 20 },
+        ],
+        coins: { mo: 60 }, haggleDc: 13,
+      },
+      combat: { defend: 'fazione', provoke: 'fazione', calmDc: 14 },
+      routine: [{ from: 8, to: 20, place: 'Banco sul ponte' }, { from: 20, to: 8, place: 'Locanda della Lanterna' }],
+      notes: 'Esempio di mercante e datore di quest. Vende l\'arco lungo solo a chi ha almeno 20 di reputazione con la Compagnia.',
+      dialog: {
+        start: 'saluto',
+        nodes: [
+          { id: 'saluto', title: 'Saluto', text: 'Benvenuti a Pontegrigio! Lanterne, lame e consigli: tutto ha un prezzo, tranne il sorriso.', answers: [
+            { id: 'r-merce', text: 'Mostrami la merce.', outcomes: [{ kind: 'negozio' }, { kind: 'fine' }] },
+            { id: 'r-lavoro', text: 'Hai del lavoro per noi?', outcomes: [{ kind: 'vai', to: 'lavoro' }] },
+            { id: 'r-sconto', text: 'Un piccolo sconto, per amicizia?', outcomes: [{ kind: 'prova', what: 'Persuasione', dc: 13, success: 'sconto', failure: 'niente-sconto' }] },
+            { id: 'r-amici', text: 'La Compagnia ci conosce bene.', conds: [{ kind: 'reputazione', factionId: EXAMPLE_FACTION, min: 20 }], outcomes: [{ kind: 'atteggiamento', value: 'amichevole' }, { kind: 'vai', to: 'sconto' }] },
+            { id: 'r-ciao', text: 'Arrivederci.', outcomes: [{ kind: 'fine' }] },
+          ] },
+          { id: 'lavoro', title: 'Lavoro', text: 'Le lanterne della strada del bosco si spengono una a una: qualcuno le rompe di notte. Fermatelo e la Compagnia saprà essere generosa.', answers: [
+            { id: 'r-accetta', text: 'Ce ne occupiamo noi.', outcomes: [{ kind: 'quest', questId: EXAMPLE_QUEST }, { kind: 'vai', to: 'grazie' }] },
+            { id: 'r-dopo', text: 'Non ora.', outcomes: [{ kind: 'vai', to: 'saluto' }] },
+          ] },
+          { id: 'grazie', title: 'Grazie', text: 'Che la luce vi accompagni. E tornate interi, mi raccomando.', answers: [
+            { id: 'r-fine', text: 'Contaci.', outcomes: [{ kind: 'fine' }] },
+          ] },
+          { id: 'sconto', title: 'Sconto', text: 'Va bene, va bene… per questa volta.', answers: [
+            { id: 'r-grazie', text: 'Sei un tesoro.', outcomes: [{ kind: 'atteggiamento', value: 'amichevole' }, { kind: 'negozio' }, { kind: 'fine' }] },
+          ] },
+          { id: 'niente-sconto', title: 'Niente sconto', text: 'Ah! Bel tentativo. I prezzi restano quelli.', answers: [
+            { id: 'r-peccato', text: 'Peccato.', outcomes: [{ kind: 'vai', to: 'saluto' }] },
+          ] },
+        ],
+      },
+    }],
+    quests: [{
+      id: EXAMPLE_QUEST, title: 'Le lanterne spente', giver: { npcId: EXAMPLE_NPC, factionId: EXAMPLE_FACTION }, factionId: EXAMPLE_FACTION,
+      description: 'Qualcuno rompe le lanterne della strada del bosco a est di Pontegrigio. Orsola sospetta una banda di goblin.',
+      requirements: [{ kind: 'reputazione', factionId: EXAMPLE_FACTION, min: -20 }],
+      objectives: [{ id: 'obiettivo-goblin', kind: 'uccidi', creature: 'goblin', count: 3, text: 'Ferma i goblin che rompono le lanterne' }],
+      timeLimit: 72,
+      rewards: { xp: 300, coins: { mo: 25 }, reputation: [{ factionId: EXAMPLE_FACTION, delta: 15 }] },
+      offerText: 'Tre notti, non di più: poi la strada diventa troppo pericolosa per le carovane.',
+      completeText: 'La strada è di nuovo illuminata. Orsola vi consegna una borsa tintinnante.',
+      notes: 'Esempio di quest: datore Orsola Tre Monete, obiettivo «uccidi 3 goblin» avanzato dal combattimento.',
+    }],
+  };
+
   DnD.mondoDati = {
     BUILTIN, BUILTIN_IDS, LEVELS, LEVEL_NAMES, LEVEL_ICONS, HOSTILE_LEVELS, ALLY_LEVELS, BUILTIN_RELATIONS,
     REP_MIN, REP_MAX, THRESHOLDS, EFFECTS, CITY_ATTITUDES, REP_EVENTS, ATTITUDES, ATTITUDE_NAMES, ATTITUDE_SCALE, ATTITUDE_PRICE,
     ROLES, ROLE_NAMES, ROLE_ICONS, DEFENDS, DEFEND_NAMES, PROVOKE_RULES, PROVOKE_NAMES, MERCHANT, CITY_SIZES, CITY_SIZE_NAMES,
     QUEST_STATES, QUEST_STATE_NAMES, OBJECTIVES, OBJECTIVE_NAMES, REQUIREMENTS, REQUIREMENT_NAMES,
     DIALOG_CONDS, DIALOG_COND_NAMES, DIALOG_OUTCOMES, DIALOG_OUTCOME_NAMES, REP_LOG_MAX,
+    EXAMPLES, EXAMPLE_FACTION, EXAMPLE_CITY, EXAMPLE_NPC, EXAMPLE_QUEST,
   };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -505,31 +505,10 @@
     return entry;
   }
 
-  // ---------- Suoni (facoltativi, con l'interruttore dei suoni dei dadi) ----------
-  let audio = null;
+  // ---------- Suoni (categoria «Mondo» degli effetti sonori, audio.js) ----------
+  const SOUNDS = { su: 'reputazione-su', giu: 'reputazione-giu', quest: 'quest-accettata', fatto: 'quest-completata', ostile: 'npc-ostile' };
   function sound(kind) {
-    const s = DnD.impostazioni && DnD.impostazioni.dice ? DnD.impostazioni.dice() : null;
-    if (!s || !s.diceSound || typeof window === 'undefined') return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    try {
-      if (!audio) audio = new AC();
-      const notes = { su: [523, 659], giu: [392, 311], quest: [523, 659, 784], fatto: [659, 784, 1047], ostile: [220, 185] }[kind] || [440];
-      const v = (s.diceVolume === undefined ? 50 : s.diceVolume) / 100;
-      notes.forEach((f, i) => {
-        const t = audio.currentTime + i * 0.11;
-        const osc = audio.createOscillator();
-        const gain = audio.createGain();
-        osc.type = kind === 'ostile' ? 'sawtooth' : 'triangle';
-        osc.frequency.setValueAtTime(f, t);
-        gain.gain.setValueAtTime(0.18 * v, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-        osc.connect(gain);
-        gain.connect(audio.destination);
-        osc.start(t);
-        osc.stop(t + 0.27);
-      });
-    } catch (e) { /* audio non disponibile */ }
+    if (DnD.audio && SOUNDS[kind]) DnD.audio.suona(SOUNDS[kind]);
   }
 
   DnD.sezioni = DnD.sezioni || {};

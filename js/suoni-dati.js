@@ -18,6 +18,7 @@
     { id: 'boss', label: 'Boss' },
     { id: 'leggendario', label: 'Leggendario' },
     { id: 'esplorazione', label: 'Esplorazione' },
+    { id: 'mondo', label: 'Mondo' },
     { id: 'online', label: 'Online', note: 'predisposti: suoneranno quando esisterà la fase Online' },
     { id: 'interfaccia', label: 'Interfaccia' },
   ];
@@ -103,6 +104,17 @@
       ricetta: [{ t: 'rumore', filtro: { tipo: 'bandpass', f: [300, 1400], q: 1 }, dur: 0.5, a: 0.15, g: 0.25 }, { t: 'osc', forma: 'sine', f: [220, 330], at: 0.2, dur: 0.4, a: 0.05, g: 0.2 }] },
     { id: 'tempo', label: 'Ora che passa o meteo che cambia', cat: 'esplorazione', vol: 0.4, on: true,
       ricetta: notes([1000, 1500], 0.1, { dur: 0.12, a: 0.005, g: 0.12 }) },
+    // Mondo
+    { id: 'reputazione-su', label: 'Reputazione che sale', cat: 'mondo', vol: 0.6, on: true,
+      ricetta: notes([523, 659], 0.11, { forma: 'triangle', dur: 0.25, a: 0.01, g: 0.22 }) },
+    { id: 'reputazione-giu', label: 'Reputazione che scende', cat: 'mondo', vol: 0.6, on: true,
+      ricetta: notes([392, 311], 0.11, { forma: 'triangle', dur: 0.25, a: 0.01, g: 0.22 }) },
+    { id: 'quest-accettata', label: 'Quest accettata', cat: 'mondo', vol: 0.7, on: true,
+      ricetta: notes([523, 659, 784], 0.11, { forma: 'triangle', dur: 0.3, a: 0.01, g: 0.22 }) },
+    { id: 'quest-completata', label: 'Quest completata', cat: 'mondo', vol: 0.8, on: true,
+      ricetta: notes([659, 784, 1047], 0.11, { forma: 'triangle', dur: 0.45, a: 0.01, g: 0.25 }).concat([{ t: 'osc', forma: 'sine', f: 2093, at: 0.3, dur: 0.5, a: 0.02, g: 0.06 }]) },
+    { id: 'npc-ostile', label: 'NPC che diventa ostile', cat: 'mondo', vol: 0.8, on: true, principale: true,
+      ricetta: notes([220, 185], 0.11, { forma: 'sawtooth', dur: 0.3, a: 0.01, g: 0.18, filtro: { tipo: 'lowpass', f: 1200 } }) },
     // Online (predisposti)
     { id: 'online-entra', label: 'Giocatore che entra', cat: 'online', vol: 0.6, on: true, ricetta: notes([660, 880], 0.08, { dur: 0.3, a: 0.01, g: 0.22 }) },
     { id: 'online-richiesta', label: 'Richiesta di ingresso', cat: 'online', vol: 0.6, on: true, ricetta: notes([990, 990], 0.15, { dur: 0.12, a: 0.005, g: 0.2 }) },

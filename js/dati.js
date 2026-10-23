@@ -139,12 +139,14 @@
 
   function emptyState() {
     const session = DnD.sessioni.newSession(DEFAULT_SESSION_NAME, DnD.dadi.uid());
+    const world = defaultWorld(session.id);
     return {
       version: VERSION, races: defaultRaces(), npcs: defaultCreatures(session.id), players: [], structures: defaultStructures(),
       equipment: DnD.attrezzatura.defaults(), mapObjects: defaultMapObjects(), tilesets: [], spells: defaultSpells(), savedGrids: [],
       biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()],
       // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
-      factions: DnD.fazioni.builtinFactions(session.id), parties: [DnD.party.defaultParty(session.id, [])], cities: [], worldNpcs: [], quests: [],
+      factions: DnD.fazioni.builtinFactions(session.id).concat(world.factions), parties: [DnD.party.defaultParty(session.id, [])],
+      cities: world.cities, worldNpcs: world.worldNpcs, quests: world.quests,
       sessions: [session], currentSessionId: session.id, diceHistory: [],
     };
   }
@@ -941,11 +943,25 @@
 
   // Versione 12: fazioni, party, città, NPC e quest (per sessione). I combattenti tengono la fazione che avevano
   // (Giocatori, Nemici o Neutrali, ora fazioni del Mondo); i giocatori di ogni sessione entrano nel party
-  // predefinito «Gruppo». Funziona anche sui file di una singola sessione.
+  // predefinito «Gruppo». Funziona anche sui file di una singola sessione; gli archivi ricevono anche gli
+  // esempi del Mondo (fazione, città, mercante e quest, condivisi).
   function migrateV12(raw) {
     if (!raw || typeof raw !== 'object' || raw.version >= 12) return raw;
     raw.addDefaultParties = true;
+    if (raw.kind !== 'sessione') raw.addWorldExamples = true;
     return raw;
+  }
+
+  // Esempi originali del Mondo (mondo-dati.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
+  function defaultWorld(sessionId) {
+    const E = DnD.mondoDati.EXAMPLES;
+    const own = (x) => Object.assign(JSON.parse(JSON.stringify(x)), { sessionId, shared: true });
+    return {
+      factions: E.factions.map((f) => DnD.fazioni.normalizeFaction(own(f))),
+      cities: E.cities.map((c) => DnD.citta.normalizeCity(own(c))),
+      worldNpcs: E.worldNpcs.map((n) => DnD.npc.normalizeNpc(own(n))),
+      quests: E.quests.map((q) => DnD.quest.normalizeQuest(own(q))),
+    };
   }
 
   // Party «Gruppo» per ogni sessione che non ne ha, con i giocatori visibili nella sessione.
@@ -1003,6 +1019,10 @@
       }),
     };
     if (raw.addDefaultParties) addDefaultParties(out);
+    if (raw.addWorldExamples) {
+      const ex = defaultWorld(sessions[0].id);
+      for (const key of Object.keys(ex)) for (const x of ex[key]) if (!out[key].some((e) => e.id === x.id)) out[key].push(x);
+    }
     return out;
   }
 
@@ -1207,7 +1227,7 @@
     VERSION, emptyState, defaultRaces, defaultStructures, defaultSpells, defaultMapObjects, defaultCreatures, makeBonuses,
     normalizeState, normalizeRace, normalizeCreature, normalizeWeapon, normalizeGridSize, normalizeStructure, normalizeEquipment, normalizeMapObject, normalizeSpell,
     normalizePlacedStructure, normalizePlacedItem, normalizeLabel, normalizeZone, normalizeBackground, normalizeGridContent, normalizeSavedGrid, normalizeGridDraft,
-    migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, addDefaultParties, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
+    migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, addDefaultParties, defaultWorld, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
     normalizeSession, DEFAULT_SESSION_NAME, normalizeTileset, normalizeSource, normalizeTileProps, normalizeTiles,
     exportJSON, importJSON, parseSaved, openStore, saveErrorMessage, pushDiceHistory, pushLog,
   };

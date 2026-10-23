@@ -266,7 +266,7 @@
         it.trap.enabled ? el('div', { class: 'head-actions' },
           check('Cerca trappole (SAG)', 'SAG', OM.findTrap),
           it.trap.armed ? check('Disinnesca (DES)', 'DES', OM.disarmTrap) : null,
-          it.trap.armed ? b('Attiva la trappola', () => triggerTrap(), false, 'danger') : b('Riarma', () => act((x) => { x.trap.armed = true; return 'La trappola di ' + x.name + ' è di nuovo attiva.'; }))) : null,
+          it.trap.armed ? b('Attiva la trappola', () => triggerTrap(), false, 'danger') : b('Riarma', () => act((x) => { x.trap.armed = true; return 'La trappola di ' + x.name + ' è di nuovo attiva.'; }))) : '',
         it.container ? el('div', { class: 'object-contents' },
           el('h3', { text: 'Contenuto' }),
           it.state !== 'aperto' && it.otype !== 'a-terra' ? el('p', { class: 'muted small', text: 'Aprilo per prendere il contenuto.' }) : null,
@@ -276,7 +276,7 @@
             coinsLeft ? el('li', { text: '💰 ' + A.formatCoins(it.coins) }) : null) : el('p', { class: 'muted small', text: 'Vuoto.' }),
           players().length ? el('div', { class: 'input-row' }, el('span', { class: 'field-label', text: 'Nell\'inventario di' }), target,
             b('Prendi tutto', () => takeAll(), (it.state !== 'aperto' && it.otype !== 'a-terra') || OM.isEmpty(it), 'primary'))
-            : el('p', { class: 'muted small', text: 'Crea un giocatore per prendere gli oggetti.' })) : null);
+            : el('p', { class: 'muted small', text: 'Crea un giocatore per prendere gli oggetti.' })) : '');
     }
 
     function playerOf(state) { return state.players.find((p) => p.id === target.value) || null; }

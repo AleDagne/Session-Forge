@@ -141,12 +141,15 @@
     for (const q of arr(quests)) {
       const e = journal[q.id];
       if (!e || e.status !== 'attiva') continue;
+      let moved = false;
       for (const o of q.objectives) {
         if (o.kind !== kind || objectiveDone(e, o) || !match(o)) continue;
         e.progress[o.id] = Math.min(o.count, (e.progress[o.id] || 0) + (n || 1));
+        moved = true;
         lines.push('📜 «' + q.title + '»: ' + objectiveText(o) + ' ' + e.progress[o.id] + '/' + o.count + (objectiveDone(e, o) ? ' ✓' : '') + '.');
       }
-      if (allDone(q, e)) lines.push('📜 «' + q.title + '»: tutti gli obiettivi completati, da consegnare.');
+      // Avviso di consegna solo quando questa azione ha fatto avanzare la quest (non a ogni uccisione successiva).
+      if (moved && allDone(q, e)) lines.push('📜 «' + q.title + '»: tutti gli obiettivi completati, da consegnare.');
     }
     return lines;
   }

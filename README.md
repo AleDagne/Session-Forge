@@ -37,6 +37,8 @@ In cima alla barra laterale c'è il selettore **Sessione corrente**, con i pulsa
 - Una sessione contiene: nome, descrizione, note del master, i suoi **nemici** (Standard e Creature),
   **giocatori** e **griglie**, il **combattimento in corso** con il suo log (e la bozza dell'editor griglie) e
   l'**esplorazione in corso** (gruppo, tempo, scorte, variabili, registro).
+- Il **Mondo** (fazioni, party, città, NPC e quest, vedi [Mondo](#mondo)) è della sessione, con lo stesso
+  *Condividi con tutte le sessioni*; le tre fazioni predefinite e gli esempi sono condivisi.
 - **Razze, Magie, Strutture, Attrezzatura, Oggetti di mappa, TileSet, Biomi ed Eventi** sono librerie globali,
   uguali in tutte le sessioni.
 - Nemici, giocatori e griglie si vedono solo nella loro sessione, a meno di spuntare
@@ -57,13 +59,16 @@ I dati delle versioni precedenti finiscono automaticamente nella **Sessione pred
 | Mappa      | Editor griglie   | Alt+1 |
 |            | Combattimento    | Alt+2 |
 |            | Esplorazione     | Alt+3 |
+|            | Mondo (Fazioni, Città, NPC, Quest) | Alt+0 |
 | Personaggi | Nemici (Standard, Creature, Boss) | Alt+4 |
-|            | Giocatori        | Alt+5 |
+|            | Giocatori (Standard, Leggendari, Party) | Alt+5 |
 | Libreria   | Magie            | Alt+6 |
 |            | Asset (Strutture, Oggetti, Biomi, Eventi) | Alt+7 |
 |            | Razze            | Alt+8 |
 | Strumenti  | Dadi             | Alt+9 |
 
+- Ogni voce ha la sua scorciatoia fissa (campo `key` di `MENU` in `js/config.js`): Mondo, aggiunta dopo, ha Alt+0
+  e non sposta le altre.
 - Nel menù ci si sposta anche con le frecce su/giù (Home/Fine) e si apre con Invio.
 - La barra laterale si chiude e si riapre con « o **Ctrl+B**: da chiusa mostra solo le icone (il
   nome compare passandoci sopra). Lo stato viene ricordato e sugli schermi stretti parte chiusa.
@@ -179,8 +184,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
   - Elenco con ricerca, badge del tipo, duplica, elimina, **esporta/importa JSON** di una singola creatura.
 - **Giocatori** – stessa scheda dei nemici Standard, con il nome del giocatore reale e l'**Inventario**:
   oggetti del catalogo con quantità e casella *equipaggiato*, monete (mr, ma, me, mo, mp) e peso totale
-  (50 monete = 0,5 kg). Due schede: **Standard** e **✦ Leggendari** (livelli 20-40, vedi
-  [Personaggi leggendari](#personaggi-leggendari)).
+  (50 monete = 0,5 kg). Tre schede: **Standard**, **✦ Leggendari** (livelli 20-40, vedi
+  [Personaggi leggendari](#personaggi-leggendari)) e **⚑ Party** (vedi [Party](#party)).
 - **Magie** – libreria degli incantesimi (come prima).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
@@ -458,6 +463,136 @@ chiusura e schede sugli schermi stretti, preferenze proprie):
 - Non c'è ancora una vista per i giocatori: il disegno è già pronto a nascondere celle non scoperte, eventi
   nascosti e note quando ci sarà.
 
+## Mondo
+
+Voce di menù **Mondo** (Alt+0) con le schede **Fazioni**, **Città**, **NPC** e **Quest**, più la scheda
+**Giocatori › ⚑ Party**. Tutto è della sessione corrente, con *Condividi con tutte le sessioni*, ed è incluso in
+Esporta/Importa (archivio e sessione) e nella duplicazione. Valori e tabelle (livelli, soglie, effetti, margini dei
+mercanti, ruoli, stati delle quest) stanno in un solo file dati, `js/mondo-dati.js`. La logica è pura e testata
+(`fazioni.js`, `party.js`, `citta.js`, `npc.js`, `quest.js`); l'interfaccia è in `ui-mondo.js`, `ui-party.js`,
+`ui-npc.js` e `ui-quest.js`.
+
+### Fazioni e relazioni
+
+- Una fazione ha nome, colore, icona, descrizione e note del master. **Giocatori, Nemici e Neutrali** sono
+  predefinite e non si eliminano: sono le tre parti del combattimento simulato di prima (Neutrali di base
+  amichevole con i Giocatori e ostile ai Nemici), quindi i dati esistenti funzionano come prima.
+- **Relazioni**: per ogni coppia Alleata, Amichevole, Neutrale, Ostile o In guerra, in una matrice modificabile
+  (simmetrica o no a scelta, con l'elenco delle coppie asimmetriche) o in un elenco.
+- `DnD.fazioni.relazione(a, b, fazioni)` è l'unica fonte di verità. La usano l'IA (attacca solo Ostile e In guerra,
+  supporta Alleati e Amichevoli, ignora i Neutrali), il movimento (pedine ostili che bloccano), gli **avvisi degli
+  effetti ad area** (se colpiscono neutrali o alleati), la conversione degli NPC e la **fine del combattimento**
+  (tutte le fazioni ostili al party a terra o in fuga, di qualunque tipo). Tra combattenti vale
+  `relazioneCombattenti`, che aggiunge le ostilità personali degli NPC provocati e gli NPC che aiutano il party.
+- La fazione si assegna a giocatori, party, nemici (Standard, Creature, Boss), NPC e città. Ogni combattente ha la
+  sua; di base la eredita dalla scheda, poi dal party (giocatori) o dalla città (nemici e NPC). Sulle pedine c'è il
+  contorno del colore della fazione con il pallino e il nome nel tooltip.
+- **Cambio di fazione in gioco**, anche a metà combattimento: voce nel log e «↶ torna a…» per annullarlo.
+
+### Reputazione
+
+- Valore da −100 a +100 del party (e, se attiva *Anche per giocatore*, di ogni giocatore) verso ogni fazione.
+  Le soglie si modificano per sessione: Nemico giurato, Ostile, Diffidente, Neutrale, Amichevole, Alleato, Eroe.
+- Cambia a mano, con le quest, con gli eventi (azione **Reputazione**), con le uccisioni e con gli attacchi agli NPC
+  neutrali. Ogni variazione va nel **registro** con motivazione e origine, e il master può annullarla.
+- **Effetti automatici** (tabelle in `EFFECTS`):
+  - prezzi: +50% sotto −50, +20% sotto −20, −10% da +50, −20% da +80;
+  - atteggiamento delle città: ostile, con porte chiuse, sotto −50; diffidente sotto −20; accogliente da +50;
+  - atteggiamento iniziale degli NPC: da −2 a +2 punti;
+  - accesso a quest e città: bloccati sotto −50.
+- Il pannello **Reputazione** del party ha una barra per fazione con la soglia e lo storico delle variazioni.
+
+### Party
+
+- Un party ha nome, colore, icona, fazione, i giocatori scelti dall'elenco (anche leggendari), l'ordine di marcia,
+  la borsa comune facoltativa (inventario e monete), la reputazione comune e le note.
+- Più party per sessione, uno **attivo** (★): è quello usato da *Aggiungi party*, dai mercanti e dalla reputazione.
+  Un giocatore sta in **un solo party**: spostarlo chiede conferma.
+- **⚑ Aggiungi party** nel setup del Combattimento inserisce tutti i membri. Nell'Esplorazione il party diventa la
+  pedina del gruppo, con ordine di marcia, nome e icona; si divide e si riunisce come prima.
+- Nel dettaglio del party ci sono l'ordine di marcia, la reputazione e il **Diario delle quest** (ricerca, filtro
+  per fazione e stato).
+
+### Città
+
+- Una città ha nome, descrizione, fazione dominante e fazioni presenti, dimensione (da villaggio a metropoli),
+  bioma, mappa collegata con punto di ingresso, ambiente e regole (armi, coprifuoco, tasse: promemoria), quest ed
+  eventi collegati. **Crea città** chiede solo nome, fazione, dimensione e bioma.
+- L'**atteggiamento** verso il party viene dalla reputazione con la fazione dominante.
+- La fazione della città è quella predefinita per gli NPC e i nemici creati lì (*+ NPC qui*, *+ Nemico qui*).
+- **Sulla mappa…** piazza la città su una mappa di esplorazione come evento «Entra in una mappa» (con ritorno).
+
+### NPC
+
+- Un NPC **riusa la scheda** Standard o Creatura (statistiche, PF, CA, armi, incantesimi) e aggiunge ruoli,
+  fazione (vuota = quella della città), città, atteggiamento (Amichevole, Indifferente, Ostile, più il modificatore
+  della reputazione), titolo, dialogo, routine facoltativa (luogo per fascia oraria: promemoria) e note. Si crea da
+  zero o con **⇧ Promuovi da nemico…**; l'originale resta. Non conta nella difficoltà né nei PE finché non diventa
+  ostile.
+- **Ruoli** combinabili:
+  - **Mercante**: merce dall'Attrezzatura con quantità, prezzo (quello del catalogo o uno proprio), rifornimento
+    giornaliero fino a un tetto e reputazione minima per gli oggetti bloccati; monete per comprare dal party;
+    margini di vendita e acquisto. La **finestra di scambio** ha carrello, totale in monete (mr, ma, me, mo, mp, con
+    il resto) e acquirente scelto (un giocatore o la borsa comune). La **contrattazione** è una prova di
+    Persuasione contro la CD del mercante: sconto del 10% se riesce, rincaro del 5% se fallisce, al massimo il 20%.
+  - **Datore di quest**: le quest offerte, con testo di offerta, accettazione e consegna.
+  - **Combattente neutrale**: non attacca. Difende se stesso, difende la fazione, oppure aiuta il party se è
+    amichevole. Attaccato (o attaccato un suo protetto), **diventa ostile** secondo la regola scelta:
+    - *solo lui*;
+    - *tutta la fazione* (la relazione scende);
+    - *a cerchi di città* (tutti gli NPC della città).
+
+    L'attacco dà una penalità di reputazione e una voce nel log, entrambe annullabili. Con *Calma* (prova di
+    Persuasione) l'NPC torna neutrale. Resta fuori dall'iniziativa finché non diventa ostile, poi
+    entra al round successivo; l'opzione *Entra subito* lo include dall'inizio.
+  - **Informatore / Altro**: dialogo, informazioni e indizi.
+- **Dialogo**: alberi a nodi con risposte.
+  - Condizioni: reputazione, possesso di un oggetto, variabile, atteggiamento.
+  - Esiti: vai a un nodo, prova con successo o fallimento, reputazione, apri una quest, apri il negozio, avvia il
+    combattimento, cambia atteggiamento, variabile, fine.
+  - L'editor è a blocchi, con ▶ *Prova* e gli avvisi per i nodi irraggiungibili o eliminati.
+- **Sulla griglia**: gli NPC si trascinano dal pannello (gruppo «NPC del Mondo») nell'Editor, nel Combattimento e
+  nell'Esplorazione. La pedina mostra icona e nome; con il ruolo nascosto si vede solo il nome. Doppio clic apre il
+  **pannello NPC**: *Parla*, *Commercia*, *Quest*, *Attacca*, *Entra nell'iniziativa*, *Scheda*, *Fazione e stato*
+  (con Calma e l'anteprima della vista dei giocatori).
+- Modello e istanze come per eventi e oggetti: **ogni copia** ha stato proprio (PF, merce e monete, atteggiamento,
+  ostilità, quest consegnate).
+
+### Quest
+
+- Una quest ha titolo, descrizione, datore (NPC o fazione), fazione, requisiti (reputazione, livello, oggetto, evento),
+  **obiettivi** con contatori, tempo limite facoltativo in ore di gioco e ricompense (PE, monete, oggetti, reputazione,
+  sblocco di quest e negozi), più gli eventi da attivare all'accettazione e al completamento.
+  - Obiettivi: parla con, uccidi N creature per nome, tipo o nemico preciso della libreria, raccogli oggetti
+    (conta il posseduto), raggiungi un luogo, completa un evento.
+- Stati: Disponibile, Attiva, Completata, Fallita, Scaduta (alla scadenza, col tempo dell'esplorazione). Il diario
+  è nella sessione, per party.
+- Collegamenti:
+  - le uccisioni nel combattimento fanno avanzare gli obiettivi, e alla fine del combattimento si calcolano i PE dei
+    nemici sconfitti;
+  - l'azione evento **Quest** avvia, avanza, completa o fallisce una quest;
+  - un evento completato e una cella raggiunta fanno avanzare i loro obiettivi;
+  - le variabili sono quelle della sessione (dell'esplorazione, se c'è).
+- Alla **consegna** il master conferma le ricompense da distribuire. I giocatori non vedono le quest non offerte.
+
+### Vista dei giocatori (per la futura fase Online)
+
+`DnD.npc.statoNpcPerGiocatore()` e `DnD.quest.perGiocatore()` danno ai giocatori solo ciò che il master rivela:
+nome (o «Sconosciuto»), icona, ruolo e atteggiamento solo se rivelati, merce solo a negozio aperto (senza gli
+oggetti bloccati dalla reputazione) e solo le quest offerte e accettate. Mai note, ruoli nascosti, atteggiamenti
+segreti o reputazioni nascoste.
+
+### Riferimenti mancanti ed esempi
+
+- Fazioni, città, oggetti, quest, creature e mappe eliminati: avviso ⚠ nell'elenco e nel pannello, e la voce viene
+  saltata senza errori (un combattente con la fazione eliminata torna a quella predefinita).
+- **Esempi originali** (condivisi, modificabili ed eliminabili; negli archivi nuovi e in quelli migrati):
+  - la fazione *Compagnia della Lanterna*;
+  - la città *Pontegrigio*;
+  - la mercante *Orsola Tre Monete*, con dialogo, contrattazione e un arco lungo sbloccato a reputazione 20;
+  - la quest *Le lanterne spente* (uccidi 3 goblin entro 72 ore).
+- Suoni facoltativi nella categoria *Mondo* degli [Effetti sonori](#effetti-sonori).
+
 ## Tile
 
 ### Componente «Taglia immagine in tile»
@@ -518,7 +653,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 11)
+### Modello dati (versione 12)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -551,12 +686,35 @@ events: [{ id, name, icon, description, readText, notes, trigger, area, visibili
 sessione.exploration: { gridId, stack: [{ gridId, parties }], parties: [{ id, name, icon, pos, memberIds }], activeParty,
            time: { day, hour, total }, weather, pace, mode, supplies, members: { id: { hp, maxHp, exhaustion, conditions, xp } },
            variables, log, queue, pending (combattimento in attesa), seed }
-combattente: { …, w, h, speeds: { cammina, scalare, nuotare, volare, scavare } (ft), speedOverride, moveMode, conditions,
+factions: [{ id, name, color, icon, description, notes, builtin, relations: { idFazione: livello }, sessionId, shared }]
+parties: [{ id, name, color, icon, factionId, memberIds, marchOrder, sharedPurse, inventory, coins, reputation: { idFazione: -100…100 }, notes }]
+cities: [{ id, name, description, icon, factionId, presentFactionIds, size, biomeId, gridId, entry, place: { gridId, x, y, instanceId },
+           environment, rules: { weapons, curfew, taxes }, questIds, eventIds, entryEventId, notes }]
+worldNpcs: [{ id, name, title, base: 'standard' | 'creatura', stats (scheda riusata), roles, factionId, cityId, attitude,
+           dialog: { start, nodes: [{ id, title, text, answers: [{ id, text, conds, outcomes }] }] },
+           merchant: { stock: [{ id, equipmentId, qty, price, restock, max, minRep }], coins, sellMargin, buyMargin, haggleDc, buys },
+           questIds, combat: { defend, provoke, calmDc, joinNow, penalty }, routine, hiddenRole, notes }]
+quests: [{ id, title, description, giver: { npcId, factionId }, factionId, requirements, objectives: [{ id, kind, count, … }],
+           timeLimit (ore), rewards: { xp, coins, items, reputation, unlockQuestIds, unlockMerchantIds }, onAccept, onComplete,
+           offerText, completeText, hidden, notes }]
+sessione.world: { activePartyId, symmetric, perPlayer, blockHostile, thresholds, playerRep, repLog: [{ id, at, partyId, playerId,
+           factionId, delta, before, after, reason, source, reverted }], quests: { idQuest: { status, offered, unlocked, partyId,
+           acceptedAt, deadline, endedAt, progress, rewarded } }, variables, provocations }
+oggetto di mappa piazzato (otype 'npc'): { …, npcId, npcState: { hp, attitude, stock, coins, hostile, hostileTo, factionId, delivered,
+           haggle, lastRestockDay, revealed: { name, role, attitude }, dead } }
+nemici e giocatori: { …, factionId, cityId }
+combattente: { …, faction (qualsiasi fazione), hostileTo, npc: { npcId, itemId, cityId, defend, provoke, calmDc, penalty, attitude, roles },
+               joinRound, prevFaction, fled, w, h, speeds: { cammina, scalare, nuotare, volare, scavare } (ft), speedOverride, moveMode, conditions,
                movement: { used, dashes, stood, disengaged, start, moves }, ignoreSpeed, defenses: { vuln, res, imm }, creature: { …scheda, uses, recharge, legendaryPoints, legendaryResistance }, pendingSave,
                boss: { …campi del boss, phase, revealed, defeated },
                legend: { theme, rank, transformations, uses, senses, texts, passive, form: { id, name, hpMode, theme, roundsLeft, prev } } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
 ```
+
+**Migrazione dalla versione 11** (`migrateV12`): le tre fazioni predefinite sostituiscono le parti di prima con gli
+stessi id, quindi ogni combattente tiene Giocatori, Nemici o Neutrali; i giocatori di ogni sessione entrano nel party
+predefinito «Gruppo», che diventa attivo; nulla viene perso. Gli archivi ricevono gli esempi del Mondo, i file di
+una singola sessione no (ricevono solo il party «Gruppo», anche all'importazione).
 
 **Migrazione dalla versione 10** (`migrateV11`): i giocatori esistenti restano standard (nessun campo cambia);
 gli archivi ricevono la libreria dei modelli di percorso con l'esempio *Ascesa dell'Eterno*.
@@ -588,10 +746,11 @@ Con **Combattimento simulato** (nel setup o nel pannello del combattimento) i co
 dall'**IA** giocano da soli; spento, tutto funziona come prima.
 
 - **Controllo e fazioni**: ogni combattente è *Manuale* o *IA* (di base giocatori Manuale, nemici IA) e ha
-  una fazione: Giocatori, Nemici o Neutrali/Alleati (questi ultimi stanno con i giocatori). Si scelgono per
-  riga nel setup e si cambiano durante la partita dal menu contestuale della pedina (doppio clic), dove si
+  una fazione del [Mondo](#mondo) (di base Giocatori, Nemici o Neutrali, che stanno con i giocatori). Si scelgono
+  per riga nel setup e si cambiano durante la partita dal menu contestuale della pedina (doppio clic), dove si
   può anche rendere un combattente *nascosto* (l'IA non lo vede). Così l'IA può giocare anche un giocatore
-  assente o un alleato. L'IA attacca solo le fazioni ostili e cura o aiuta solo gli alleati.
+  assente o un alleato. L'IA attacca solo chi è Ostile o In guerra, cura o aiuta solo Alleati e Amichevoli e
+  ignora i Neutrali e gli NPC non ancora entrati nell'iniziativa.
 - **Comportamento** (form di Nemici, Standard e Creature): **Temperamento** *Aggressivo* (sempre il
   bersaglio più vicino per percorso, non fugge mai) o *Furbo* (il più debole; può fuggire sotto una soglia
   di PF); **Archetipo** *Automatico* (la caratteristica finale più alta; a parità vince l'ordine FOR, DES,
@@ -698,7 +857,7 @@ Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, 
   *Movimento* (passo, spento di base; movimento rifiutato); *Boss* (evocazione, ingresso in combattimento, cambio di
   fase, sconfitta); *Leggendario* (ascensione, sblocco di un nodo, trasformazione, ritorno alla forma normale);
   *Esplorazione* (evento o incontro, scoperta di un evento nascosto, ingresso in una mappa, tempo che passa o meteo
-  che cambia); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
+  che cambia); *Mondo* (reputazione che sale o scende, quest accettata o completata, NPC che diventa ostile); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
   *Interfaccia* (conferma, errore, salvataggio della griglia, spenti di base).
 - **Da dove partono**: il combattimento traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme
   dei leggendari) in un solo punto (`mutate`), l'esplorazione dalle nuove righe del registro; dadi, boss,
@@ -777,7 +936,7 @@ decodificate. Se il salvataggio non riesce (es. **spazio esaurito**) compare un 
 la griglia resta segnata come *non salvata*. Tutto resta sul tuo computer, ma va perso se cancelli
 i dati di navigazione del sito: fai backup regolari dal pannello **Impostazioni**:
 
-- **Esporta archivio** scarica tutto (sessioni con combattimenti ed esplorazioni, personaggi e creature,
+- **Esporta archivio** scarica tutto (sessioni con combattimenti, esplorazioni e Mondo, personaggi e creature,
   griglie con TileMap, sfondi, biomi, eventi e nebbia, librerie compresi biomi ed eventi, attrezzatura, oggetti
   di mappa, TileSet, dadi, impostazioni e file dei suoni e le immagini usate, incorporate in
   Base64: il file è autosufficiente).
@@ -851,6 +1010,17 @@ personaggio con il danno in eccesso, PF temporanei, usi e durata, fine anticipat
 tema della forma; promozione e declassamento, migrazione, esportazione e importazione; temi unificati con il Boss,
 scheda del combattente a tema ed effetti fermi con *Riduci animazioni*.
 
+Per il **Mondo**: matrice delle relazioni, simmetria e asimmetrie, `relazione`; soglie ed effetti della reputazione
+(prezzi, città, atteggiamento, accessi); registro con annullamento e reputazione per giocatore; monete con il resto;
+mercante (prezzi da reputazione e atteggiamento, acquisto e vendita, oggetti bloccati, rifornimento, contrattazione);
+NPC neutrale provocato (solo lui, fazione, città), penalità, annullamento e calma, PE solo se ostile; IA con alleati,
+neutrali, ostili, NPC che aiuta il party e NPC in attesa; cambio di fazione a metà combattimento, avvisi ad area, fine per
+fazioni e `nextTurn` con `joinRound`; party con un solo party per giocatore; quest (requisiti, obiettivi e contatori,
+uccisioni per nome, tipo e nemico, raccolta, consegna, sblocchi, scadenza, fallimento, diario); dialoghi con condizioni,
+prove ed esiti; istanze indipendenti dello stesso NPC; città con fazione propagata; vista dei giocatori; riferimenti
+mancanti; migrazione v11 → v12 ed esempi validi; esportazione e importazione (archivio e sessione, anche precedente alla
+v12) e duplicazione con il Mondo; azioni evento Reputazione e Quest, obiettivo «completa un evento» e scadenza col tempo.
+
 Per **velocità e movimento**: conversione piedi/celle con scale diverse e fonti della velocità (razza, oggetti,
 creatura, nodi, trasformazione, sovrascrittura); residuo per turno, azzeramento, limite e fermata all'ultima
 cella; costo con terreno difficile, diagonali con le due regole, pedina 2×2 nello stretto, pedine ostili e alleate;
@@ -914,7 +1084,7 @@ js/leggendario.js     logica pura dei leggendari: livelli, punti, effetti nei ca
 js/attrezzatura.js    catalogo dell'Attrezzatura: armi e armature base, bonus, danno, CA, inventario
 js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trappole, contenuto
 js/validazione.js     validazione dei form con messaggi in italiano
-js/dati.js            modello dati, migrazioni (fino alla versione 11), salvataggio (IndexedDB), import/export
+js/dati.js            modello dati, migrazioni (fino alla versione 12), esempi, salvataggio (IndexedDB), import/export
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
 js/ui-tileset.js      disegno delle tilemap, vista con zoom/pan, anteprime, importazione immagini
 js/ui-tile.js         componente «Taglia immagine in tile» (strutture, oggetti di mappa, pannello Tile)
@@ -925,6 +1095,16 @@ js/ui-mostri.js       Nemici › Creature: elenco, form (riusato dai boss), sche
 js/ui-boss.js         Nemici › Boss (forgia, anteprima, evocazione) e boss nel combattimento (barre, ombra, effetti)
 js/ui-percorso.js     editor della mappa a nodi del Percorso e modalità Sblocca (canvas)
 js/ui-leggendario.js  Giocatori › Leggendari: elenco, scheda, trasformazioni, opzioni del master, Ascensione, combattimento
+js/mondo-dati.js      Mondo (dati): fazioni predefinite, livelli, soglie ed effetti della reputazione, ruoli, quest, esempi
+js/fazioni.js         fazioni e reputazione (logica pura): relazione(), matrice, combattenti, registro, effetti
+js/party.js           party (logica pura): membri, un solo party per giocatore, ordine di marcia, attivo
+js/citta.js           città (logica pura): atteggiamento, contenuti, segnaposto «Entra in una mappa»
+js/npc.js             NPC (logica pura): istanze, monete, mercante, combattente neutrale, dialoghi, vista dei giocatori
+js/quest.js           quest (logica pura): requisiti, diario, obiettivi, consegna, scadenza, vista dei giocatori
+js/ui-mondo.js        sezione Mondo: Fazioni, Città, componenti comuni (fazione, reputazione, suoni)
+js/ui-party.js        Giocatori › Party: elenco, form, dettaglio con reputazione e diario
+js/ui-npc.js          Mondo › NPC: editor, pannello sulla griglia, dialogo giocabile, finestra di scambio
+js/ui-quest.js        Mondo › Quest: editor, offerta, consegna, diario
 js/ia-dati.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»

@@ -651,6 +651,7 @@
     eq(DnD.config.MENU.map((m) => m.id), ['editor', 'combattimento', 'esplorazione', 'mondo', 'nemici', 'giocatori', 'magie', 'asset', 'razze', 'dadi'], 'Esplorazione dopo Combattimento, Mondo dopo Esplorazione');
     eq(DnD.config.MENU.map((m) => m.group), ['mappa', 'mappa', 'mappa', 'mappa', 'personaggi', 'personaggi', 'libreria', 'libreria', 'libreria', 'strumenti']);
     eq(DnD.config.MENU.length, 10, 'scorciatoie Alt+1…Alt+9 e Alt+0');
+    eq(DnD.config.MENU.map((m) => m.key).join(''), '1230456789', 'scorciatoie fisse: Mondo Alt+0, le altre come prima');
     ok(DnD.config.MENU.every((m) => m.icon.length > 0), 'ogni voce ha un\'icona');
     ok(!DnD.config.SECTIONS.includes('oggetti'), 'gli Oggetti sono dentro Strutture');
     eq(DnD.config.APP_NAME, 'Session Forge');
@@ -1806,6 +1807,7 @@
     const st = DnD.dati.emptyState();
     const sess = S().current(st);
     const bgId = IMG().imageId(PNG);
+    st.worldNpcs = []; // senza il mercante d'esempio: nel file solo l'attrezzatura di inventario e oggetti
     const drago = st.npcs.find((n) => n.id === 'esempio-drago-cenere');
     drago.innate.spells.push({ spellId: st.spells[0].id, freq: 'volonta', uses: 1 });
     const p = DnD.dati.normalizeCreature({ id: 'p', name: 'Aria', inventory: [{ equipmentId: 'eq-pugnale', qty: 1 }] }, true);
@@ -3597,7 +3599,7 @@
 
   test('Suoni: tutti gli eventi hanno etichetta, categoria e ricetta valida', () => {
     const S = SDD();
-    eq(S.CATEGORIES.map((c) => c.id), ['dadi', 'combattimento', 'turno', 'movimento', 'boss', 'leggendario', 'esplorazione', 'online', 'interfaccia']);
+    eq(S.CATEGORIES.map((c) => c.id), ['dadi', 'combattimento', 'turno', 'movimento', 'boss', 'leggendario', 'esplorazione', 'mondo', 'online', 'interfaccia']);
     const ids = S.EVENTS.map((e) => e.id);
     eq(new Set(ids).size, ids.length, 'identificatori unici');
     const required = ['dadi-rotolio', 'dadi-tonfo', 'dadi-20', 'dadi-1', 'colpo', 'mancato', 'critico', 'danno', 'cura', 'a-terra', 'incantesimo', 'ts-riuscito', 'ts-fallito', 'azione-lieve',
@@ -3862,6 +3864,466 @@
       DnD.audio = prev;
       I.set(prevSettings);
     }
+  });
+
+  // ======================= Mondo: fazioni, party, città, NPC e quest =======================
+  const FZ = () => DnD.fazioni;
+  const NPC = () => DnD.npc;
+  const QS = () => DnD.quest;
+  const PY = () => DnD.party;
+  const CT = () => DnD.citta;
+  // Le tre predefinite più «Gilda», neutrale verso tutti (nessuna relazione scritta).
+  const worldFactions = () => FZ().builtinFactions('s').concat(FZ().normalizeFaction({ id: 'gilda', name: 'Gilda' }));
+  // Mercante di prova: pugnali (2 mo) con rifornimento e una spada lunga (15 mo) sbloccata da reputazione 50.
+  const merchantNpc = (o) => NPC().normalizeNpc(Object.assign({
+    id: 'm', name: 'Bera', roles: ['mercante'], factionId: 'gilda',
+    merchant: { stock: [{ id: 'l1', equipmentId: 'eq-pugnale', qty: 3, restock: 1, max: 5 }, { id: 'l2', equipmentId: 'eq-spada-lunga', qty: 1, minRep: 50 }], coins: { mo: 10 } },
+  }, o));
+  // Combattente NPC (neutrale finché non è provocato).
+  const npcC = (id, o, npc) => mkC(Object.assign({ id, name: 'NPC ' + id, faction: 'gilda', npc: Object.assign({ npcId: 'n-' + id, defend: 'se', provoke: 'solo', cityId: 'c1', penalty: -10 }, npc) }, o));
+
+  test('Fazioni: matrice delle relazioni, simmetria, asimmetrie e relazione()', () => {
+    const list = worldFactions();
+    eq([FZ().relazione('giocatori', 'nemici', list), FZ().relazione('neutrali', 'giocatori', list), FZ().relazione('nemici', 'nemici', list)], ['guerra', 'amichevole', 'alleata'], 'predefinite e stessa fazione');
+    eq([FZ().relazione('nemici', 'giocatori', []), FZ().relazione('x', 'y', list), FZ().relazione('', 'nemici', list)], ['guerra', 'neutrale', 'neutrale'], 'predefinite mancanti dalla lista e sconosciute');
+    FZ().setRelation(list, 'gilda', 'nemici', 'alleata', true);
+    eq([FZ().relazione('gilda', 'nemici', list), FZ().relazione('nemici', 'gilda', list)], ['alleata', 'alleata'], 'simmetrica');
+    FZ().setRelation(list, 'gilda', 'giocatori', 'ostile', false);
+    eq([FZ().relazione('gilda', 'giocatori', list), FZ().relazione('giocatori', 'gilda', list)], ['ostile', 'neutrale'], 'asimmetrica');
+    eq(FZ().asymmetries(list), [{ a: 'giocatori', b: 'gilda', ab: 'neutrale', ba: 'ostile' }]);
+    eq(FZ().matrix(list)[3].cells.map((c) => c.level), ['ostile', 'alleata', 'neutrale', 'alleata'], 'riga della Gilda');
+    FZ().setRelation(list, 'gilda', 'gilda', 'guerra', true);
+    FZ().setRelation(list, 'gilda', 'nemici', 'boh', true);
+    eq(FZ().relazione('gilda', 'nemici', list), 'alleata', 'livelli non validi e sé stessa ignorati');
+    eq([FZ().isHostileLevel('guerra'), FZ().isHostileLevel('neutrale'), FZ().isAllyLevel('amichevole'), FZ().isAllyLevel('neutrale')], [true, false, true, false]);
+    eq(FZ().normalizeFaction({ id: 'x', relations: { x: 'alleata', y: 'boh', z: 'ostile' } }).relations, { z: 'ostile' }, 'normalizzazione');
+    const fixed = FZ().ensureBuiltins([FZ().normalizeFaction({ id: 'gilda' })], 's');
+    eq([fixed.map((f) => f.id), fixed.filter((f) => f.builtin).length, fixed[0].shared], [['giocatori', 'nemici', 'neutrali', 'gilda'], 3, true], 'predefinite sempre presenti e condivise');
+    eq(FZ().factionOr(list, 'eliminata'), 'neutrali', 'fazione eliminata: Neutrali');
+  });
+
+  test('Reputazione: soglie, effetti su prezzi, città, atteggiamento e accessi', () => {
+    const th = (v) => FZ().threshold(v).id;
+    eq([th(-100), th(-60), th(-20), th(-6), th(-5), th(19), th(20), th(50), th(100)], ['nemico', 'ostile', 'diffidente', 'diffidente', 'neutrale', 'neutrale', 'amichevole', 'alleato', 'eroe']);
+    eq([-60, -50, -30, 0, 50, 79, 80].map(FZ().priceFactor), [1.5, 1.5, 1.2, 1, 0.9, 0.9, 0.8], 'prezzi');
+    eq([-51, -20, 0, 50].map(FZ().cityAttitude), ['ostile', 'diffidente', 'neutrale', 'accogliente'], 'città');
+    eq([-60, -30, 0, 20, 90].map(FZ().attitudeDelta), [-2, -1, 0, 1, 2], 'atteggiamento degli NPC');
+    eq([FZ().hasAccess(-51, true), FZ().hasAccess(-50, true), FZ().hasAccess(-90, false)], [false, true, true], 'sotto -50 bloccato (se la regola è attiva)');
+    eq(FZ().normalizeThresholds([{ id: 'a', name: 'A', min: 10 }, { id: 'b', name: 'B', min: -30 }]).map((t) => [t.id, t.min]), [['b', -100], ['a', 10]], 'soglie modificabili, ordinate, la prima da -100');
+    eq(FZ().threshold(5, [{ id: 'a', min: 10 }, { id: 'b', min: -30 }]).id, 'b', 'soglie della sessione');
+    const city = CT().quickCity({ name: 'Rocca', factionId: 'gilda' }, 's');
+    eq([CT().attitude(city, -60).id, CT().attitude(city, -60).name, CT().isClosed(city, -60, true), CT().isClosed(city, -60, false), CT().attitude(city, 60).id], ['ostile', 'Ostile', true, false, 'accogliente']);
+  });
+
+  test('Reputazione: registro con motivazione, annullamento e reputazione per giocatore', () => {
+    const world = FZ().normalizeWorld({});
+    const party = PY().normalizeParty({ id: 'pa', memberIds: ['p1', 'p2'] });
+    const t = { world, party };
+    const e1 = FZ().changeReputation(t, 'gilda', 30, 'aiuto al mercato', 'manuale', new Date('2026-01-01T10:00:00Z'));
+    eq([e1.delta, e1.before, e1.after, e1.reason, e1.at, party.reputation.gilda], [30, 0, 30, 'aiuto al mercato', '2026-01-01T10:00:00.000Z', 30]);
+    const e2 = FZ().changeReputation(t, 'gilda', 90, 'eroi', 'quest');
+    eq([e2.delta, e2.after, party.reputation.gilda], [70, 100, 100], 'massimo +100: la voce registra la differenza reale');
+    eq(FZ().changeReputation(t, 'gilda', 5), null, 'già al massimo: nessuna voce');
+    eq(FZ().changeReputation(t, 'gilda', 0), null, 'variazione nulla');
+    ok(FZ().revertReputation(world, [party], e2.id) && party.reputation.gilda === 30 && e2.reverted, 'annullata dal master');
+    eq(FZ().revertReputation(world, [party], e2.id), false, 'non si annulla due volte');
+    // Reputazione personale: parte da quella del party e resta separata.
+    world.perPlayer = true;
+    const e3 = FZ().changeReputation({ world, party, playerId: 'p1' }, 'gilda', -10, 'furto');
+    eq([e3.playerId, e3.before, e3.after, party.reputation.gilda], ['p1', 30, 20, 30]);
+    eq([FZ().reputationOf(world, party, 'gilda', 'p1'), FZ().reputationOf(world, party, 'gilda', 'p2'), FZ().reputationOf(world, party, 'nemici')], [20, 30, 0]);
+    FZ().revertReputation(world, [party], e3.id);
+    eq(world.playerRep.p1.gilda, 30, 'annullamento della voce personale');
+    world.perPlayer = false;
+    eq(FZ().reputationOf(world, party, 'gilda', 'p1'), 30, 'reputazione personale spenta: vale quella del party');
+    eq([world.repLog.length, FZ().normalizeWorld(JSON.parse(JSON.stringify(world))).repLog.map((e) => e.reverted)], [3, [false, true, true]], 'registro salvato');
+  });
+
+  test('Monete: conversione in rame, pagamento con resto, incasso', () => {
+    eq([NPC().toCopper({ mo: 1, ma: 5, mr: 3 }), NPC().toCopper({ mp: 1, me: 2 })], [153, 1100]);
+    const c = NPC().fromCopper(153);
+    eq([c.mo, c.ma, c.mr, c.me, c.mp], [1, 5, 3, 0, 0], 'resto in oro, argento e rame');
+    const p = NPC().pay({ mo: 2 }, 35);
+    eq([p.mo, p.ma, p.mr, NPC().toCopper(p)], [1, 6, 5, 165], '2 mo − 35 mr: si cambia una moneta d\'oro');
+    const q = NPC().pay({ mr: 10, mo: 1 }, 15);
+    eq([q.mo, q.ma, q.mr, NPC().toCopper(q)], [0, 9, 5, 95], 'prima le monete piccole, poi il cambio');
+    eq(NPC().pay({ ma: 2 }, 50), null, 'non basta');
+    eq(NPC().toCopper(NPC().receive({ mo: 1 }, 250)), 350);
+    ok(/1 mo/.test(NPC().formatCopper(150)) && /5 ma/.test(NPC().formatCopper(150)), NPC().formatCopper(150));
+  });
+
+  test('Mercante: prezzi, acquisto e vendita, oggetti sbloccati dalla reputazione, rifornimento, contrattazione', () => {
+    const catalog = DnD.attrezzatura.defaults();
+    const npc = merchantNpc();
+    const st = NPC().instantiateState(npc);
+    const ctx = (rep, attitude) => ({ rep: rep || 0, attitude: attitude || 'indifferente', catalog });
+    const line = st.stock[0];
+    eq([0, 50, 80, -30].map((r) => NPC().unitSellPrice(npc, st, line, ctx(r))), [200, 180, 160, 240], 'reputazione: sconto o rincaro');
+    eq(['amichevole', 'ostile'].map((a) => NPC().unitSellPrice(npc, st, line, ctx(0, a))), [190, 250], 'atteggiamento');
+    eq(NPC().offer(npc, st, ctx(0)).map((r) => r.locked), [false, true], 'spada lunga bloccata sotto 50');
+    eq(NPC().offer(npc, st, ctx(50)).map((r) => r.locked), [false, false]);
+    const buyer = { inventory: [], coins: { mo: 5 } };
+    ok(NPC().quote(npc, st, { buy: [{ lineId: 'l2', qty: 1 }] }, buyer, ctx(0)).errors.some((e) => /richiede reputazione 50/.test(e)), 'oggetto bloccato');
+    ok(NPC().quote(npc, st, { buy: [{ lineId: 'l1', qty: 4 }] }, buyer, ctx(0)).errors.some((e) => /Solo 3/.test(e)), 'quantità disponibile');
+    ok(NPC().quote(npc, st, { buy: [{ lineId: 'l1', qty: 3 }] }, buyer, ctx(0)).errors.some((e) => /Monete insufficienti/.test(e)), 'monete insufficienti (6 mo)');
+    eq(NPC().quote(npc, st, {}, buyer, ctx(0)).ok, false, 'carrello vuoto');
+    const text = NPC().checkout(npc, st, { buy: [{ lineId: 'l1', qty: 2 }] }, buyer, ctx(0));
+    eq([line.qty, buyer.inventory[0].equipmentId, buyer.inventory[0].qty, NPC().toCopper(buyer.coins), NPC().toCopper(st.coins)], [1, 'eq-pugnale', 2, 100, 1400], text);
+    ok(/compra 2× Pugnale/.test(text) && /paga 4 mo/.test(text), text);
+    eq(NPC().unitBuyPrice(npc, st, 'eq-pugnale', ctx(0)), 100, 'il mercante compra a metà prezzo');
+    const sold = NPC().checkout(npc, st, { sell: [{ equipmentId: 'eq-pugnale', qty: 1 }] }, buyer, ctx(0));
+    eq([line.qty, buyer.inventory[0].qty, NPC().toCopper(buyer.coins), NPC().toCopper(st.coins)], [2, 1, 200, 1300], sold);
+    ok(npc.merchant.stock[0].qty === 3, 'il modello non cambia: cambia solo la copia');
+    let threw = false;
+    try { NPC().checkout(npc, st, { buy: [{ lineId: 'l2', qty: 1 }] }, buyer, ctx(0)); } catch (e) { threw = true; }
+    ok(threw && st.stock[1].qty === 1, 'scambio non valido: errore e nulla cambia');
+    // Rifornimento giornaliero fino al tetto.
+    eq([NPC().restock(st, 2), line.qty, NPC().restock(st, 2), NPC().restock(st, 10), line.qty, st.stock[1].qty], [2, 4, 0, 1, 5, 1]);
+    // Contrattazione: Persuasione contro CD 15.
+    const h1 = NPC().haggle(npc, st, 2, seq(13));
+    eq([h1.success, h1.total, st.haggle, NPC().unitSellPrice(npc, st, line, ctx(0))], [true, 15, 0.1, 180], h1.text);
+    const h2 = NPC().haggle(npc, st, 0, seq(2));
+    eq([h2.success, Math.round(st.haggle * 100)], [false, 5], h2.text);
+    NPC().haggle(npc, st, 10, seq(20));
+    NPC().haggle(npc, st, 10, seq(20));
+    eq(Math.round(st.haggle * 100), 20, 'sconto massimo 20%');
+  });
+
+  test('NPC neutrale provocato: solo lui, tutta la fazione o la città; penalità, annullamento e calma', () => {
+    const t = FZ().table(worldFactions());
+    const make = (provoke) => {
+      const hero = mkHero({ id: 'h', name: 'Aria' });
+      const guard = npcC('g1', { name: 'Guardia' }, { provoke });
+      const guard2 = npcC('g2', {}, { defend: 'fazione' });
+      const citizen = npcC('g3', { faction: 'neutrali' }, {});
+      const far = npcC('g4', {}, { cityId: 'c2' });
+      return { hero, guard, guard2, citizen, far, all: [hero, guard, guard2, citizen, far] };
+    };
+    let w = make('solo');
+    eq([FZ().ostili(w.hero, w.guard, t), NPC().countsForXp(w.guard, t), NPC().countsForXp(w.hero, t)], [false, false, true], 'neutrale: non conta nei PE');
+    eq(NPC().reactions(w.hero, w.guard, w.all, t).map((x) => x.id), ['g1', 'g2'], 'reagiscono il bersaglio e chi difende la fazione');
+    const r = NPC().provoke([w.guard], { combatants: w.all, factions: worldFactions(), symmetric: true, attackerFaction: 'giocatori' });
+    eq([r.changed, w.guard.hostileTo, w.guard.npc.attitude, r.reputation], [['g1'], ['giocatori'], 'ostile', [{ factionId: 'gilda', delta: -10, reason: 'attacco a Guardia' }]]);
+    eq([FZ().ostili(w.hero, w.guard, t), FZ().ostili(w.guard, w.hero, t), FZ().ostili(w.hero, w.guard2, t), NPC().countsForXp(w.guard, t)], [true, true, false, true], 'solo lui');
+    eq([NPC().calm(w.guard), FZ().ostili(w.hero, w.guard, t), w.guard.npc.attitude], ['Guardia si calma e torna neutrale.', false, 'indifferente'], 'calmato');
+    // Tutta la fazione: la relazione scende; l'istantanea di prima annulla.
+    w = make('fazione');
+    const list = worldFactions();
+    const rf = NPC().provoke([w.guard], { combatants: w.all, factions: list, symmetric: true, attackerFaction: 'giocatori' });
+    const t2 = FZ().table(list);
+    eq([FZ().relazione('gilda', 'giocatori', list), FZ().relazione('giocatori', 'gilda', list), FZ().ostili(w.hero, w.guard2, t2), FZ().ostili(w.hero, w.far, t2), FZ().ostili(w.hero, w.citizen, t2)], ['ostile', 'ostile', true, true, false]);
+    eq(rf.changed.sort(), ['g1', 'g2', 'g4']);
+    eq(FZ().ostili(w.hero, w.guard2, FZ().table(rf.factionsBefore)), false, 'annullamento: relazioni di prima');
+    // A cerchi di città: tutti gli NPC della città, di qualunque fazione.
+    w = make('citta');
+    NPC().provoke([w.guard], { combatants: w.all, factions: worldFactions(), symmetric: true, attackerFaction: 'giocatori' });
+    eq([w.guard, w.guard2, w.citizen, w.far].map((x) => FZ().ostili(w.hero, x, t)), [true, true, true, false]);
+    ok(!NPC().reactions(w.hero, w.guard, w.all, t).some((x) => x.id === 'g1'), 'già ostile: non reagisce di nuovo');
+  });
+
+  test('IA con fazioni: attacca solo gli ostili, ignora i neutrali, l\'NPC amichevole aiuta il party', () => {
+    const t = FZ().table(worldFactions());
+    const hero = mkHero({ id: 'h', name: 'Aria', pos: { x: 2, y: 2 } });
+    const goblin = mkC({ id: 'x', name: 'Goblin', pos: { x: 6, y: 2 } });
+    const guard = npcC('g', { pos: { x: 5, y: 2 } });
+    const friend = npcC('f', { name: 'Amica', pos: { x: 3, y: 3 }, control: 'ia' }, { defend: 'party', attitude: 'amichevole' });
+    const st = aiState([goblin, hero, guard, friend], { relations: t });
+    eq([FZ().relazioneCombattenti(friend, hero, t), FZ().relazioneCombattenti(friend, goblin, t), FZ().relazioneCombattenti(goblin, friend, t), FZ().relazioneCombattenti(friend, guard, t)], ['amichevole', 'ostile', 'ostile', 'alleata']);
+    eq(plan(st, 'x').scores.map((s) => s.id).sort(), ['f', 'h'], 'il goblin ignora la guardia neutrale');
+    eq(plan(st, 'f').action.targetIds, ['x'], 'l\'NPC amichevole attacca i nemici del party');
+    eq(plan(aiState([guard, hero, goblin], { relations: t }), 'g').reason, 'NPC g (aggressivo, FOR): nessun avversario rimasto.', 'il neutrale non attacca');
+    // Non ancora nell'iniziativa: l'IA non lo considera.
+    guard.hostileTo = ['nemici'];
+    guard.joinRound = 3;
+    ok(!plan(aiState([goblin, hero, guard], { relations: t, round: 1 }), 'x').scores.some((s) => s.id === 'g'), 'in attesa fino al round 3');
+    ok(plan(aiState([goblin, hero, guard], { relations: t, round: 3 }), 'x').scores.some((s) => s.id === 'g'), 'dal round 3 conta');
+  });
+
+  test('Combattimento con fazioni: cambio a metà, avvisi ad area, fine per fazioni, nextTurn con joinRound', () => {
+    const t = FZ().table(worldFactions());
+    const hero = mkHero({ id: 'h', name: 'Aria', initiative: 15 });
+    const ally = mkC({ id: 'a', name: 'Alleato', faction: 'neutrali', initiative: 12 });
+    const orc = mkC({ id: 'o', name: 'Orco', initiative: 10 });
+    const goblin = mkC({ id: 'x', name: 'Goblin', initiative: 5 });
+    eq(FZ().areaWarnings(hero, [hero, ally, orc, goblin], t), [{ id: 'a', name: 'Alleato', level: 'amichevole' }], 'avvisa solo per chi non è ostile');
+    Object.assign(goblin, { prevFaction: goblin.faction, faction: 'neutrali' });
+    eq([FZ().ostili(hero, goblin, t), FZ().ostili(orc, goblin, t), FZ().areaWarnings(hero, [orc, goblin], t).map((x) => x.id)], [false, true, ['x']], 'il goblin passa ai Neutrali a metà combattimento');
+    eq(DnD.dati.normalizeCombatant(JSON.parse(JSON.stringify(goblin))).prevFaction, 'nemici', '«torna a…» salvato');
+    eq(FZ().combatOver([hero, ally, orc, goblin], t).over, false);
+    orc.hp = 0;
+    eq(FZ().combatOver([hero, ally, orc, goblin], t), { over: true, foes: 1, standing: 0 }, 'tutti gli ostili a terra (il goblin ora neutrale non conta)');
+    orc.hp = 5;
+    orc.fled = true;
+    eq(FZ().combatOver([hero, orc], t).over, true, 'o in fuga');
+    eq(FZ().combatOver([hero, ally], t).over, false, 'nessun ostile: non si chiude da solo');
+    // Iniziativa: chi entra al round 2 viene saltato al round 1; il fuggito sempre.
+    const order = R().sortByInitiative([hero, ally, Object.assign(orc, { fled: false, joinRound: 2 }), goblin]);
+    eq(R().firstTurn(order, 1), 'h');
+    eq([R().nextTurn(order, 'a', 1), R().nextTurn(order, 'x', 1), R().nextTurn(order, 'a', 2)], [{ currentId: 'x', round: 1 }, { currentId: 'h', round: 2 }, { currentId: 'o', round: 2 }]);
+    goblin.fled = true;
+    eq(R().nextTurn(order, 'o', 2), { currentId: 'h', round: 3 }, 'il fuggito è saltato');
+    eq([R().waiting(orc, 1), R().waiting(orc, 2), R().waiting(goblin, 9)], [true, false, true]);
+  });
+
+  test('Party: più membri, ordine di marcia, un solo party per giocatore, attivo e fazione', () => {
+    const parties = [PY().normalizeParty({ id: 'A', memberIds: ['p1', 'p2'] }), PY().normalizeParty({ id: 'B', name: 'Esploratori', memberIds: ['p3'] })];
+    eq(PY().assignPlayer(parties, 'B', 'p1').id, 'A', 'restituisce il party di prima (per la conferma)');
+    eq([parties[0].memberIds, parties[1].memberIds, parties[1].marchOrder, PY().partyOf(parties, 'p1').id], [['p2'], ['p3', 'p1'], ['p3', 'p1'], 'B']);
+    eq(PY().assignPlayer(parties, 'B', 'p1'), null, 'già nel party: nessun cambio');
+    eq(parties[1].memberIds, ['p3', 'p1'], 'nessun doppione');
+    ok(PY().moveInOrder(parties[1], 'p1', -1) && !PY().moveInOrder(parties[1], 'p1', -1), 'ordine di marcia e limiti');
+    eq(parties[1].marchOrder, ['p1', 'p3']);
+    const players = [{ id: 'p1', name: 'Aria' }, { id: 'p2', name: 'Brun' }];
+    eq([PY().members(parties[1], players).list.map((p) => p.name), PY().members(parties[1], players).missing], [['Aria'], 1], 'giocatore eliminato saltato');
+    eq(PY().prune(parties[1], players).memberIds, ['p1']);
+    eq([PY().active(parties, { activePartyId: 'B' }).id, PY().active(parties, {}).id, PY().active([], {})], ['B', 'A', null]);
+    eq(PY().normalizeParty({ memberIds: ['a', 'b', 'c'], marchOrder: ['c', 'x'] }).marchOrder, ['c', 'a', 'b'], 'ordine di marcia normalizzato');
+    parties[0].factionId = 'gilda';
+    eq([PY().playerFaction({ id: 'p2' }, parties), PY().playerFaction({ id: 'p1' }, parties), PY().playerFaction({ id: 'p1', factionId: 'nemici' }, parties), PY().playerFaction({ id: 'zz' }, parties)], ['gilda', 'giocatori', 'nemici', 'giocatori']);
+    eq([FZ().defaultFactionFor({ id: 'p2' }, 'player', { parties }), FZ().defaultFactionFor({}, 'npc', {})], ['gilda', 'nemici'], 'fazione di partenza nel combattimento');
+  });
+
+  test('Quest: requisiti, obiettivi con contatori, uccisioni, raccolta, consegna, sblocchi e scadenza', () => {
+    const q = QS().normalizeQuest({
+      id: 'q1', title: 'Lupi', factionId: 'gilda', requirements: [{ kind: 'reputazione', factionId: 'gilda', min: 10 }, { kind: 'livello', level: 3 }],
+      objectives: [{ id: 'o1', kind: 'uccidi', creature: 'lupo', count: 3 }, { id: 'o2', kind: 'raccogli', equipmentId: 'eq-pugnale', count: 2 }, { id: 'o3', kind: 'parla', npcId: 'n1', optional: true }],
+      timeLimit: 48, rewards: { xp: 300, coins: { mo: 20 }, reputation: [{ factionId: 'gilda', delta: 15 }], unlockQuestIds: ['q2'] },
+    });
+    const ctx = (rep) => ({ rep: () => rep, level: 4, hasItem: () => false, eventDone: () => false, blockHostile: true });
+    eq([QS().requirementsMet(q, ctx(5)), QS().requirementsMet(q, ctx(10)).ok], [{ ok: false, missing: ['reputazione 10'] }, true]);
+    ok(QS().requirementsMet(q, ctx(-60)).missing.includes('fazione ostile'), 'fazione ostile: bloccata');
+    const j = {};
+    eq(QS().statusOf(j, 'q1'), 'disponibile');
+    const e = QS().accept(j, q, 10, 'pa');
+    eq([e.status, e.offered, e.deadline, e.partyId, QS().accept(j, q, 11)], ['attiva', true, 58, 'pa', null]);
+    eq(QS().onKill(j, [q], { name: 'Lupo 2' }).length, 1, 'per nome (senza il numero della copia)');
+    eq(QS().onKill(j, [q], { name: 'Orso', creature: { ctype: 'bestia' } }), [], 'altre creature no');
+    QS().onKill(j, [q], { name: 'Grande Lupo' });
+    const last = QS().onKill(j, [q], { name: 'Bestia', creature: { ctype: 'lupo mannaro' } });
+    ok(last.some((l) => /3\/3 ✓/.test(l)), 'per tipo, con ✓');
+    eq([QS().onKill(j, [q], { name: 'Lupo' }), j.q1.progress.o1, QS().allDone(q, j.q1)], [[], 3, false], 'il contatore non supera il totale');
+    eq(QS().complete(j, q, 12), { ok: false, reason: 'obiettivi non completati' });
+    QS().onCollect(j, [q], () => 1);
+    eq(j.q1.progress.o2, 1, 'raccogli: conta il posseduto');
+    const lines = QS().onCollect(j, [q], () => 5);
+    eq([j.q1.progress.o2, lines.length, QS().allDone(q, j.q1)], [2, 1, true], 'facoltativo non richiesto');
+    const done = QS().complete(j, q, 20);
+    eq([done.ok, done.rewards.xp, done.rewards.coins.mo, done.rewards.reputation, j.q1.status, j.q1.endedAt, j.q2.unlocked], [true, 300, 20, [{ factionId: 'gilda', delta: 15 }], 'completata', 20, true]);
+    eq(QS().complete(j, q, 21).ok, false, 'già consegnata');
+    // Nemico preciso della libreria, scadenza e fallimento.
+    const q3 = QS().normalizeQuest({ id: 'q3', title: 'Il capo', timeLimit: 5, objectives: [{ id: 'k', kind: 'uccidi', npcSourceId: 'boss1' }] });
+    QS().accept(j, q3, 0);
+    eq([QS().onKill(j, [q3], { name: 'Altro', sourceId: 'x' }).length, QS().onKill(j, [q3], { name: 'Capo', sourceId: 'boss1' }).length > 0], [0, true]);
+    eq([QS().expire(j, [q3], 5).length, QS().expire(j, [q3], 6).map((x) => x.id), j.q3.status], [0, ['q3'], 'scaduta']);
+    const q4 = QS().normalizeQuest({ id: 'q4', title: 'Rotta', objectives: [{ id: 'r', kind: 'raggiungi', gridId: 'g', x: 2, y: 3 }, { id: 'v', kind: 'evento', eventId: 'ev' }] });
+    QS().accept(j, q4, 0);
+    eq([QS().onReach(j, [q4], 'g', 2, 2).length, QS().onReach(j, [q4], 'g', 2, 3).length, QS().onEvent(j, [q4], 'ev').length, QS().onTalk(j, [q4], 'n1').length], [0, 1, 2, 0]);
+    QS().fail(j, q4, 9);
+    eq([j.q4.status, QS().onEvent(j, [q4], 'ev')], ['fallita', []], 'una quest fallita non avanza');
+    eq(QS().journalList([q, q3, q4], j, { status: 'scaduta' }).map((x) => x.id), ['q3']);
+    eq(QS().journalList([q, q3, q4], j, { factionId: 'gilda', text: 'lup' }).map((x) => x.id), ['q1'], 'ricerca e filtro per fazione');
+  });
+
+  test('Dialoghi: condizioni (reputazione, oggetto, variabile), esiti, prove e avvisi', () => {
+    const dialog = NPC().normalizeDialog({ start: 'a', nodes: [
+      { id: 'a', text: 'Ciao', answers: [
+        { id: 'r1', text: 'Sconto?', conds: [{ kind: 'reputazione', factionId: 'gilda', min: 20 }], outcomes: [{ kind: 'atteggiamento', value: 'amichevole' }, { kind: 'vai', to: 'b' }] },
+        { id: 'r2', text: 'Convinci', outcomes: [{ kind: 'prova', what: 'Persuasione', dc: 12, success: 'b', failure: 'c' }] },
+        { id: 'r3', text: 'Chiave', conds: [{ kind: 'oggetto', equipmentId: 'eq-chiave' }, { kind: 'variabile', name: 'porta', op: '=', value: 'aperta', negate: true }], outcomes: [{ kind: 'quest', questId: 'q1' }, { kind: 'fine' }] },
+      ] },
+      { id: 'b', text: 'Affare fatto' },
+      { id: 'c', text: 'No', answers: [{ id: 'r4', outcomes: [{ kind: 'vai', to: 'zzz' }] }] },
+      { id: 'd', text: 'Orfano' },
+    ] });
+    const ctx = (o) => Object.assign({ rep: () => 0, hasItem: () => true, variable: () => undefined, attitude: 'indifferente', bonus: () => 2 }, o);
+    const a = NPC().nodeOf(dialog, 'a');
+    eq(NPC().answersFor(a, ctx()).map((x) => x.id), ['r2', 'r3']);
+    eq(NPC().answersFor(a, ctx({ rep: (f) => (f === 'gilda' ? 20 : 0), variable: () => 'aperta' })).map((x) => x.id), ['r1', 'r2'], 'reputazione sufficiente, porta già aperta');
+    eq(NPC().answersFor(a, ctx({ hasItem: () => false })).map((x) => x.id), ['r2'], 'senza l\'oggetto');
+    eq(NPC().choose(dialog, a.answers[0], ctx()), { next: 'b', effects: [{ kind: 'atteggiamento', value: 'amichevole' }], lines: [] });
+    const ok1 = NPC().choose(dialog, a.answers[1], ctx(), seq(10));
+    const ko = NPC().choose(dialog, a.answers[1], ctx(), seq(9));
+    eq([ok1.next, ko.next, /Persuasione 12 contro CD 12: successo/.test(ok1.lines[0])], ['b', 'c', true], 'prova con successo e fallimento');
+    eq(NPC().choose(dialog, a.answers[2], ctx()), { next: '', effects: [{ kind: 'quest', questId: 'q1' }], lines: [] }, 'apri quest e fine');
+    const broken = NPC().choose(dialog, NPC().nodeOf(dialog, 'c').answers[0], ctx());
+    eq([broken.next, broken.lines.length], ['', 1], 'nodo eliminato: il dialogo finisce senza errori');
+    eq(NPC().dialogWarnings(dialog), ['«Orfano» non è raggiungibile.', 'Una risposta porta a un nodo eliminato.']);
+    eq(NPC().normalizeDialog({ start: 'zz', nodes: [{ id: 'n' }] }).start, 'n', 'inizio mancante: il primo nodo');
+  });
+
+  test('NPC: istanze indipendenti dallo stesso modello, fazione dalla città, atteggiamento, routine, promozione', () => {
+    const npc = merchantNpc({ notes: 'segreto' });
+    const i1 = NPC().placedItem(npc, 'it1', 0, 0);
+    const i2 = NPC().placedItem(npc, 'it2', 1, 0);
+    i1.npcState.stock[0].qty = 0;
+    i1.npcState.hp = 3;
+    i1.npcState.delivered.push('q1');
+    eq([i1.otype, i1.npcId, i2.npcState.stock[0].qty, i2.npcState.hp, i2.npcState.delivered, npc.merchant.stock[0].qty], ['npc', 'm', 3, null, [], 3], 'ogni copia ha il suo stato');
+    const back = NPC().normalizeState(JSON.parse(JSON.stringify(i1.npcState)), npc);
+    eq([back.stock[0].qty, back.hp, back.delivered], [0, 3, ['q1']], 'stato salvato');
+    // Città: la sua fazione è quella predefinita per NPC e nemici creati lì.
+    const city = CT().quickCity({ id: 'c1', name: 'Rocca', factionId: 'gilda', size: 'citta' }, 's');
+    const local = NPC().normalizeNpc({ id: 'n2', cityId: 'c1', roles: ['quest'] });
+    eq([NPC().factionOf(local, null, [city]), NPC().factionOf(local, { factionId: 'nemici' }, [city]), NPC().factionOf(local, null, []), NPC().factionOf(npc, null, [city])], ['gilda', 'nemici', 'neutrali', 'gilda']);
+    eq([FZ().defaultFactionFor({ cityId: 'c1' }, 'npc', { cities: [city] }), FZ().defaultFactionFor({ cityId: 'c1', factionId: 'nemici' }, 'npc', { cities: [city] })], ['gilda', 'nemici'], 'nemico creato in città');
+    const q = QS().normalizeQuest({ id: 'qq', giver: { npcId: 'n2' } });
+    const c = CT().contents(city, [npc, local], [q]);
+    eq([c.npcs.map((n) => n.id), c.merchants, c.quests.map((x) => x.id)], [['n2'], [], ['qq']], 'contenuti della città');
+    eq([CT().placeEvent(city).actions[0].kind, CT().placeEvent(Object.assign({}, city, { gridId: 'g' })).actions[0].kind], ['nota', 'mappa'], 'segnaposto «Entra in una mappa»');
+    // Atteggiamento: base più modificatore dalla reputazione con la sua fazione.
+    const s = NPC().instantiateState(npc);
+    eq([NPC().attitudeOf(npc, s, 0), NPC().attitudeOf(npc, s, 20), NPC().attitudeOf(npc, s, -20), NPC().attitudeOf(npc, Object.assign({}, s, { attitude: 'amichevole' }), -20), NPC().attitudeOf(npc, Object.assign({}, s, { hostile: true }), 90)],
+      ['indifferente', 'amichevole', 'ostile', 'amichevole', 'ostile']);
+    const r = NPC().normalizeNpc({ routine: [{ from: 22, to: 6, place: 'Taverna' }, { from: 8, to: 18, place: 'Bottega' }] });
+    eq([23, 3, 12, 19].map((h) => (NPC().routineAt(r, h) || {}).place || null), ['Taverna', 'Taverna', 'Bottega', null], 'routine anche a cavallo della mezzanotte');
+    const enemy = DnD.dati.normalizeCreature({ id: 'e', name: 'Lupo', type: 'creatura', size: 'Media' }, false);
+    const promoted = NPC().fromEnemy(enemy, 's');
+    eq([promoted.name, promoted.base, promoted.roles, promoted.id !== 'e', enemy.name], ['Lupo', 'creatura', ['informatore'], true, 'Lupo'], 'promosso da nemico; l\'originale resta');
+  });
+
+  test('Vista dei giocatori e riferimenti mancanti: NPC, quest e città', () => {
+    const npc = merchantNpc({ notes: 'segreto', questIds: ['q1', 'q2'] });
+    const s = NPC().instantiateState(npc);
+    let v = NPC().statoNpcPerGiocatore(npc, s, { shopOpen: true, offeredQuestIds: ['q1', 'q9'] });
+    eq([v.name, v.roles, v.attitude, v.shop, v.quests, 'notes' in v, 'merchant' in v], ['Bera', [], null, [], ['q1'], false, false], 'senza rivelare: solo nome e icona');
+    s.revealed.role = true;
+    s.revealed.attitude = true;
+    s.stock[0].qty = 0;
+    v = NPC().statoNpcPerGiocatore(npc, s, { shopOpen: true, attitude: 'amichevole' });
+    eq([v.roles, v.attitude, v.shop], [['mercante'], 'amichevole', []], 'merce esaurita e merce sbloccata da reputazione non si vedono');
+    eq(NPC().statoNpcPerGiocatore(merchantNpc({ hiddenRole: true }), s, { shopOpen: true }).roles, [], 'ruolo nascosto');
+    s.revealed.name = false;
+    s.hostile = true;
+    eq([NPC().statoNpcPerGiocatore(npc, s).name, NPC().statoNpcPerGiocatore(npc, s).status], ['Sconosciuto', 'ostile']);
+    // Quest: i giocatori vedono solo quelle offerte e accettate.
+    const qs = ['a', 'b', 'c'].map((id) => QS().normalizeQuest({ id, title: id.toUpperCase(), notes: 'segreto', objectives: [{ id: 'o', kind: 'parla', npcId: 'n' }] }));
+    const j = {};
+    QS().offer(j, qs[1]);
+    QS().accept(j, qs[2], 0);
+    QS().onTalk(j, qs, 'n');
+    eq(QS().perGiocatore(qs, j), [{ id: 'c', title: 'C', description: '', status: 'attiva', objectives: [{ text: 'parla con l\'NPC', done: true, progress: 1, count: 1 }] }]);
+    // Riferimenti mancanti: avvisi, nessun errore.
+    const catalog = DnD.attrezzatura.defaults();
+    const world = { factions: worldFactions(), cities: [], quests: [qs[0]], npcs: [] };
+    const broken = merchantNpc({ cityId: 'sparita', questIds: ['a', 'zz'], merchant: { stock: [{ equipmentId: 'eq-sparito' }] } });
+    eq(NPC().missingRefs(broken, { equipment: catalog, savedGrids: [] }, world), ['città eliminata', 'oggetto in vendita eliminato', 'quest eliminata']);
+    const bq = QS().normalizeQuest({ giver: { npcId: 'nn' }, factionId: 'sparita', objectives: [{ kind: 'raccogli', equipmentId: 'eq-sparito' }, { kind: 'uccidi', npcSourceId: 'boh' }], rewards: { items: [{ equipmentId: 'eq-sparito' }] } });
+    eq(QS().missingRefs(bq, { equipment: catalog, npcs: [], events: [] }, world), ['datore eliminato', 'fazione eliminata', 'oggetto da raccogliere eliminato', 'creatura dell\'obiettivo eliminata', 'oggetto della ricompensa eliminato']);
+    const bc = CT().normalizeCity({ factionId: 'sparita', gridId: 'gg', questIds: ['zz'], eventIds: ['ev'] });
+    eq(CT().missingRefs(bc, { savedGrids: [], biomes: [], events: [] }, world), ['fazione dominante eliminata', 'mappa collegata eliminata', 'quest eliminata', 'evento eliminato']);
+    eq(FZ().defaultFactionFor({ factionId: 'sparita' }, 'npc', { factions: world.factions }), 'nemici', 'fazione eliminata nel combattimento: torna alla predefinita');
+  });
+
+  // Mondo di una sessione per migrazione, esportazione e duplicazione.
+  function worldState() {
+    const st = DnD.dati.emptyState();
+    const sess = S().current(st);
+    const sid = sess.id;
+    st.players.push(Object.assign(DnD.dati.normalizeCreature({ id: 'p1', name: 'Aria' }, true), { sessionId: sid }));
+    st.factions.push(FZ().normalizeFaction({ id: 'gilda', name: 'Gilda', sessionId: sid, relations: { giocatori: 'amichevole' } }));
+    st.cities.push(CT().normalizeCity({ id: 'c1', name: 'Rocca', factionId: 'gilda', sessionId: sid }));
+    st.worldNpcs.push(Object.assign(merchantNpc({ cityId: 'c1', questIds: ['q1'] }), { sessionId: sid }));
+    st.quests.push(QS().normalizeQuest({ id: 'q1', title: 'Lupi', factionId: 'gilda', giver: { npcId: 'm' }, sessionId: sid, rewards: { reputation: [{ factionId: 'gilda', delta: 10 }] } }));
+    const party = st.parties.find((p) => p.sessionId === sid);
+    Object.assign(party, { memberIds: ['p1'], marchOrder: ['p1'], reputation: { gilda: 30 } });
+    sess.world.activePartyId = party.id;
+    QS().accept(sess.world.quests, st.quests.find((q) => q.id === 'q1'), 0, party.id);
+    FZ().changeReputation({ world: sess.world, party }, 'gilda', 5, 'prova');
+    return { st, sess, party };
+  }
+
+  test('Mondo: migrazione v11 → v12 (party «Gruppo», fazioni predefinite ed esempi, combattenti con la fazione di prima)', () => {
+    const mig = DnD.dati.normalizeState({ version: 11, races: [], npcs: [], players: [{ id: 'z', name: 'Zed' }, { id: 'y', name: 'Yla' }] });
+    const se = S().current(mig);
+    const K = DnD.mondoDati;
+    eq([mig.version, mig.factions.map((f) => f.id), mig.parties.length, mig.parties[0].name, mig.parties[0].memberIds, se.world.activePartyId === mig.parties[0].id],
+      [DnD.dati.VERSION, ['giocatori', 'nemici', 'neutrali', K.EXAMPLE_FACTION], 1, 'Gruppo', ['z', 'y'], true]);
+    eq([mig.cities.map((c) => c.id), mig.worldNpcs.map((n) => n.id), mig.quests.map((q) => q.id), se.world.repLog], [[K.EXAMPLE_CITY], [K.EXAMPLE_NPC], [K.EXAMPLE_QUEST], []], 'esempi del Mondo');
+    eq(DnD.dati.normalizeState({ version: 11, kind: 'sessione', races: [], npcs: [], players: [] }).cities, [], 'i file di una sessione non ricevono esempi');
+    // Esempi originali validi: nessun riferimento mancante, dialogo completo, condivisi.
+    const st = DnD.dati.emptyState();
+    const v = FZ().view(st);
+    const world = { factions: v.factions, cities: v.cities, quests: v.quests, npcs: v.npcs };
+    const orsola = v.npcs.find((n) => n.id === K.EXAMPLE_NPC);
+    eq([NPC().missingRefs(orsola, st, world), QS().missingRefs(v.quests[0], st, world), CT().missingRefs(v.cities[0], st, world), NPC().dialogWarnings(orsola.dialog)], [[], [], [], []]);
+    eq([orsola.shared, orsola.roles, NPC().factionOf(orsola, null, v.cities), FZ().relazione(K.EXAMPLE_FACTION, 'giocatori', v.factions), orsola.merchant.stock.length], [true, ['mercante', 'quest'], K.EXAMPLE_FACTION, 'amichevole', 4]);
+    eq(CT().contents(v.cities[0], v.npcs, v.quests).quests.map((q) => q.id), [K.EXAMPLE_QUEST], 'la città elenca la quest del suo mercante');
+    eq(['giocatori', 'nemici', 'neutrali'].map((f) => DnD.dati.normalizeCombatant({ name: 'X', faction: f }).faction), ['giocatori', 'nemici', 'neutrali'], 'la fazione di prima resta');
+    eq([DnD.dati.normalizeCombatant({ name: 'X', kind: 'player' }).faction, DnD.dati.normalizeCombatant({ name: 'X' }).faction], ['giocatori', 'nemici']);
+    eq(DnD.dati.normalizeState(JSON.parse(JSON.stringify(mig))).parties.length, 1, 'una seconda normalizzazione non aggiunge party');
+  });
+
+  test('Mondo: esportazione e importazione (archivio e sessione) e duplicazione di sessione', () => {
+    const { st, sess, party } = worldState();
+    const back = DnD.dati.importJSON(DnD.dati.exportJSON(st));
+    const bs = S().current(back);
+    const bp = back.parties.find((p) => p.id === party.id);
+    eq([back.factions.some((f) => f.id === 'gilda'), back.cities.find((c) => c.id === 'c1').factionId, back.worldNpcs.find((n) => n.id === 'm').cityId, bp.reputation.gilda, bs.world.quests.q1.status, bs.world.repLog.length], [true, 'gilda', 'c1', 35, 'attiva', 1], 'archivio');
+    // File di una sessione: nuovi id, riferimenti aggiornati, predefinite non duplicate.
+    const file = JSON.parse(JSON.stringify(S().exportSession(st, sess.id)));
+    eq([file.factions.length, file.cities.length, file.worldNpcs.length, file.quests.length, file.parties.length], [5, 2, 2, 2, 1], 'tutto il Mondo nel file (anche gli esempi condivisi)');
+    const dst = DnD.dati.emptyState();
+    const imp = S().importSession(dst, file, DnD.dadi.uid);
+    const fg = dst.factions.find((f) => f.name === 'Gilda');
+    const city = dst.cities.find((c) => c.name === 'Rocca');
+    const npc = dst.worldNpcs.find((n) => n.name === 'Bera');
+    const q = dst.quests.find((x) => x.title === 'Lupi');
+    const ip = dst.parties.find((p) => p.sessionId === imp.id);
+    eq([dst.factions.length, dst.worldNpcs.length], [5, 2], 'predefinite ed esempi condivisi non duplicati');
+    ok(fg.id !== 'gilda' && city.factionId === fg.id && npc.factionId === fg.id && npc.cityId === city.id && npc.questIds[0] === q.id, 'fazione, città e quest dell\'NPC');
+    ok(q.giver.npcId === npc.id && q.factionId === fg.id && q.rewards.reputation[0].factionId === fg.id, 'quest');
+    const p1 = dst.players.find((p) => p.name === 'Aria');
+    eq([ip.memberIds, Object.keys(ip.reputation), imp.world.activePartyId, Object.keys(imp.world.quests), imp.world.quests[q.id].partyId, imp.world.repLog[0].factionId], [[p1.id], [fg.id], ip.id, [q.id], ip.id, fg.id], 'party, diario e registro');
+    // Sessione di una versione precedente: i giocatori entrano nel party «Gruppo».
+    const old = JSON.parse(JSON.stringify(file));
+    old.version = 11;
+    old.parties = [];
+    const dst2 = DnD.dati.emptyState();
+    const imp2 = S().importSession(dst2, old, DnD.dadi.uid);
+    const g = dst2.parties.find((p) => p.sessionId === imp2.id);
+    eq([g.name, g.memberIds.length, imp2.world.activePartyId === g.id], ['Gruppo', 1, true]);
+    // Duplicazione: copie indipendenti con i riferimenti della copia.
+    const dup = S().duplicateSession(st, sess.id, 'Copia', DnD.dadi.uid);
+    const df = st.factions.find((f) => f.sessionId === dup.id && f.name === 'Gilda');
+    const dc = st.cities.find((c) => c.sessionId === dup.id);
+    const dn = st.worldNpcs.find((n) => n.sessionId === dup.id);
+    const dpt = st.parties.find((p) => p.sessionId === dup.id);
+    ok(df && df.id !== 'gilda' && dc.factionId === df.id && dn.cityId === dc.id && dpt.reputation[df.id] === 35 && dup.world.activePartyId === dpt.id, 'duplicazione con il Mondo');
+    eq(st.cities.find((c) => c.id === 'c1').factionId, 'gilda', 'l\'originale non cambia');
+  });
+
+  test('Mondo negli eventi: azioni Reputazione e Quest (avvia, avanza, completa, fallisci), scadenza col tempo', () => {
+    const w = exploreWorld();
+    const sess = S().current(w.st);
+    const party = DnD.party.active(FZ().view(w.st).parties, sess.world);
+    w.st.factions.push(FZ().normalizeFaction({ id: 'gilda', name: 'Gilda', sessionId: sess.id }));
+    w.st.quests.push(QS().normalizeQuest({ id: 'q1', title: 'Sentiero', sessionId: sess.id, timeLimit: 30, objectives: [{ id: 'o', kind: 'evento', eventId: 'e1', count: 2 }] }));
+    w.st.quests.push(QS().normalizeQuest({ id: 'q2', title: 'Scorta', sessionId: sess.id }));
+    const run = (actions) => XP().fireEvent(w, { event: EV().normalizeEvent({ id: 'bivio', name: 'Bivio', actions }) }, {});
+    run([{ kind: 'reputazione', factionId: 'gilda', delta: 10, reason: 'aiuto' }, { kind: 'quest', op: 'avvia', questId: 'q1' }]);
+    const j = sess.world.quests;
+    eq([party.reputation.gilda, sess.world.repLog[0].source, j.q1.status, j.q1.deadline], [10, 'evento', 'attiva', w.ex.time.total + 30]);
+    ok(w.ex.log.some((l) => /Reputazione con «Gilda»: \+10 \(10\)/.test(l.text)) && w.ex.log.some((l) => /Quest «Sentiero» accettata/.test(l.text)), 'nel registro');
+    run([{ kind: 'quest', op: 'avanza', questId: 'q1', n: 1 }]);
+    eq(j.q1.progress.o, 1, 'avanza');
+    eq(XP().questOp(w, 'avanza', 'q1', 'o', 5).length, 2, 'fino al totale, poi «da consegnare»');
+    eq([XP().questOp(w, 'completa', 'q1')[0].includes('completata'), j.q1.status], [true, 'completata']);
+    // Obiettivo «Completa un evento»: lo fa avanzare l'evento stesso, quando finisce.
+    w.st.quests.push(QS().normalizeQuest({ id: 'q5', title: 'Pellegrino', sessionId: sess.id, objectives: [{ id: 'p', kind: 'evento', eventId: 'e1', count: 2 }] }));
+    XP().questOp(w, 'avvia', 'q5');
+    XP().fireEvent(w, { event: EV().normalizeEvent({ id: 'e1', name: 'Santuario', actions: [{ kind: 'testo', text: 'Una preghiera.' }] }) }, {});
+    eq(j.q5.progress.p, 1, 'evento completato');
+    run([{ kind: 'quest', op: 'avvia', questId: 'q2' }, { kind: 'quest', op: 'fallisci', questId: 'q2' }, { kind: 'quest', op: 'avvia', questId: 'sparita' }, { kind: 'reputazione', factionId: 'sparita', delta: 5 }]);
+    eq(j.q2.status, 'fallita');
+    ok(w.ex.log.some((l) => /Quest eliminata/.test(l.text)) && w.ex.log.some((l) => /fazione eliminata/.test(l.text)), 'riferimenti mancanti: avviso, nessun errore');
+    // Scadenza: il tempo dell'esplorazione chiude le quest oltre il limite.
+    const q3 = QS().normalizeQuest({ id: 'q3', title: 'Corsa', sessionId: sess.id, timeLimit: 2 });
+    w.st.quests.push(q3);
+    XP().questOp(w, 'avvia', 'q3');
+    XP().advanceTime(w, 3);
+    eq(j.q3.status, 'scaduta');
+    ok(w.ex.log.some((l) => /Quest «Corsa» scaduta/.test(l.text)), 'scadenza nel registro');
+    eq(EV().missingRefs(EV().normalizeEvent({ actions: [{ kind: 'quest', questId: 'zz' }, { kind: 'reputazione', factionId: 'zz' }] }), w.st).sort(), ['fazione eliminata', 'quest eliminata'], 'avvisi nell\'elenco degli eventi');
   });
 
   async function runTests() {
