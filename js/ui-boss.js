@@ -254,8 +254,10 @@
   }
 
   // Eventi di checkCombat (boss.js): banner "FASE N — nome", lampo o tremolio; sconfitta: banner finale.
+  // I suoni accompagnano gli stessi eventi (audio.js li tace con «Effetti boss» spenti).
   function playEvents(events, shakeNode) {
     for (const e of events || []) {
+      DnD.audio.suona(e.kind === 'fase' ? 'boss-fase' : 'boss-sconfitto', { coda: true });
       if (e.kind === 'fase') {
         banner(e.theme, 'Fase ' + (e.phase + 1) + ' — ' + e.phaseName, e.name);
         if (e.effect === 'lampo') flash(e.theme);
@@ -269,6 +271,7 @@
 
   // Evocazione di un nuovo boss: lampo, tremolio della cornice, nome con effetto di impatto. Un clic la salta.
   function summon(npc, frameNode, done) {
+    DnD.audio.suona('boss-evocazione'); // anche con «Riduci animazioni»: sono due preferenze diverse
     if (motionOff()) { done(); return; }
     shake(frameNode);
     const overlay = themeHost(npc.boss.theme, el('div', { class: 'boss-summon', role: 'dialog', 'aria-label': 'Evocazione di ' + npc.name, tabindex: -1 },

@@ -73,6 +73,8 @@
   function toast(message, type) {
     const host = document.getElementById('toasts');
     if (!host) return;
+    // Suoni dell'interfaccia (spenti di base): errore e conferma accompagnano gli avvisi.
+    if (DnD.audio && (type === 'error' || type === 'success')) DnD.audio.suona(type === 'error' ? 'errore' : 'conferma', { coda: true });
     const t = el('div', { class: 'toast ' + (type || 'info'), role: 'status', text: message });
     host.appendChild(t);
     setTimeout(() => t.remove(), 3500);

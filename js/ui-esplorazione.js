@@ -57,6 +57,7 @@
     const rec = DnD.dadi.registratore();
     let logFrom = 0;
     let lastLine = '';
+    let sounds = [];
     DnD.store.update((st) => {
       const w = world(st);
       if (!w || !w.grid) return;
@@ -70,8 +71,11 @@
       out = fn(w);
       const fresh = w.ex.log.slice(logFrom);
       lastLine = fresh.length ? fresh[fresh.length - 1].text : '';
+      // Suoni dagli esiti già scritti nel registro: evento, scoperta, ingresso in una mappa, meteo.
+      sounds = DnD.suoniDati.fromExploration(fresh);
     });
     render();
+    DnD.audio.suonaTutti(sounds);
     // Solo i dadi veri: le scelte pesate (meteo, quale incontro) usano lo stesso generatore con altre facce.
     const tiro = rec.tiro('Esplorazione', 'esplorazione', { testo: lastLine });
     if (tiro) DnD.uiDadi.mostraTiro(Object.assign(tiro, { totale: null, gruppi: tiro.gruppi.filter((g) => [4, 6, 8, 10, 12, 20, 100].includes(g.sides)) }));
@@ -151,7 +155,8 @@
       w.ex.activeParty = partyId;
       return X.moveTo(w, to);
     });
-    if (r && !r.ok) toast('Movimento: ' + r.reason + (r.steps ? ' (dopo ' + r.steps + ' passi)' : '') + '.', 'error');
+    if (r && !r.ok) { DnD.audio.suona('movimento-rifiutato'); toast('Movimento: ' + r.reason + (r.steps ? ' (dopo ' + r.steps + ' passi)' : '') + '.', 'error'); }
+    else if (r) DnD.audio.suona('passo');
     afterAction();
   }
   function stepBy(dx, dy) {
@@ -159,7 +164,8 @@
     if (!e) return;
     const p = X.activeParty(e).pos;
     const r = mutate((w) => X.step(w, { x: p.x + dx, y: p.y + dy }));
-    if (r && !r.ok) toast(r.reason + '.', 'error');
+    if (r && !r.ok) { DnD.audio.suona('movimento-rifiutato'); toast(r.reason + '.', 'error'); }
+    else if (r) DnD.audio.suona('passo');
     afterAction();
   }
   // Frecce (e tastierino) per muovere la pedina attiva, quando la sezione è aperta e il focus non è in un campo.
@@ -229,7 +235,7 @@
     const done = () => { if (q) dropPrompt(q.id); };
     const dialog = openDialog('Evento', body, [
       { text: 'Rimanda', onclick: () => { snoozed = true; render(); } },
-      { text: 'Salta', onclick: () => { done(); mutate((w) => X.log(w, '⏭ «' + ev.name + '» saltato dal master.', 'evento'), false); afterAction(); } },
+      { text: 'Salta', onclick: () => { done(); mutate((w) => X.log(w, '⏭ «' + ev.name + '» saltato dal master.', 'sistema'), false); afterAction(); } },
       { text: '▶ Esegui', class: 'primary', onclick: () => { done(); runEvent(inst, template, overrides); } },
     ]);
     dialog.classList.add('wide');
@@ -334,6 +340,7 @@
       combat.currentId = R.firstTurn(sorted);
       for (const x of combat.combatants) DnD.movimento.resetTurn(x);
       DnD.dati.pushLog(combat, 'sistema', 'Inizia il combattimento (dall\'esplorazione). Ordine: ' + sorted.map((x) => x.name + ' (' + x.initiative + ')').join(', ') + '.');
+      DnD.audio.suonaTutti(DnD.suoniDati.fromCombat(null, combat.log, combat)); // ingresso del boss
     }
     return combat;
   }

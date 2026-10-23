@@ -216,6 +216,19 @@ p { margin: 0.25rem 0; }
 .settings-panel h2 { margin: 0; }
 .settings-group { display: flex; flex-direction: column; gap: 0.4rem; }
 .settings-actions { display: flex; flex-direction: column; gap: 0.4rem; align-items: stretch; }
+/* Suoni: pulsante rapido (stato sempre visibile sull'icona) e finestra «Tutti i suoni». */
+.sound-btn.off { color: var(--muted); }
+.sound-btn[aria-pressed="true"] { color: var(--accent); }
+.sound-panel { gap: 0.75rem; }
+.sound-top { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; align-items: center; }
+.sound-cat { display: flex; flex-direction: column; gap: 0.35rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; }
+.sound-cat legend { padding: 0 0.3rem; font-weight: 700; }
+.sound-row { display: grid; grid-template-columns: minmax(10rem, 1.4fr) minmax(5rem, 0.8fr) auto auto; gap: 0.3rem 0.6rem; align-items: center;
+  padding: 0.25rem 0; border-top: 1px solid var(--border); }
+.sound-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sound-tag.custom { color: var(--accent); border-color: var(--accent); }
+.sound-tag.broken { color: var(--bad); border-color: var(--bad); }
+@media (max-width: 720px) { .sound-row { grid-template-columns: 1fr 1fr; } .sound-actions { grid-column: 1 / -1; } }
 
 /* Schede (Strutture / Oggetti) */
 .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
@@ -629,6 +642,7 @@ body:has(.combat-screen) .dice-fab { display: none; }
 .log li.log-colpito { border-left-color: var(--warn); }
 .log li.log-critico { border-left-color: var(--accent); background: var(--crit-bg); }
 .log li.log-mancato { border-left-color: var(--muted); }
+.log li.log-ts-fallito { border-left-color: var(--warn); }
 .log li.log-cura { border-left-color: var(--ok); }
 .log li.log-a-terra { border-left-color: var(--bad); color: var(--danger-text); font-weight: 700; }
 .log li.log-turno { color: var(--muted); }

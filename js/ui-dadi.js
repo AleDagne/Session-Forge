@@ -6,7 +6,7 @@
 //   nell'Esplorazione, con la coda dei tiri; si chiude da solo.
 // - d4, d6 (cubo 3D), d8, d10, d12, d20, d100 (due d10) in SVG/CSS; colore della palette dell'app.
 // - 20 naturale: bagliore dorato; 1 naturale: effetto scuro e tremolio; dadi scartati (vantaggio, 4d6) attenuati.
-// - Impostazioni: interruttore generale e per categoria, velocità, colore, suoni (Web Audio, spenti di base),
+// - Impostazioni: interruttore generale e per categoria, velocità, colore; suoni da audio.js (rotolio, tonfo, 20 e 1),
 //   «Riduci animazioni» (risultato subito, senza movimento), limite di 12 dadi animati (oltre: solo il totale).
 (function (DnD) {
   'use strict';
@@ -28,51 +28,14 @@
     return p ? p.hex : '#d4453a';
   }
 
-  // ---------- Suoni (Web Audio, sintetizzati) ----------
-  let audio = null;
-  function sound(kind, volume) {
-    if (!settings().diceSound || typeof window === 'undefined') return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    try {
-      if (!audio) audio = new AC();
-      const v = (volume === undefined ? settings().diceVolume : volume) / 100;
-      const now = audio.currentTime;
-      const gain = audio.createGain();
-      gain.connect(audio.destination);
-      if (kind === 'rotolio') {
-        // Rumore filtrato a colpetti: dadi che rotolano sul tavolo.
-        const len = Math.floor(audio.sampleRate * 0.45);
-        const buf = audio.createBuffer(1, len, audio.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) {
-          const t = i / audio.sampleRate;
-          const clack = Math.pow(Math.max(0, Math.sin(t * 55 * Math.PI)), 12);
-          data[i] = (Math.random() * 2 - 1) * (0.25 + 0.75 * clack) * (1 - t / 0.45);
-        }
-        const src = audio.createBufferSource();
-        src.buffer = buf;
-        const filter = audio.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 2200;
-        filter.Q.value = 0.8;
-        src.connect(filter);
-        filter.connect(gain);
-        gain.gain.value = 0.35 * v;
-        src.start(now);
-      } else {
-        // Tonfo finale: sinusoide grave che scende e si spegne in fretta.
-        const osc = audio.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(55, now + 0.18);
-        gain.gain.setValueAtTime(0.6 * v, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-        osc.connect(gain);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      }
-    } catch (e) { /* audio non disponibile: si continua in silenzio */ }
+  // ---------- Suoni (audio.js) ----------
+  // Rotolio unico per tutti i dadi del tiro all'inizio dell'animazione; al risultato tonfo e, per 20 e 1 naturali,
+  // il loro suono. Animazione saltata: il rotolio si ferma e resta solo il tonfo. Turni automatici veloci: solo 20 e 1.
+  const audio = () => DnD.audio || { suona: () => ({ stop() {} }) };
+  function landingSounds(plan, veloce) {
+    audio().suona('dadi-tonfo', { veloce });
+    const crit = plan.dadi.find((d) => d.crit && !d.dropped);
+    if (crit) audio().suona(crit.crit === 'max' ? 'dadi-20' : 'dadi-1', { veloce, coda: true });
   }
 
   // ---------- Disegno dei dadi ----------
@@ -138,6 +101,7 @@
     };
     let timer = null;
     let flick = null;
+    let rolling = { stop() {} };
     let finish;
     const done = new Promise((r) => { finish = r; });
     const end = () => {
@@ -147,11 +111,17 @@
       timer = null;
       flick = null;
       land();
-      if (o.sound !== false && plan.animati) sound('tonfo');
+      rolling.stop();
+      if (o.sound !== false) landingSounds(plan, o.veloce);
       finish();
     };
     stage.classList.remove('landed');
-    if (!plan.animati) { land(); finish(); return { skip: () => {}, done }; }
+    if (!plan.animati) {
+      land();
+      if (o.sound !== false) landingSounds(plan, o.veloce);
+      finish();
+      return { skip: () => {}, done };
+    }
     stage.style.setProperty('--roll-ms', plan.durata + 'ms');
     for (const { node, die, part } of nodes) {
       node.classList.add('rolling');
@@ -164,7 +134,7 @@
         cube.style.transform = FACE_ROT[die.value];
       }
     }
-    if (o.sound !== false) sound('rotolio');
+    if (o.sound !== false) rolling = audio().suona('dadi-rotolio', { veloce: o.veloce, durata: plan.durata / 1000 });
     // Numeri che scorrono durante il lancio (solo visivi), poi la faccia decisa.
     flick = setInterval(() => {
       for (const { node, part } of nodes) {
@@ -206,7 +176,7 @@
     const card = el('div', { class: 'dice-card' }, stage, summary(plan));
     clear(box).append(card);
     box.classList.add('visible');
-    current = animate(stage, plan, { sound: !fast });
+    current = animate(stage, plan, { veloce: fast });
     current.done.then(() => {
       current = null;
       setTimeout(() => {
@@ -349,5 +319,5 @@
 
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.dadi = { title: 'Dadi', render };
-  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue, sound };
+  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue };
 })(globalThis.DnD = globalThis.DnD || {});

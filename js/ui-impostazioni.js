@@ -1,6 +1,6 @@
 // Impostazioni: pulsante ingranaggio con pannello a comparsa e pulsante rapido sole/luna.
-// Il pannello gestisce tema, dimensione del testo, animazioni ridotte, regole del movimento, dadi animati ed
-// esportazione/importazione.
+// Il pannello gestisce tema, dimensione del testo, animazioni ridotte, regole del movimento, dadi animati, suoni
+// (ui-suoni.js) ed esportazione/importazione.
 (function (DnD) {
   'use strict';
 
@@ -24,9 +24,10 @@
   // Le immagini importate stanno fuori dallo stato: si aggiungono al file quelle effettivamente usate.
   const imagesOf = (part) => DnD.immagini.getMany(DnD.immaginiLib.referencedIds(part));
 
+  // L'archivio porta anche le impostazioni dei suoni e i file che sostituiscono i suoni predefiniti.
   async function exportArchive() {
     const images = await imagesOf(DnD.store.state);
-    download(DnD.dati.exportJSON(DnD.store.state, images), slug(DnD.config.APP_NAME) + '-archivio-' + today() + '.json');
+    download(DnD.dati.exportJSON(DnD.store.state, images, { suoni: await DnD.audio.esporta() }), slug(DnD.config.APP_NAME) + '-archivio-' + today() + '.json');
     toast('Archivio esportato.', 'success');
   }
 
@@ -75,6 +76,7 @@
         const stored = await storeImages(raw.images);
         const res = await DnD.store.replace(state);
         if (!res.ok) throw new Error('archivio non salvato: ' + res.message);
+        if (raw.suoni) await DnD.audio.importa(raw.suoni);
         toast('Archivio importato' + (stored ? ' con ' + stored + (stored === 1 ? ' immagine' : ' immagini') : '') + '.', 'success');
       }
       DnD.app.refreshAll();
@@ -91,6 +93,7 @@
     try {
       const res = await DnD.store.clearAll();
       DnD.immagini.reset();
+      DnD.audio.svuota();
       DnD.app.refreshAll();
       if (res.ok) toast('Tutti i dati sono stati cancellati.', 'success');
       else toast('Dati cancellati, ma il nuovo archivio vuoto non è stato salvato: ' + res.message, 'error');
@@ -118,7 +121,6 @@
     };
     const select = (key, label, options) => el('label', { class: 'inline small' }, label + ' ',
       el('select', { 'data-setting': key, onchange: (e) => { I.set({ [key]: e.target.value }); sync(); } }, options.map(([v, t]) => el('option', { value: v, text: t }))));
-    const volume = el('input', { type: 'range', min: 0, max: 100, step: 5, 'aria-label': 'Volume dei dadi', onchange: () => I.set({ diceVolume: Number(volume.value) }) });
     const movementGroup = el('details', { class: 'settings-group' }, el('summary', { text: 'Movimento' }),
       radios('diagonali', 'Diagonali (come il misuratore)', I.DIAGONALS.map((k) => [k, DnD.movimento.DIAGONAL_NAMES[k]]), 'diagonals'),
       radios('senza-velocita', 'Modalità senza velocità (scalare, nuotare…)', I.MISSING_MODES.map((k) => [k, DnD.movimento.MISSING_NAMES[k]]), 'missingMode'));
@@ -127,21 +129,21 @@
       el('div', { class: 'radio-row' }, check('diceMenu', 'Menù Dadi'), check('diceCombat', 'Combattimento'), check('diceExploration', 'Esplorazione')),
       select('diceSpeed', 'Velocità', [['lenta', 'Lenta'], ['normale', 'Normale'], ['veloce', 'Veloce'], ['istantanea', 'Istantanea']]),
       select('diceColor', 'Colore', DnD.colori.PALETTE.map((p) => [p.key, p.name])),
-      el('div', { class: 'radio-row' }, check('diceSound', 'Suoni', 'Rotolio e tonfo sintetizzati, spenti di base'), volume),
       el('button', { type: 'button', class: 'btn small', text: '🎲 Prova', onclick: () => {
         const rec = DnD.dadi.registratore();
         DnD.regole.rollSave({ bonus: 0, mode: 'vantaggio', dc: null }, rec.rng);
         DnD.dadi.roll(2, 6, 0, rec.rng);
         if (!DnD.uiDadi.mostraTiro(rec.tiro('Prova dei dadi', 'combattimento'))) toast('Dadi animati spenti per il combattimento.');
       } }),
-      el('p', { class: 'muted small', text: 'Con «Riduci animazioni» il risultato compare subito, senza movimento. Spazio salta l\'animazione.' }));
+      el('p', { class: 'muted small', text: 'Con «Riduci animazioni» il risultato compare subito, senza movimento. Spazio salta l\'animazione. I suoni dei dadi sono nel gruppo «Suoni».' }));
+    const soundGroup = DnD.uiSuoni.settingsGroup();
     const panel = el('div', { class: 'settings-panel', id: 'settings-panel', role: 'dialog', 'aria-label': 'Impostazioni', hidden: true },
       el('h2', { text: 'Impostazioni' }),
       radios('tema', 'Tema', [['chiaro', 'Chiaro'], ['scuro', 'Scuro'], ['auto', 'Automatico']], 'theme'),
       radios('testo', 'Dimensione del testo', [['piccolo', 'Piccola'], ['normale', 'Normale'], ['grande', 'Grande']], 'textSize'),
       el('label', { class: 'check' }, reduce, ' Riduci animazioni'),
       el('label', { class: 'check', title: 'Barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel combattimento' }, bossFx, ' Effetti boss'),
-      movementGroup, diceGroup,
+      movementGroup, diceGroup, soundGroup.node,
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Dati' }),
         el('div', { class: 'settings-actions' },
@@ -169,8 +171,7 @@
         if (input.type === 'checkbox') input.checked = Boolean(s[input.dataset.setting]);
         else input.value = s[input.dataset.setting];
       }
-      volume.value = String(s.diceVolume);
-      volume.disabled = !s.diceSound;
+      soundGroup.sync();
       for (const k of ['diceMenu', 'diceCombat', 'diceExploration', 'diceSpeed', 'diceColor']) { const n = panel.querySelector('[data-setting="' + k + '"]'); if (n) n.disabled = !s.diceAnim; }
       const dark = I.isDark();
       clear(themeBtn).append(svgIcon(dark ? ICONS.sun : ICONS.moon));
@@ -196,7 +197,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { close(); gear.focus(); } });
     window.addEventListener('themechange', sync);
 
-    footer.append(gear, themeBtn, panel);
+    footer.append(gear, themeBtn, DnD.uiSuoni.quickButton(), panel);
     sync();
   }
 

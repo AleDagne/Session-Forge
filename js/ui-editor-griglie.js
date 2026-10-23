@@ -341,6 +341,7 @@
       return;
     }
     updateStatus();
+    DnD.audio.suona('salvataggio');
     toast('Griglia «' + d.name + '» salvata.', 'success');
   }
 

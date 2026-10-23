@@ -1,5 +1,6 @@
 // Impostazioni di visualizzazione: tema, dimensione del testo, animazioni ridotte, effetti dei boss, regole del
-// movimento (diagonali, modalità senza velocità) e dadi animati (interruttori, velocità, colore, suoni).
+// movimento (diagonali, modalità senza velocità) e dadi animati (interruttori, velocità, colore). I suoni hanno
+// impostazioni proprie (audio.js), indipendenti da «Riduci animazioni».
 // Caricato in <head> per applicare il tema prima del primo rendering (niente lampo di tema sbagliato).
 (function (DnD) {
   'use strict';
@@ -13,7 +14,7 @@
   const DEFAULTS = {
     theme: 'auto', textSize: 'normale', reduceMotion: false, bossEffects: true,
     diagonals: 'sempre1', missingMode: 'vietato',
-    diceAnim: true, diceMenu: true, diceCombat: true, diceExploration: true, diceSpeed: 'normale', diceColor: 'rosso', diceSound: false, diceVolume: 50,
+    diceAnim: true, diceMenu: true, diceCombat: true, diceExploration: true, diceSpeed: 'normale', diceColor: 'rosso',
   };
   const DARK_QUERY = '(prefers-color-scheme: dark)';
 
@@ -28,15 +29,13 @@
       // Movimento: diagonali sempre a 1 casella (come prima) o alternate 1-2-1; modalità senza velocità vietata o doppia.
       diagonals: DIAGONALS.includes(raw.diagonals) ? raw.diagonals : DEFAULTS.diagonals,
       missingMode: MISSING_MODES.includes(raw.missingMode) ? raw.missingMode : DEFAULTS.missingMode,
-      // Dadi animati: interruttore generale e per categoria, velocità, colore (chiave della palette), suoni (spenti).
+      // Dadi animati: interruttore generale e per categoria, velocità, colore (chiave della palette).
       diceAnim: raw.diceAnim !== false,
       diceMenu: raw.diceMenu !== false,
       diceCombat: raw.diceCombat !== false,
       diceExploration: raw.diceExploration !== false,
       diceSpeed: DICE_SPEEDS.includes(raw.diceSpeed) ? raw.diceSpeed : DEFAULTS.diceSpeed,
       diceColor: typeof raw.diceColor === 'string' && /^[a-z]{2,20}$/.test(raw.diceColor) ? raw.diceColor : DEFAULTS.diceColor,
-      diceSound: Boolean(raw.diceSound),
-      diceVolume: Number.isFinite(Number(raw.diceVolume)) && raw.diceVolume !== null && raw.diceVolume !== '' ? Math.max(0, Math.min(100, Math.round(Number(raw.diceVolume)))) : DEFAULTS.diceVolume,
     };
   }
 

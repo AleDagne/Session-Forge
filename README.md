@@ -68,12 +68,14 @@ I dati delle versioni precedenti finiscono automaticamente nella **Sessione pred
 - La barra laterale si chiude e si riapre con « o **Ctrl+B**: da chiusa mostra solo le icone (il
   nome compare passandoci sopra). Lo stato viene ricordato e sugli schermi stretti parte chiusa.
   Lo stesso vale per il pannello laterale della griglia (◧ o **Ctrl+Alt+B**).
+- **Alt+M** accende o spegne tutti i suoni (vedi [Effetti sonori](#effetti-sonori)).
 - All'avvio si riapre l'ultima sezione usata.
 
 ## Impostazioni e tema
 
 In fondo alla barra laterale: l'**ingranaggio** apre il pannello delle impostazioni, il
-pulsante **sole/luna** cambia tema con un clic.
+pulsante **sole/luna** cambia tema con un clic e l'**altoparlante** accende o spegne i suoni (l'icona mostra
+sempre lo stato; anche Alt+M).
 
 - **Tema**: Chiaro, Scuro o Automatico (come il sistema). Al primo avvio si segue il sistema;
   dopo una scelta, quella ha la precedenza. Il tema viene applicato prima che la pagina venga
@@ -84,7 +86,10 @@ pulsante **sole/luna** cambia tema con un clic.
   le impostazioni di visualizzazione restano).
 
 - **Effetti boss**: barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel
-  combattimento (attivi di base). Spenti, i boss funzionano comunque (fasi, log, azioni).
+  combattimento (attivi di base). Spenti, i boss funzionano comunque (fasi, log, azioni). Spengono anche i suoni
+  di Boss e Leggendario.
+- **Movimento** (diagonali, modalità senza velocità), **Dadi animati** e **Suoni**: gruppi a scomparsa, descritti
+  in [Velocità e movimento](#velocità-e-movimento), [Dadi animati](#dadi-animati) ed [Effetti sonori](#effetti-sonori).
 
 Tutti i colori dell'interfaccia sono variabili CSS (`:root` per il tema chiaro,
 `[data-theme="dark"]` per lo scuro), anche quelli della griglia, che si ridisegna al cambio tema.
@@ -673,10 +678,55 @@ pronta per dadi condivisi in futuro.
   basso») e come piccolo **overlay** in basso nel Combattimento e nell'Esplorazione: non copre i controlli
   (`pointer-events: none`), si chiude da solo e mette i tiri in coda (veloce durante i turni automatici dell'IA).
 - **Impostazioni › Dadi animati**: interruttore generale e per categoria (menù, combattimento, esplorazione),
-  velocità (lenta, normale, veloce, istantanea), colore, **suoni** sintetizzati con la Web Audio API (rotolio e
-  tonfo, volume regolabile, spenti di base) e *Prova*. **Salta animazione** con il pulsante, un clic sull'area o
+  velocità (lenta, normale, veloce, istantanea), colore e *Prova*. I suoni dei dadi (rotolio unico per tutto il
+  tiro, tonfo al risultato, suoni propri per 20 e 1 naturali; animazione saltata = solo il tonfo) stanno negli
+  [Effetti sonori](#effetti-sonori). **Salta animazione** con il pulsante, un clic sull'area o
   Spazio. Con *Riduci animazioni* il risultato compare subito senza movimento; oltre 12 dadi si mostra solo il
   totale.
+
+## Effetti sonori
+
+I punti dell'app emettono **eventi sonori** e un solo modulo li suona (`js/audio.js`): il resto dell'app chiama
+soltanto `DnD.audio.suona('critico')`. Il suono accompagna e basta: non decide nulla di gioco, e ogni evento ha già
+un riscontro visivo (log, evidenziazione, banner, avviso). Tutti i suoni sono **sintetizzati nel codice** con la Web
+Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, nessuna libreria, nessuna rete.
+
+- **Eventi** (tabella in `js/suoni-dati.js`: identificatore, etichetta, categoria, volume relativo, acceso/spento di
+  base e ricetta): *Dadi* (rotolio, tonfo, 20 e 1 naturali); *Combattimento* (colpo a segno, mancato, critico, danno
+  subito da un giocatore, cura, a terra, incantesimo, tiro salvezza riuscito o fallito, azione bonus o reazione);
+  *Turno* (inizio del turno di un giocatore manuale, nuovo round, fine combattimento con vittoria o sconfitta);
+  *Movimento* (passo, spento di base; movimento rifiutato); *Boss* (evocazione, ingresso in combattimento, cambio di
+  fase, sconfitta); *Leggendario* (ascensione, sblocco di un nodo, trasformazione, ritorno alla forma normale);
+  *Esplorazione* (evento o incontro, scoperta di un evento nascosto, ingresso in una mappa, tempo che passa o meteo
+  che cambia); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
+  *Interfaccia* (conferma, errore, salvataggio della griglia, spenti di base).
+- **Da dove partono**: il combattimento traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme
+  dei leggendari) in un solo punto (`mutate`), l'esplorazione dalle nuove righe del registro; dadi, boss,
+  leggendari, griglia e avvisi chiamano `suona` accanto alle animazioni che esistevano già. Gli esiti di un'azione
+  vanno in **coda** (uno dopo l'altro); nei turni automatici dell'IA restano solo i suoni principali e la coda non
+  aspetta mai più di 1,5 s (il gioco non rallenta).
+- **Protezioni**: l'audio parte solo dopo il primo clic o tasto (regole di autoplay dei browser; prima non suona
+  nulla e non ci sono errori); al massimo 8 suoni insieme (il più vecchio sfuma); almeno 60 ms tra due suoni uguali;
+  silenzio con la scheda in secondo piano; tutto passa da un nodo master con un compressore leggero, senza partenze
+  a volume improvviso.
+- **Impostazioni › Suoni**: interruttore generale (**spento di base**), volume, *Avvisi sonori più evidenti per il
+  turno* (il «ding» del turno è più forte e ripetuto), *Prova suono* e **Tutti i suoni…**: per ogni categoria
+  interruttore e volume, per ogni evento acceso/spento, volume, **Ascolta**, **Sostituisci…**, **Ripristina** e
+  l'indicatore *Predefinito / Personalizzato*. Pulsante rapido con l'altoparlante accanto al tema e **Alt+M**.
+  I suoni sono **indipendenti da «Riduci animazioni»**; quelli di Boss e Leggendario seguono anche *Effetti boss*.
+- Le impostazioni dei suoni sono di questo browser (come tema e animazioni) e viaggiano con *Esporta archivio* /
+  *Importa*, insieme ai file sostituiti. *Cancella tutti i dati* toglie i file e riporta gli slot alla sintesi.
+  Chi usava i suoni dei dadi della versione precedente li ritrova accesi, con lo stesso volume.
+
+### Sostituire un suono
+
+In *Impostazioni › Suoni › Tutti i suoni…* premi **Sostituisci…** accanto all'evento e scegli un file **mp3, ogg o
+wav** di **2 MB al massimo**. Il file viene salvato una volta sola nel database del browser (IndexedDB, stesso
+contenuto = una sola copia anche se lo usi per più eventi), decodificato una volta e tenuto in memoria. **Ripristina**
+torna al suono sintetizzato; se il file manca o è illeggibile l'app torna da sola alla sintesi, senza errori.
+
+> **Diritti**: usa solo file tuoi o con una licenza che lo consenta (ad esempio **CC0**). Non usare suoni estratti
+> da videogiochi, film o siti non liberi.
 
 ## Note del master
 
@@ -729,14 +779,14 @@ i dati di navigazione del sito: fai backup regolari dal pannello **Impostazioni*
 
 - **Esporta archivio** scarica tutto (sessioni con combattimenti ed esplorazioni, personaggi e creature,
   griglie con TileMap, sfondi, biomi, eventi e nebbia, librerie compresi biomi ed eventi, attrezzatura, oggetti
-  di mappa, TileSet, dadi e le immagini usate, incorporate in
+  di mappa, TileSet, dadi, impostazioni e file dei suoni e le immagini usate, incorporate in
   Base64: il file è autosufficiente).
   Importandolo, i dati attuali vengono sostituiti dopo una conferma.
 - **Esporta sessione corrente** scarica una sola sessione con i suoi personaggi e le sue griglie e
   gli elementi delle librerie che usano (razze, incantesimi anche innati, strutture, attrezzatura di
   armi, armature, inventari e contenuti, oggetti di mappa, i TileSet usati e le immagini, sfondi compresi). Importandola, la sessione si **aggiunge** alle
   altre: gli elementi delle librerie già presenti non vengono duplicati.
-- **Cancella tutti i dati** (doppia conferma) svuota anche IndexedDB, immagini e sfondi compresi.
+- **Cancella tutti i dati** (doppia conferma) svuota anche IndexedDB, immagini, sfondi e suoni personalizzati compresi.
 - Ogni creatura (Standard o del Manuale) si esporta e si importa anche da sola, come file JSON, dalla
   sezione Nemici.
 
@@ -809,7 +859,13 @@ modalità con velocità mancante vietata o doppia; anteprima delle celle raggiun
 salvataggio, migrazione, movimento libero e annulla/ripeti con il residuo. Per i **dadi animati**: risultato
 mostrato uguale a quello deciso anche con l'animazione interrotta, 4d6 con scarto, vantaggio e svantaggio, 20 e 1
 naturali, d100, limite dei dadi animati, velocità, *Riduci animazioni*, interruttori, coda dei tiri e
-registrazione dell'esplorazione senza cambiare il seme.
+registrazione dell'esplorazione senza cambiare il seme. Per gli **effetti sonori** (con un AudioContext finto):
+etichetta, categoria e ricetta di ogni evento; interruttore generale, categoria ed evento, *Effetti boss*; niente
+suoni prima del primo gesto; massimo 8 voci, intervallo minimo, coda e turni veloci; silenzio con la scheda in
+secondo piano; sostituzione con un file, una sola copia, ripristino, file corrotto o mancante, limite di 2 MB;
+impostazioni salvate e migrazione dei suoni dei dadi; esportazione e importazione con i file; *Cancella tutti i
+dati*; dadi sincronizzati con l'animazione anche saltata; eventi dal combattimento e dall'esplorazione; *Silenzia
+tutto* con il pulsante e Alt+M; indipendenza da *Riduci animazioni*.
 
 ## Struttura
 
@@ -835,6 +891,9 @@ js/colori.js          palette dei 14 colori delle pedine e bordo di contrasto
 js/libreria-icone.js  icone predefinite (SVG originali) per pedine e oggetti, con dimensione suggerita
 js/icone.js           icone: normalizzazione, SVG della libreria, disegno nell'ingombro, immagini
 js/immagini.js        immagini importate: archivio IndexedDB con cache, lettura dei pixel
+js/suoni-dati.js      effetti sonori (dati e logica pura): categorie, eventi con le ricette, impostazioni, esiti → eventi
+js/audio.js           effetti sonori: unico modulo Web Audio (sintesi, nodo master, limiti, coda, file in IndexedDB)
+js/ui-suoni.js        gruppo «Suoni» nelle impostazioni, finestra «Tutti i suoni», pulsante rapido e Alt+M
 js/tileset.js         logica pura dei TileSet: sorgenti, taglio (anche a copertura), id delle tile, proprietà, migrazioni
 js/tile.js            logica pura del componente «Taglia immagine in tile» (X e Y, bordi parziali, flag)
 js/tilemap.js         logica pura delle TileMap: livelli, pittura, timbri, regioni, trasformazioni, ingombro

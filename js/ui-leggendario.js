@@ -128,6 +128,7 @@
 
   // Ascensione (nuovo leggendario o promozione): colonna di luce, tremolio leggero, comparsa del nome.
   function ascension(c, done) {
+    DnD.audio.suona('ascensione'); // anche con «Riduci animazioni»: sono due preferenze diverse
     if (motionOff()) { done(); return; }
     const overlay = applyTheme(el('div', { class: 'legend-ascension', role: 'dialog', 'aria-label': 'Ascensione di ' + c.name, tabindex: -1 },
       el('div', { class: 'legend-column', 'aria-hidden': 'true' }), wings(),
@@ -376,6 +377,7 @@
           const r = P.unlock(cur().legend.path, cur().legend.unlocked, nodeId, { rank: L.rank(cur()), bonus: cur().legend.pointsBonus });
           if (!r.ok) { toast(r.reason, 'error'); return false; }
           update(id, (x) => { x.legend.unlocked = r.unlocked; });
+          DnD.audio.suona('nodo-sbloccato');
           toast('✦ ' + P.nodeById(cur().legend.path, nodeId).name + ' sbloccato.', 'success');
           refreshHead();
           return true;

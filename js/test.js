@@ -660,7 +660,8 @@
     const I = DnD.impostazioni;
     const st = fakeStorage();
     eq(I.load(st), Object.assign({}, I.DEFAULTS), 'primo avvio');
-    eq([I.DEFAULTS.theme, I.DEFAULTS.reduceMotion, I.DEFAULTS.bossEffects, I.DEFAULTS.diagonals, I.DEFAULTS.diceSound], ['auto', false, true, 'sempre1', false], 'predefiniti: suoni spenti, diagonali come prima');
+    eq([I.DEFAULTS.theme, I.DEFAULTS.reduceMotion, I.DEFAULTS.bossEffects, I.DEFAULTS.diagonals], ['auto', false, true, 'sempre1'], 'predefiniti: diagonali come prima');
+    ok(!('diceSound' in I.DEFAULTS), 'i suoni hanno impostazioni proprie (audio.js)');
     eq([I.resolveTheme('auto', true), I.resolveTheme('auto', false)], ['dark', 'light'], 'auto segue il sistema');
     ok(I.save(st, { theme: 'chiaro', textSize: 'grande', reduceMotion: true }));
     eq(I.load(st), Object.assign({}, I.DEFAULTS, { theme: 'chiaro', textSize: 'grande', reduceMotion: true }));
@@ -3523,8 +3524,8 @@
     } finally {
       I.set(prev);
     }
-    eq(I.normalize({ diceSpeed: 'turbo', diceVolume: 300, diceColor: '<x>', diceSound: 1 }).diceSpeed, 'normale');
-    eq([I.normalize({ diceVolume: 300 }).diceVolume, I.normalize({ diceColor: '<x>' }).diceColor, I.normalize({}).diceSound], [100, 'rosso', false]);
+    eq(I.normalize({ diceSpeed: 'turbo', diceColor: '<x>' }).diceSpeed, 'normale');
+    eq(I.normalize({ diceColor: '<x>' }).diceColor, 'rosso');
     // Coda: uno alla volta, con la pausa; i più vecchi si saltano oltre il massimo.
     const shown = [];
     const pending = [];
@@ -3548,6 +3549,319 @@
     const a = [plain(20), plain(6), plain(100)];
     eq([wrapped(20), wrapped(6), wrapped(100)], a, 'stessi valori');
     eq(rec.gruppi().map((g) => g.sides), [20, 6, 100]);
+  });
+
+  // ---------- Effetti sonori (AudioContext finto) ----------
+  const SDD = () => DnD.suoniDati;
+  // AudioContext finto: registra le sorgenti avviate; decodeAudioData accetta solo i dati che iniziano con «RIFF».
+  function fakeAudio() {
+    const rec = { sources: [], resumed: 0, suspended: 0 };
+    const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime(v) { this.value = v; }, cancelScheduledValues() {} });
+    const node = (extra) => Object.assign({ connect() {} }, extra);
+    const source = (extra) => { const s = node(Object.assign({ start(t) { s.at = t; rec.sources.push(s); }, stop(t) { s.end = t; } }, extra)); return s; };
+    class Ctx {
+      constructor() { this.currentTime = 0; this.sampleRate = 4000; this.state = 'suspended'; this.destination = node(); rec.ctx = this; }
+      createGain() { return node({ gain: param() }); }
+      createDynamicsCompressor() { return node({ threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() }); }
+      createBiquadFilter() { return node({ type: '', frequency: param(), Q: param() }); }
+      createOscillator() { return source({ kind: 'osc', type: '', frequency: param() }); }
+      createBufferSource() { return source({ kind: 'buffer', buffer: null, loop: false }); }
+      createBuffer(ch, len, rate) { const d = new Float32Array(len); return { duration: len / rate, getChannelData: () => d }; }
+      decodeAudioData(buf) { const b = new Uint8Array(buf); return String.fromCharCode(b[0], b[1], b[2], b[3]) === 'RIFF' ? Promise.resolve({ duration: 0.5, decoded: true }) : Promise.reject(new Error('corrotto')); }
+      resume() { rec.resumed++; this.state = 'running'; return Promise.resolve(); }
+      suspend() { rec.suspended++; this.state = 'suspended'; return Promise.resolve(); }
+    }
+    const listeners = {};
+    const doc = {
+      hidden: false,
+      addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
+      removeEventListener(t, fn) { listeners[t] = (listeners[t] || []).filter((f) => f !== fn); },
+      fire(t) { for (const fn of (listeners[t] || []).slice()) fn({}); },
+      count: (t) => (listeners[t] || []).length,
+    };
+    const data = new Map();
+    const blobs = { get: async (k) => (data.has(k) ? data.get(k) : null), set: async (k, v) => { data.set(k, v); } };
+    return { Ctx, rec, doc, blobs, data };
+  }
+  const wavUrl = (body) => 'data:audio/wav;base64,' + btoa('RIFF' + (body || 'suono di prova'));
+  const brokenUrl = 'data:audio/wav;base64,' + btoa('XXXX file rovinato');
+  // Istanza con suoni accesi e contesto già sbloccato (primo gesto simulato).
+  function soundBox(opts) {
+    const f = fakeAudio();
+    const o = opts || {};
+    const a = DnD.audioLib.crea({ AudioContext: f.Ctx, doc: f.doc, storage: o.storage || fakeStorage(), blobs: f.blobs, effettiBoss: o.effettiBoss || (() => true), leggiFile: async (file) => file.dataUrl });
+    if (o.on !== false) a.imposta({ on: true });
+    if (o.unlock !== false) f.doc.fire('pointerdown');
+    return Object.assign(f, { a });
+  }
+
+  test('Suoni: tutti gli eventi hanno etichetta, categoria e ricetta valida', () => {
+    const S = SDD();
+    eq(S.CATEGORIES.map((c) => c.id), ['dadi', 'combattimento', 'turno', 'movimento', 'boss', 'leggendario', 'esplorazione', 'online', 'interfaccia']);
+    const ids = S.EVENTS.map((e) => e.id);
+    eq(new Set(ids).size, ids.length, 'identificatori unici');
+    const required = ['dadi-rotolio', 'dadi-tonfo', 'dadi-20', 'dadi-1', 'colpo', 'mancato', 'critico', 'danno', 'cura', 'a-terra', 'incantesimo', 'ts-riuscito', 'ts-fallito', 'azione-lieve',
+      'turno-giocatore', 'round', 'vittoria', 'sconfitta', 'passo', 'movimento-rifiutato', 'boss-evocazione', 'boss-ingresso', 'boss-fase', 'boss-sconfitto',
+      'ascensione', 'nodo-sbloccato', 'trasformazione', 'forma-normale', 'evento', 'scoperta', 'mappa', 'tempo',
+      'online-entra', 'online-richiesta', 'online-chat', 'online-disconnessione', 'online-ping', 'conferma', 'errore', 'salvataggio'];
+    for (const id of required) ok(S.event(id), 'manca ' + id);
+    const cats = new Set(S.CATEGORIES.map((c) => c.id));
+    const FORME = ['sine', 'triangle', 'square', 'sawtooth'];
+    for (const e of S.EVENTS) {
+      ok(typeof e.label === 'string' && e.label.length > 2 && cats.has(e.cat), e.id + ': etichetta e categoria');
+      ok(e.vol > 0 && e.vol <= 1 && typeof e.on === 'boolean', e.id + ': volume relativo e predefinito');
+      ok(Array.isArray(e.ricetta) && e.ricetta.length > 0, e.id + ': ricetta');
+      for (const l of e.ricetta) {
+        ok(['osc', 'rumore'].includes(l.t) && l.dur > 0 && l.g > 0 && l.g <= 1, e.id + ': strato valido');
+        if (l.t === 'osc') ok(FORME.includes(l.forma) && [].concat(l.f).every((f) => f > 0), e.id + ': oscillatore');
+        if (l.filtro) ok(['lowpass', 'highpass', 'bandpass'].includes(l.filtro.tipo), e.id + ': filtro');
+      }
+    }
+    const def = S.normalize(null);
+    eq([def.on, def.eventi.passo.on, def.eventi.conferma.on, def.eventi.errore.on, def.eventi.salvataggio.on, def.eventi.critico.on], [false, false, false, false, false, true],
+      'spenti di base: interruttore generale, passo e interfaccia');
+    eq(S.normalize({ volume: 300 }).volume, 100);
+    eq(S.normalize({ eventi: { critico: { volume: -5, file: { id: '../x' } } } }).eventi.critico, { on: true, volume: 0, file: null }, 'valori corretti e file non valido scartato');
+  });
+
+  test('Suoni: interruttore generale, categoria ed evento; niente prima del primo gesto', () => {
+    const f = soundBox({ unlock: false });
+    eq(f.a.suona('critico').suonato, false);
+    ok(/serve un clic/.test(f.a.suona('critico').motivo), 'prima del primo gesto non suona');
+    eq(f.rec.sources.length, 0);
+    eq(f.doc.count('pointerdown'), 1);
+    f.doc.fire('keydown');
+    eq([f.a.stato().sbloccato, f.rec.resumed, f.doc.count('pointerdown')], [true, 1, 0], 'sbloccato al primo tasto, ascoltatori tolti');
+    ok(f.a.suona('critico').suonato);
+    f.rec.ctx.currentTime = 1;
+    f.a.imposta({ on: false });
+    eq(f.a.suona('critico').motivo, 'suoni spenti');
+    f.a.imposta({ on: true });
+    f.a.impostaCategoria('combattimento', { on: false });
+    eq(f.a.suona('critico').motivo, 'categoria spenta');
+    ok(f.a.suona('round').suonato, 'le altre categorie restano');
+    f.a.impostaCategoria('combattimento', { on: true });
+    f.a.impostaEvento('critico', { on: false });
+    eq(f.a.suona('critico').motivo, 'evento spento');
+    ok(f.a.suona('critico', { anteprima: true }).suonato, 'Ascolta ignora gli interruttori');
+    eq(f.a.suona('passo').motivo, 'evento spento', 'passo spento di base');
+    // Boss e Leggendario seguono anche «Effetti boss».
+    let fx = false;
+    const g = soundBox({ effettiBoss: () => fx });
+    eq([g.a.suona('boss-fase').motivo, g.a.suona('ascensione').motivo], ['effetti boss spenti', 'effetti boss spenti']);
+    fx = true;
+    ok(g.a.suona('boss-fase').suonato);
+    // Volumi: categoria × evento × volume relativo; il generale va nel nodo master.
+    const s = SDD().normalize({ categorie: { dadi: { volume: 50 } }, eventi: { 'dadi-tonfo': { volume: 50 } } });
+    eq(SDD().gain(s, 'dadi-tonfo'), 0.25 * SDD().event('dadi-tonfo').vol);
+    ok(SDD().gain(Object.assign({}, s, { turnoEvidente: true }), 'turno-giocatore') > SDD().gain(s, 'turno-giocatore'), 'avviso del turno più evidente');
+  });
+
+  test('Suoni: massimo 8 contemporanei, intervallo minimo, coda e turni veloci', () => {
+    const f = soundBox();
+    const ids = SDD().EVENTS.filter((e) => e.on).map((e) => e.id).slice(0, 12);
+    for (const id of ids) f.a.suona(id);
+    eq(f.a.stato().voci, DnD.audioLib.MAX_VOICES, 'il più vecchio sfuma');
+    ok(f.rec.sources.some((s) => s.end !== undefined && s.end < 0.2), 'le voci scartate si fermano subito');
+    // Due suoni identici ravvicinati: il secondo si scarta.
+    const g = soundBox();
+    ok(g.a.suona('colpo').suonato);
+    g.rec.ctx.currentTime = 0.03;
+    eq(g.a.suona('colpo').motivo, 'troppo ravvicinato');
+    g.rec.ctx.currentTime = 0.2;
+    ok(g.a.suona('colpo').suonato, 'dopo 60 ms sì');
+    // Coda: gli esiti di un'azione uno dopo l'altro, senza accavallarsi.
+    const h = soundBox();
+    h.a.suonaTutti(['colpo', 'danno', 'a-terra']);
+    const starts = [...new Set(h.rec.sources.map((s) => s.at))].sort((a, b) => a - b);
+    ok(starts.length >= 3 && starts[1] - starts[0] >= 0.1, 'partenze distanziate: ' + starts.join(', '));
+    // Turni automatici veloci: solo i suoni principali.
+    const k = soundBox();
+    eq(k.a.suonaTutti(['ts-riuscito', 'colpo', 'cura', 'a-terra'], { veloce: true }).map((x) => x.suonato), [false, true, false, true]);
+    // La coda non rallenta il gioco: oltre 1,5 s di attesa i suoni si scartano.
+    const m = soundBox();
+    const many = m.a.suonaTutti(SDD().EVENTS.filter((e) => e.on && e.cat !== 'boss' && e.cat !== 'leggendario').map((e) => e.id));
+    ok(many.some((x) => x.motivo === 'coda piena'), 'coda piena');
+  });
+
+  test('Suoni: silenzio con la scheda in secondo piano', () => {
+    const f = soundBox();
+    f.doc.hidden = true;
+    f.doc.fire('visibilitychange');
+    eq(f.rec.suspended, 1, 'contesto sospeso');
+    eq(f.a.suona('round').motivo, 'scheda in secondo piano');
+    f.doc.hidden = false;
+    f.doc.fire('visibilitychange');
+    ok(f.rec.resumed >= 2 && f.a.suona('round').suonato, 'riprende al ritorno');
+  });
+
+  test('Suoni: sostituzione con un file, ripristino, file corrotto o mancante, limite di 2 MB', async () => {
+    const f = soundBox();
+    const url = wavUrl();
+    const fid = await f.a.sostituisciDati('critico', url, 'spada.wav');
+    eq([fid, f.data.get('snd:' + fid), f.a.fonte('critico'), f.a.impostazioni().eventi.critico.file.nome], [DnD.audioLib.fileId(url), url, 'personalizzato', 'spada.wav']);
+    await f.a.sostituisciDati('colpo', url, 'stesso.wav');
+    eq(f.data.size, 1, 'una sola copia per contenuto');
+    eq(f.a.suona('critico').fonte, 'file', 'suona il file decodificato');
+    eq(f.rec.sources[f.rec.sources.length - 1].buffer.decoded, true);
+    f.a.ripristina('critico');
+    eq([f.a.fonte('critico'), f.a.suona('critico', { anteprima: true }).fonte], ['predefinito', 'sintesi'], 'Ripristina torna alla sintesi');
+    // File corrotto: rifiutato, resta il predefinito.
+    let err = '';
+    try { await f.a.sostituisciDati('mancato', brokenUrl, 'rotto.wav'); } catch (e) { err = e.message; }
+    ok(/non è un audio leggibile/.test(err), err);
+    eq(f.a.fonte('mancato'), 'predefinito');
+    err = '';
+    try { await f.a.sostituisciDati('mancato', 'data:image/png;base64,AAAA', 'x.png'); } catch (e) { err = e.message; }
+    ok(/non è un audio/.test(err), 'formato non audio rifiutato');
+    // Limite di dimensione e formati.
+    err = '';
+    try { await f.a.sostituisci('mancato', { name: 'lungo.wav', type: 'audio/wav', size: 3 * 1024 * 1024 }); } catch (e) { err = e.message; }
+    ok(/troppo grande/.test(err) && /2 MB/.test(err), err);
+    err = '';
+    try { await f.a.sostituisci('mancato', { name: 'x.flac', type: 'audio/flac', size: 10 }); } catch (e) { err = e.message; }
+    ok(/Formato non supportato/.test(err), err);
+    ok(await f.a.sostituisci('mancato', { name: 'ok.ogg', type: 'audio/ogg', size: 100, dataUrl: wavUrl('ogg') }));
+    // File mancante nell'archivio (impostazioni copiate in un altro browser): si ripiega sulla sintesi senza errori.
+    const st = fakeStorage();
+    st.setItem(DnD.audioLib.KEY, JSON.stringify(f.a.impostazioni()));
+    const g = soundBox({ storage: st });
+    eq(g.a.suona('colpo').fonte, 'sintesi', 'mentre si carica: sintesi');
+    await g.a.preload();
+    g.rec.ctx.currentTime = 1;
+    eq([g.a.fonte('colpo'), g.a.suona('colpo').fonte], ['non leggibile', 'sintesi']);
+  });
+
+  test('Suoni: impostazioni salvate, migrazione dei suoni dei dadi, esporta/importa e Cancella tutti i dati', async () => {
+    const st = fakeStorage();
+    const f = soundBox({ storage: st });
+    f.a.imposta({ volume: 40, turnoEvidente: true });
+    f.a.impostaCategoria('boss', { on: false });
+    await f.a.sostituisciDati('round', wavUrl('gong'), 'gong.wav');
+    const again = DnD.audioLib.crea({ storage: st }).impostazioni();
+    eq([again.on, again.volume, again.turnoEvidente, again.categorie.boss.on, again.eventi.round.file.nome], [true, 40, true, false, 'gong.wav'], 'ricaricate');
+    // Prima versione: diceSound/diceVolume nelle impostazioni di visualizzazione.
+    const old = fakeStorage();
+    old.setItem('dnd-battaglie:impostazioni', JSON.stringify({ theme: 'scuro', diceSound: true, diceVolume: 30 }));
+    const mig = DnD.audioLib.crea({ storage: old }).impostazioni();
+    eq([mig.on, mig.categorie.dadi.volume, Boolean(old.getItem(DnD.audioLib.KEY))], [true, 30, true], 'migrazione salvata subito');
+    eq(DnD.audioLib.crea({ storage: fakeStorage() }).impostazioni().on, false, 'nuova installazione: spenti');
+    // Esporta: impostazioni e file usati, dentro l'archivio; Importa su un altro browser.
+    const exp = await f.a.esporta();
+    eq([exp.impostazioni.volume, Object.keys(exp.file).length], [40, 1]);
+    const text = DnD.dati.exportJSON(DnD.dati.emptyState(), {}, { suoni: exp });
+    eq(JSON.parse(text).suoni.impostazioni.volume, 40, 'nell\'archivio esportato');
+    eq(DnD.dati.importJSON(text).sessions.length, 1, 'l\'archivio con i suoni si importa');
+    const g = soundBox({ on: false });
+    eq(await g.a.importa(JSON.parse(text).suoni), 1);
+    eq([g.a.impostazioni().volume, g.a.fonte('round'), g.data.size], [40, 'personalizzato', 1]);
+    // File con impronta sbagliata: scartato, lo slot torna alla sintesi.
+    const bad = JSON.parse(JSON.stringify(exp));
+    bad.file[Object.keys(bad.file)[0]] = wavUrl('altro contenuto');
+    const h = soundBox();
+    eq(await h.a.importa(bad), 0);
+    eq(h.a.fonte('round'), 'predefinito');
+    // Cancella tutti i dati: l'archivio si svuota (stato, immagini e suoni) e gli slot tornano alla sintesi.
+    const backend = { name: 'finto', data: new Map() };
+    Object.assign(backend, { get: async (k) => (backend.data.has(k) ? backend.data.get(k) : null), set: async (k, v) => { backend.data.set(k, v); }, clear: async () => { backend.data.clear(); } });
+    const store = await DnD.dati.openStore(fakeStorage(), { backend });
+    const k = soundBox();
+    k.a.collegaArchivio(store.blobs);
+    await k.a.sostituisciDati('round', wavUrl('gong'), 'gong.wav');
+    ok([...backend.data.keys()].some((x) => x.startsWith('snd:')), 'file nello stesso archivio');
+    await store.clearAll();
+    k.a.svuota();
+    eq([[...backend.data.keys()].some((x) => x.startsWith('snd:')), k.a.fonte('round'), (await k.a.esporta()).file], [false, 'predefinito', {}]);
+  });
+
+  test('Suoni: dadi sincronizzati con l\'animazione (rotolio unico, tonfo, 20 e 1, animazione saltata)', async () => {
+    if (typeof document === 'undefined' || !DnD.uiDadi) return;
+    const calls = [];
+    let stopped = 0;
+    const prev = DnD.audio;
+    DnD.audio = { suona: (id, o) => { calls.push(id + (o && o.veloce ? ':veloce' : '')); return { stop: () => { stopped++; } }; } };
+    const stage = document.createElement('div');
+    document.body.append(stage);
+    try {
+      const plan = DD().pianoAnimazione({ gruppi: [{ sides: 20, values: [20], natural: true }, { sides: 6, values: [3, 4] }] }, { speed: 'lenta' });
+      const a = DnD.uiDadi.animate(stage, plan);
+      eq(calls, ['dadi-rotolio'], 'un solo rotolio per tre dadi');
+      a.skip();
+      await a.done;
+      eq([calls, stopped], [['dadi-rotolio', 'dadi-tonfo', 'dadi-20'], 1], 'saltata: il rotolio si ferma, poi tonfo e 20 naturale');
+      calls.length = 0;
+      const still = DD().pianoAnimazione({ gruppi: [{ sides: 20, values: [1], natural: true }] }, { speed: 'normale', reduceMotion: true });
+      await DnD.uiDadi.animate(stage, still).done;
+      eq(calls, ['dadi-tonfo', 'dadi-1'], 'senza animazione: tonfo e 1 naturale');
+      calls.length = 0;
+      await DnD.uiDadi.animate(stage, still, { veloce: true }).done;
+      eq(calls, ['dadi-tonfo:veloce', 'dadi-1:veloce'], 'turni automatici: il modulo audio tiene solo i principali');
+      ok(!SDD().event('dadi-tonfo').principale && SDD().event('dadi-1').principale);
+    } finally {
+      DnD.audio = prev;
+      stage.remove();
+    }
+  });
+
+  test('Suoni: dagli esiti del combattimento e dell\'esplorazione agli eventi', () => {
+    const S = SDD();
+    const pc = { id: 'p', kind: 'player', control: 'manuale', hp: 10 };
+    const foe = { id: 'n', kind: 'npc', faction: 'nemici', hp: 7 };
+    const before = S.combatSnapshot({ phase: 'attivo', combatants: [pc, foe] });
+    const after = { phase: 'attivo', currentId: 'p', combatants: [Object.assign({}, pc, { hp: 4 }), Object.assign({}, foe, { hp: 0 })] };
+    const rows = [{ type: 'critico' }, { type: 'a-terra' }, { type: 'round' }, { type: 'turno' }, { type: 'sistema' }, { type: 'ts-fallito' }];
+    eq(S.fromCombat(before, rows, after), ['critico', 'a-terra', 'round', 'turno-giocatore', 'ts-fallito', 'danno']);
+    const aiTurn = { phase: 'attivo', currentId: 'p', combatants: [Object.assign({}, pc, { control: 'ia' }), foe] };
+    eq(S.fromCombat(before, [{ type: 'turno' }], aiTurn), [], 'turno di un giocatore giocato dall\'IA: niente ding');
+    eq(S.fromCombat(before, [{ type: 'mancato' }, { type: 'mancato' }], { phase: 'attivo', combatants: [pc, foe] }), ['mancato'], 'senza ripetizioni');
+    // Trasformazione e ritorno, ingresso del boss.
+    const lg = { id: 'l', kind: 'player', hp: 50, legend: { form: null } };
+    const formed = { phase: 'attivo', combatants: [Object.assign({}, lg, { legend: { form: { id: 'f1' } } })] };
+    eq(S.fromCombat(S.combatSnapshot({ phase: 'attivo', combatants: [lg] }), [], formed), ['trasformazione']);
+    eq(S.fromCombat(S.combatSnapshot(formed), [], { phase: 'attivo', combatants: [lg] }), ['forma-normale']);
+    const boss = { id: 'b', kind: 'npc', hp: 100, boss: { theme: 'infernale' } };
+    eq(S.fromCombat(S.combatSnapshot({ phase: 'iniziativa', combatants: [boss] }), [], { phase: 'attivo', combatants: [boss] }), ['boss-ingresso']);
+    eq(S.fromCombat(S.combatSnapshot({ phase: 'attivo', combatants: [boss] }), [], { phase: 'attivo', combatants: [boss] }), [], 'una volta sola');
+    eq(S.fromCombat(null, [], { phase: 'attivo', combatants: [boss] }), ['boss-ingresso'], 'combattimento avviato dall\'esplorazione');
+    // Esito alla fine del combattimento.
+    eq([S.combatOutcome(after), S.combatOutcome({ combatants: [Object.assign({}, pc, { hp: 0 }), foe] }), S.combatOutcome({ combatants: [pc, foe] })], ['vittoria', 'sconfitta', null]);
+    eq(S.fromExploration([{ kind: 'movimento' }, { kind: 'evento' }, { kind: 'incontro' }, { kind: 'scoperta' }, { kind: 'mappa' }, { kind: 'meteo' }, { kind: 'tempo' }]), ['evento', 'scoperta', 'mappa', 'tempo']);
+  });
+
+  test('Suoni: Silenzia tutto (pulsante e Alt+M) e indipendenza da «Riduci animazioni»', () => {
+    if (typeof document === 'undefined' || !DnD.uiSuoni) return;
+    const f = soundBox();
+    const prev = DnD.audio;
+    const I = DnD.impostazioni;
+    const prevSettings = Object.assign({}, I.get());
+    DnD.audio = f.a;
+    try {
+      const btn = DnD.uiSuoni.quickButton();
+      document.body.append(btn);
+      eq(btn.getAttribute('aria-pressed'), 'true', 'stato visibile sul pulsante');
+      btn.click();
+      eq([f.a.attivo(), btn.getAttribute('aria-pressed'), btn.getAttribute('aria-label')], [false, 'false', 'Attiva i suoni']);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', code: 'KeyM', altKey: true, bubbles: true }));
+      eq([f.a.attivo(), btn.getAttribute('aria-pressed')], [true, 'true'], 'Alt+M');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', code: 'KeyM', ctrlKey: true, altKey: true, bubbles: true }));
+      eq(f.a.attivo(), true, 'Ctrl+Alt+M non è la scorciatoia');
+      // Nell'editor delle note la scorciatoia non scatta.
+      const ed = document.createElement('div');
+      ed.setAttribute('contenteditable', 'true');
+      document.body.append(ed);
+      ed.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', code: 'KeyM', altKey: true, bubbles: true }));
+      eq(f.a.attivo(), true, 'non nell\'editor delle note');
+      ed.remove();
+      btn.remove();
+      // Riduci animazioni non tocca i suoni (e viceversa).
+      I.set({ reduceMotion: true });
+      ok(f.a.attivo() && f.a.suona('round').suonato, 'i suoni restano con «Riduci animazioni»');
+      f.a.imposta({ on: false });
+      eq(I.get().reduceMotion, true, 'spegnere i suoni non cambia le animazioni');
+    } finally {
+      DnD.audio = prev;
+      I.set(prevSettings);
+    }
   });
 
   async function runTests() {

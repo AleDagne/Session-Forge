@@ -120,6 +120,8 @@
     DnD.store = await DnD.dati.openStore(window.localStorage);
     // Immagini importate (TileSet e sfondi delle griglie): stesso database, con cache in memoria.
     DnD.immagini = DnD.immaginiLib.createStore(DnD.store.blobs);
+    // File che sostituiscono i suoni predefiniti: stesso database (chiavi "snd:<id>").
+    DnD.audio.collegaArchivio(DnD.store.blobs);
     // Tileset migrati dalle immagini "stirate": la dimensione dei tile si completa leggendo i pixel.
     DnD.uiTileset.resolveLegacyTilesets().then((changed) => { if (changed) refreshAll(); }).catch(() => { /* restano segnaposto */ });
     DnD.store.onSaveError = (e) => toast('Salvataggio non riuscito: ' + e.message + '. Esporta i dati per non perderli.', 'error');

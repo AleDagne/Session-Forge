@@ -1084,6 +1084,8 @@
       if (d.type === 'move') {
         if (d.moved && d.mv) {
           const r = d.route;
+          // Movimento rifiutato (anche in parte): avviso e suono, un solo punto per tutte le griglie.
+          if (!r || !r.end || r.stopped) DnD.audio.suona('movimento-rifiutato');
           if (!r || !r.end) toast('Non c\'è un percorso libero fin lì.', 'error');
           else if (r.end.x !== d.start.x || r.end.y !== d.start.y) {
             commit((dd) => opts.movement.apply(dd, d.hit.id, r));
@@ -1099,6 +1101,7 @@
               else Object.assign(ent, t);
             });
           } else if (!d.valid) {
+            if (d.hit.kind === 'token') DnD.audio.suona('movimento-rifiutato');
             toast(d.hit.kind === 'token' ? 'Posizione bloccata da un\'altra pedina o da una struttura.' : 'Posizione non valida.', 'error');
           }
           select(d.hit);

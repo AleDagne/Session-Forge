@@ -5,6 +5,8 @@
 // Combattimento simulato: i combattenti controllati dall'IA pianificano il turno con DnD.ia (funzioni pure)
 // e il piano si esegue con le stesse funzioni dei comandi manuali (attacco, incantesimi, azioni delle creature).
 // Boss: dopo ogni azione si controllano le soglie di fase (boss.js) e si mostrano barra in alto, ombra ed effetti.
+// Suoni: mutate() traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme dei leggendari) in
+// eventi sonori (suoni-dati.js) e li mette in coda; nei turni automatici dell'IA restano solo i principali.
 (function (DnD) {
   'use strict';
 
@@ -65,6 +67,7 @@
     const t = c.combatants.find((y) => y.id === id);
     if (!t) return;
     Mv.recordMove(t, r.end, r.cost);
+    DnD.audio.suona('passo');
     log(c, 'movimento', Mv.moveText(t, r.path.length - 1, r.cost, Mv.left(t, rules(), fpc()), fpc()) + (r.stopped ? ' Movimento esaurito.' : ''));
   }
   // Azioni di movimento: Scatto, Disimpegno, Rialzarsi, Annulla spostamento.
@@ -712,12 +715,16 @@
 
   function mutate(fn) {
     let events = [];
+    let sounds = [];
+    let fast = false;
     const aggr = pendingAggr;
     pendingAggr = null;
     provoked = false;
     DnD.store.update((st) => {
-      const pre = session(st).combat;
-      const beforeHp = new Map(pre ? pre.combatants.map((x) => [x.id, x.hp]) : []);
+      const prev = session(st).combat;
+      const beforeHp = new Map(prev ? prev.combatants.map((x) => [x.id, x.hp]) : []);
+      const before = DnD.suoniDati.combatSnapshot(prev);
+      const lastLine = prev && prev.log.length ? prev.log[prev.log.length - 1] : null;
       fn(session(st).combat, st);
       if (hurtLines.length && session(st).combat) for (const line of hurtLines) log(session(st).combat, 'sistema', line);
       hurtLines = [];
@@ -726,7 +733,12 @@
       if (c) worldAfter(c, st, beforeHp, aggr);
       // Boss: passaggi di fase e sconfitte (anche più fasi con un solo colpo), con le note nel log.
       if (c && c.phase === 'attivo') events = DnD.boss.checkCombat(c, (type, text) => log(c, type, text));
+      if (c) {
+        sounds = DnD.suoniDati.fromCombat(before, c.log.slice(c.log.lastIndexOf(lastLine) + 1), c);
+        fast = Boolean(c.ai && c.ai.simulated && c.ai.mode === 'auto');
+      }
     });
+    DnD.audio.suonaTutti(sounds, { veloce: fast });
     if (provoked) { aiPlan = null; if (DnD.uiMondo) DnD.uiMondo.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
     if (events.some((e) => e.kind === 'fase')) aiPlan = null;
     render();
@@ -1007,8 +1019,10 @@
     if (!confirm('Terminare il combattimento? Il log e lo stato dei combattenti verranno cancellati.')) return;
     const xp = defeatedXp(combat());
     const ended = JSON.parse(JSON.stringify(combat()));
+    const outcome = DnD.suoniDati.combatOutcome(ended);
     if (xp) toast('PE dei nemici sconfitti: ' + xp + ' (da dividere tra il party).', 'success');
     mutate((c, st) => { session(st).combat = null; });
+    if (outcome) DnD.audio.suona(outcome);
     toast('Combattimento terminato.');
     // Combattimento preparato da un evento dell'esplorazione: esito e ritorno all'esplorazione.
     if (DnD.uiEsplorazione) DnD.uiEsplorazione.onCombatEnded(ended);
@@ -1345,7 +1359,7 @@
           const r = R.rollSave({ bonus: t.saves[ab], mode: m, dc: dcValue }, dice());
           const d20 = m === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + m + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
           const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
-          log(c, r.success === false ? 'mancato' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': ' + d20 + ' ' +
+          log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': ' + d20 + ' ' +
             R.formatModifier(t.saves[ab]) + ' = ' + r.total + (outcome || '.'));
           summaryText = t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)');
           summaryType = r.success === false ? 'error' : r.success ? 'success' : 'info';
@@ -1534,6 +1548,7 @@
       const use = M.canUse(st, a);
       if (!use.ok) { toast(a.name + ': ' + use.reason + '.', 'error'); return; }
       M.consume(st, a);
+      if (a.group === 'bonusActions' || a.group === 'reactions') DnD.audio.suona('azione-lieve', { coda: true });
       const header = x.name + (a.group === 'legendary' ? ' (azione leggendaria, ' + st.legendaryPoints.left + ' punti rimasti)' : '') + ' usa ' + a.name;
       if (a.mech.kind === 'testo') { log(c, 'sistema', header + ': ' + M.actionText(st, a)); return; }
       const steps = a.mech.kind === 'multiattacco' ? M.expandMultiattack(st, a) : [a];
@@ -1564,7 +1579,7 @@
               (r.success && sub.mech.half ? ' (metà)' : '') + (applied.notes.length ? ' (' + applied.notes.join('; ') + ')' : '') + ' → ' + applied.total + ' danni';
             if (!r.success && sub.mech.effect) text += '; ' + sub.mech.effect;
             text += '. ' + (before !== t.hp ? t.name + ': ' + before + ' → ' + t.hp + ' PF.' : '');
-            log(c, r.success ? 'tiro-salvezza' : 'colpito', text);
+            log(c, r.success ? 'tiro-salvezza' : 'ts-fallito', text);
             if (!r.success && t.creature && t.creature.legendaryResistance.left > 0) {
               t.pendingSave = { full: r.full.map((q) => ({ amount: q.amount, type: q.type })), half: sub.mech.half, applied: before - t.hp, magical: false, text: sub.name };
             }

@@ -1008,9 +1008,10 @@
 
   // --- Import / export ---
   // images: { id: dataUrl } delle immagini importate usate (stanno fuori dallo stato, in IndexedDB).
-  function exportJSON(state, images) {
+  // extra: altre parti dell'archivio fuori dallo stato (es. suoni: impostazioni e file personalizzati).
+  function exportJSON(state, images, extra) {
     return JSON.stringify(Object.assign({ app: DnD.config ? DnD.config.APP_NAME : 'Session Forge', kind: 'archivio', exportedAt: new Date().toISOString() },
-      state, { images: images || {} }), null, 2);
+      state, { images: images || {} }, extra || {}), null, 2);
   }
 
   function importJSON(text) {
@@ -1077,11 +1078,11 @@
       name: 'localStorage',
       get: async (key) => storage.getItem(DB_NAME + ':' + key),
       set: async (key, value) => storage.setItem(DB_NAME + ':' + key, value),
-      // Solo le chiavi dei dati (stato e immagini): le impostazioni di visualizzazione restano.
+      // Solo le chiavi dei dati (stato, immagini e file dei suoni): le impostazioni di visualizzazione restano.
       clear: async () => {
         const keys = [];
         for (let i = 0; i < storage.length; i++) if (storage.key(i).startsWith(DB_NAME + ':')) keys.push(storage.key(i));
-        for (const k of keys) if (k === DB_NAME + ':' + DB_KEY || k.startsWith(DB_NAME + ':img:')) storage.removeItem(k);
+        for (const k of keys) if (k === DB_NAME + ':' + DB_KEY || k.startsWith(DB_NAME + ':img:') || k.startsWith(DB_NAME + ':snd:')) storage.removeItem(k);
       },
     };
   }
