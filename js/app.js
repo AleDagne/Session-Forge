@@ -105,8 +105,8 @@
       if (sidebar) sidebar.toggle();
       return;
     }
-    // Alt+cifra: la voce del menù con quella scorciatoia (config.js).
-    const m = /^(?:Digit|Numpad)([0-9])$/.exec(e.code);
+    // Alt+cifra (o Alt+lettera, es. Alt+S per Scene): la voce del menù con quella scorciatoia (config.js).
+    const m = /^(?:Digit|Numpad|Key)([0-9A-Z])$/.exec(e.code);
     const item = m ? C.MENU.find((x) => x.key === m[1]) : null;
     if (e.altKey && !e.ctrlKey && !e.metaKey && item) {
       e.preventDefault();

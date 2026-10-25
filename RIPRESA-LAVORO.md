@@ -1,8 +1,30 @@
 # Ripresa del lavoro
 
-## Fase in corso: «FASE 3/5: Difficoltà dell'incontro» (25 ottobre 2026)
+## Fase in corso: «FASE 4/5: Scene e incontri» (25 ottobre 2026)
 
-- Stato: **completata** e committata. Dati alla versione **15**, cache `session-forge-v29`.
+- Stato: **completata** e committata. Dati alla versione **16**, cache `session-forge-v30`.
+- `test.html`: **251/251** passati (12 test nuovi della fase; aggiornati l'ordine del menù e le categorie dei suoni).
+  Se il pannello resta su «Esecuzione…» è la finestra nascosta: aspettare o usare una finestra visibile.
+- File nuovi: `js/scene-dati.js`, `js/scene.js`, `js/ui-scene.js`.
+- Toccati: `config.js` (voce Scene in cima, Alt+S, gruppo Gioco), `app.js` (scorciatoie Alt+lettera), `dati.js`
+  (v16: `scenes`, `encounters`, `xp` dei giocatori, `currentSceneId`, `combat.scene`, esempi alla migrazione),
+  `sessioni.js` (librerie per sessione, rimappatura, esportazione), `condizioni.js` (condizione «Sorpreso»),
+  `quest.js` (`op`, ora usata anche da `esplorazione.js`), `suoni-dati.js` (categoria Scene), `ui-combattimento.js`
+  (condizioni di fine nel log, fine del combattimento alla scena), `ui-note.js` (`openPage`, pulsante «🎬 Scena»),
+  `ui-creature.js` (PE dei giocatori), CSS, `index.html`, `test.html`, `sw.js`, README, CLAUDE.md.
+- Scelte: «Mostra ai giocatori» rivela il testo (`revealed`, per la vista Online futura) e lo apre grande in una
+  finestra. «Prossima scena» conclude la corrente, «Scena precedente» la riporta a Da fare. Gli NPC del Mondo
+  negli incontri entrano ostili (salvo fazione scelta). Le scene sono agganciate a eventi e città come riferimenti
+  mostrati nella scena: non c'è ancora un'azione evento «Lancia scena» nell'Esplorazione.
+- Provato nel browser (con uno store in memoria, senza toccare i dati): lancio con sorpresa e nemici nascosti,
+  riepilogo a fine combattimento, distribuzione delle ricompense, conclusione e proposta della scena successiva,
+  vista a linea, editor della scena e dell'incontro, Genera incontro, pulsante «🎬 Scena» nelle note, Alt+S.
+- Da provare a mano: riordino a trascinamento, esportazione/importazione JSON di un incontro, scena con mappa di
+  esplorazione, effetti su quest e reputazione nell'interfaccia.
+
+## Fase precedente: «FASE 3/5: Difficoltà dell'incontro» (commit `136d2a8`)
+
+- Stato: completata. Dati alla versione 15, cache `session-forge-v29`.
 - `test.html`: **239/240** (10 test nuovi della fase, tutti passati). L'unico fallito è il noto «Boss UI: la
   vignettatura…», che vuole una finestra visibile.
 - File nuovi: `js/difficolta-dati.js`, `js/difficolta.js`, `js/ui-difficolta.js`.

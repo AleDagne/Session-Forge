@@ -69,6 +69,9 @@
       effects: ['nessuna-azione', 'velocita-zero', 'ts-fallisce-for-des', 'contro-vantaggio', 'critico-mischia'] },
     { id: 'rallentato', name: 'Rallentato', icon: '🐌', color: '#0d9488', text: 'Si muove a fatica: metà velocità.',
       effects: ['velocita-meta'] },
+    // Sorpresa all'inizio di un incontro (scene.js): fino alla fine del suo primo turno.
+    { id: 'sorpreso', name: 'Sorpreso', icon: '❗', color: '#e11d48', text: 'Colto alla sprovvista: nel suo primo turno non si muove, non agisce e non reagisce.',
+      effects: ['nessuna-azione', 'velocita-zero'] },
     { id: 'sfinimento', name: 'Sfinimento', icon: '🥱', color: '#9f1239', levels: true, text: 'Stanchezza a livelli (1-6), cumulativi: prove, velocità, attacchi e salvezze, PF massimi, immobilità e morte.',
       effects: [] },
   ];

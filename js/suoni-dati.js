@@ -19,6 +19,7 @@
     { id: 'leggendario', label: 'Leggendario' },
     { id: 'esplorazione', label: 'Esplorazione' },
     { id: 'mondo', label: 'Mondo' },
+    { id: 'scene', label: 'Scene' },
     { id: 'online', label: 'Online', note: 'predisposti: suoneranno quando esisterà la fase Online' },
     { id: 'interfaccia', label: 'Interfaccia' },
   ];
@@ -119,6 +120,11 @@
       ricetta: notes([659, 784, 1047], 0.11, { forma: 'triangle', dur: 0.45, a: 0.01, g: 0.25 }).concat([{ t: 'osc', forma: 'sine', f: 2093, at: 0.3, dur: 0.5, a: 0.02, g: 0.06 }]) },
     { id: 'npc-ostile', label: 'NPC che diventa ostile', cat: 'mondo', vol: 0.8, on: true, principale: true,
       ricetta: notes([220, 185], 0.11, { forma: 'sawtooth', dur: 0.3, a: 0.01, g: 0.18, filtro: { tipo: 'lowpass', f: 1200 } }) },
+    // Scene
+    { id: 'scena-avviata', label: 'Scena avviata', cat: 'scene', vol: 0.7, on: true,
+      ricetta: notes([392, 523, 659], 0.14, { forma: 'triangle', dur: 0.5, a: 0.03, g: 0.2 }) },
+    { id: 'scena-conclusa', label: 'Scena conclusa', cat: 'scene', vol: 0.7, on: true,
+      ricetta: notes([659, 523, 784], 0.14, { forma: 'sine', dur: 0.55, a: 0.02, g: 0.22 }) },
     // Online (predisposti)
     { id: 'online-entra', label: 'Giocatore che entra', cat: 'online', vol: 0.6, on: true, ricetta: notes([660, 880], 0.08, { dur: 0.3, a: 0.01, g: 0.22 }) },
     { id: 'online-richiesta', label: 'Richiesta di ingresso', cat: 'online', vol: 0.6, on: true, ricetta: notes([990, 990], 0.15, { dur: 0.12, a: 0.005, g: 0.2 }) },

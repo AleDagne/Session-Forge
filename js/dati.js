@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 15;
+  const VERSION = 16;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -145,6 +145,8 @@
       equipment: DnD.attrezzatura.defaults(), mapObjects: defaultMapObjects(), tilesets: [], spells: defaultSpells(), savedGrids: [],
       biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()], customConditions: [],
       difficultyRules: DnD.difficolta.defaultRules(),
+      // Scene (scaletta per sessione) e libreria degli incontri (con tre esempi condivisi).
+      scenes: [], encounters: DnD.scene.examples(session.id),
       // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
       factions: DnD.fazioni.builtinFactions(session.id).concat(world.factions), parties: [DnD.party.defaultParty(session.id, [])],
       cities: world.cities, worldNpcs: world.worldNpcs, quests: world.quests,
@@ -354,6 +356,8 @@
       out.playerName = str(c.playerName, 60);
       out.inventory = DnD.attrezzatura.normalizeInventory(c.inventory);
       out.coins = DnD.attrezzatura.normalizeCoins(c.coins);
+      // PE accumulati (ricompense delle scene).
+      out.xp = int(c.xp, 0, 0, 100000000);
       // Personaggio leggendario (leggendario.js): tetto delle caratteristiche, Percorso e Trasformazioni.
       // Un giocatore declassato conserva i dati del percorso (legendArchive) per una nuova promozione.
       if (c.type === 'leggendario') {
@@ -813,6 +817,8 @@
         ignoreCollisions: Boolean(grid.ignoreCollisions),
         sourceGridId: typeof grid.sourceGridId === 'string' ? grid.sourceGridId : null,
       }),
+      // Combattimento lanciato da una scena: scena e incontro (per l'esito, il riepilogo e le ricompense).
+      scene: DnD.scene.normalizeCombatRef(c.scene),
       log: arr(c.log).slice(-LOG_MAX).map((e) => {
         e = obj(e);
         const out = { round: int(e.round, 0, 0, 100000), type: str(e.type, 20), text: str(e.text, 1000) };
@@ -873,6 +879,8 @@
       world: DnD.fazioni.normalizeWorld(se.world),
       // Orologio dei riposi fuori dall'esplorazione (ore di gioco), per la regola delle 24 ore.
       restClock: int(se.restClock, 0, 0, 1e9),
+      // Scena in corso (scene.js), vuota se nessuna.
+      currentSceneId: typeof se.currentSceneId === 'string' && /^[\w-]{1,64}$/.test(se.currentSceneId) ? se.currentSceneId : '',
     };
   }
 
@@ -987,6 +995,12 @@
     if (raw.kind !== 'sessione') raw.addWorldExamples = true;
     return raw;
   }
+  // Versione 16: scene e incontri. Le sessioni restano senza scene; gli archivi ricevono gli incontri d'esempio.
+  function migrateV16(raw) {
+    if (!raw || typeof raw !== 'object' || raw.version >= 16) return raw;
+    if (raw.kind !== 'sessione') raw.addSceneExamples = true;
+    return raw;
+  }
 
   // Esempi originali del Mondo (mondo-dati.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
   function defaultWorld(sessionId) {
@@ -1015,7 +1029,7 @@
     // Versioni 6, 7 e 8: immagini "stirate" -> tilemap su tileset, TileSet con sorgenti e livelli generici,
     // poi Attrezzatura, oggetti di mappa e creature (sui dati grezzi, prima di tutto); 9: boss d'esempio;
     // 10: biomi ed eventi.
-    raw = migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw)))))))));
+    raw = migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))))));
     const { sessions, currentSessionId } = normalizeSessions(raw);
     // Chi non appartiene a una sessione esistente (es. dati precedenti) va nella prima.
     const ids = new Set(sessions.map((x) => x.id));
@@ -1051,6 +1065,9 @@
       cities: unique(arr(raw.cities).map((c) => owned(DnD.citta.normalizeCity(c)))),
       worldNpcs: unique(arr(raw.worldNpcs).map((n) => owned(DnD.npc.normalizeNpc(n)))),
       quests: unique(arr(raw.quests).map((q) => owned(DnD.quest.normalizeQuest(q)))),
+      // Scene (per sessione, ordinate) e incontri della libreria (modelli, condivisibili).
+      scenes: unique(arr(raw.scenes).map((x) => owned(DnD.scene.normalizeScene(x)))),
+      encounters: unique(arr(raw.encounters).map((x) => owned(DnD.scene.normalizeEncounter(x)))),
       sessions,
       currentSessionId,
       diceHistory: arr(raw.diceHistory).slice(0, DICE_HISTORY_MAX).map((h) => {
@@ -1059,6 +1076,7 @@
       }),
     };
     if (raw.addDefaultParties) addDefaultParties(out);
+    if (raw.addSceneExamples) for (const e of DnD.scene.examples(sessions[0].id)) if (!out.encounters.some((x) => x.id === e.id)) out.encounters.push(e);
     if (raw.addWorldExamples) {
       const ex = defaultWorld(sessions[0].id);
       for (const key of Object.keys(ex)) for (const x of ex[key]) if (!out[key].some((e) => e.id === x.id)) out[key].push(x);

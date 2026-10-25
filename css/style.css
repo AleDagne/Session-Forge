@@ -1219,3 +1219,45 @@ input.short { max-width: 8rem; }
 .diff-table input.qty { width: 5.5rem; }
 .diff-rules details { margin-top: 0.4rem; }
 .diff-proposals li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+
+/* ---------- Scene (ui-scene.js) ---------- */
+.scene-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.scene-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: grab; }
+.scene-row.drop { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+.scene-row.running { border-left: 4px solid var(--primary); }
+.scene-num { min-width: 1.6rem; text-align: center; font-weight: 700; color: var(--muted); }
+.scene-kind { font-size: 1.2rem; }
+.scene-main { flex: 1; min-width: 0; }
+.scene-title { font-weight: 600; }
+.scene-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; justify-content: flex-end; }
+.tag.scene-status.scene-in-corso { background: var(--primary); color: var(--on-primary); }
+.tag.scene-status.scene-conclusa { background: var(--ok); color: var(--on-primary); }
+.tag.scene-status.scene-saltata { background: var(--hp-track); color: var(--muted); text-decoration: line-through; }
+.scene-banner { border-left: 4px solid var(--primary); margin-bottom: 1rem; }
+.scene-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; }
+.scene-details > .panel { margin: 0; }
+.scene-read { max-height: 18rem; overflow: auto; white-space: normal; font-style: normal; }
+.scene-read-big { font-size: 1.25rem; line-height: 1.6; max-height: none; }
+.scene-enc { display: flex; flex-direction: column; gap: 0.2rem; }
+.scene-tactics { font-style: italic; }
+.scene-history { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.scene-line { overflow-x: auto; padding-bottom: 0.5rem; }
+.scene-line-svg { display: block; color: var(--text); }
+.scene-node { fill: var(--panel); stroke: var(--border); stroke-width: 1.5; }
+.scene-node.scene-in-corso, .scene-node.running { stroke: var(--primary); stroke-width: 3; }
+.scene-node.scene-conclusa { stroke: var(--ok); }
+.scene-node.scene-saltata { stroke-dasharray: 5 4; }
+.scene-node-title { fill: var(--text); font-size: 13px; font-weight: 600; }
+.scene-node-sub { fill: var(--muted); font-size: 11px; }
+.scene-flow { stroke: var(--border); stroke-width: 2; }
+.scene-edge { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+.scene-edge-vittoria { stroke: var(--ok); }
+.scene-edge-sconfitta { stroke: var(--bad); }
+.scene-edge-fuga { stroke: var(--warn); }
+.scene-arrow-head { fill: var(--accent); }
+.scene-edge-label { fill: var(--muted); font-size: 11px; }
+.scene-line-list { margin: 0.5rem 0 0; padding-left: 1rem; }
+.enc-rows { display: flex; flex-direction: column; gap: 0.35rem; }
+.enc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.enc-row.missing { outline: 1px dashed var(--danger-border); }
+.enc-row .enc-cells { width: 9rem; }

@@ -232,18 +232,7 @@
   }
   // Operazioni delle azioni «Quest» degli eventi. Restituisce le righe per il registro.
   function questOp(w, op, questId, objectiveId, n) {
-    const v = worldOf(w);
-    if (!v) return ['⚠ Quest: nessun Mondo nella sessione.'];
-    const q = v.quests.find((x) => x.id === questId);
-    if (!q) return ['⚠ Quest eliminata: azione saltata.'];
-    const Q = DnD.quest;
-    const j = v.world.quests;
-    const party = DnD.party.active(v.parties, v.world);
-    if (op === 'avvia') { Q.offer(j, q); return Q.accept(j, q, w.ex.time.total, party && party.id) ? ['📜 Quest «' + q.title + '» accettata.'] : ['📜 Quest «' + q.title + '» già ' + Q.statusOf(j, q.id) + '.']; }
-    if (op === 'avanza') return Q.advance(j, [q], (q.objectives.find((o) => o.id === objectiveId) || q.objectives[0] || {}).kind, (o) => !objectiveId || o.id === objectiveId, n || 1);
-    if (op === 'fallisci') { Q.fail(j, q, w.ex.time.total); return ['📜 Quest «' + q.title + '» fallita.']; }
-    const r = Q.complete(j, q, w.ex.time.total, true);
-    return [r.ok ? '📜 Quest «' + q.title + '» completata: consegna le ricompense dal diario del party.' : '📜 «' + q.title + '»: ' + r.reason + '.'];
+    return DnD.quest.op(worldOf(w), op, questId, objectiveId, n, w.ex.time.total);
   }
 
   // ---------- Tempo ----------

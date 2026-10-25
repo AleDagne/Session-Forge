@@ -683,7 +683,7 @@
                 el('span', { class: 'ac-badge', title: 'Classe Armatura: ' + stats.ac.detail, text: 'CA ' + stats.ac.total })),
               el('p', { class: 'muted', text: [raceName(c.raceId), C.className(c.classId), 'liv. ' + c.level, cfg.isPlayer ? '' : 'GS ' + DnD.difficolta.crOf(c) + (c.crOverride ? '' : ' (stimato)')].filter(Boolean).join(' · ') }),
               cfg.isPlayer && c.playerName ? el('p', { class: 'small', text: 'Giocatore: ' + c.playerName }) : null,
-              el('p', { text: 'PF ' + (cfg.isPlayer ? restHp(c) : c.maxHp) }),
+              el('p', { text: 'PF ' + (cfg.isPlayer ? restHp(c) : c.maxHp) + (cfg.isPlayer && c.xp ? ' · ' + DnD.creature.formatXp(c.xp) + ' PE' : '') }),
               el('div', { class: 'stat-line' }, R.ABILITIES.map((ab) => el('span', { class: 'stat' },
                 el('b', { text: ab }), ' ' + fin[ab] + ' (' + R.formatModifier(R.modifier(fin[ab])) + ')'))),
               stats.saves.length ? el('p', { class: 'small muted', text: 'TS competenti: ' + stats.saves.map((ab) => ab + ' ' + R.formatModifier(stats.saveTotals[ab])).join(', ') }) : null,
@@ -724,6 +724,8 @@
       const inp = {
         name: textInput(c.name, { maxlength: 60 }),
         playerName: cfg.isPlayer ? textInput(c.playerName, { maxlength: 60 }) : null,
+        // Solo i giocatori: PE accumulati (le ricompense delle scene li aggiungono).
+        xp: cfg.isPlayer ? numberInput(c.xp || 0, { min: 0, max: 100000000, 'data-key': 'xp' }) : null,
         raceId: el('select', {},
           el('option', { value: '', text: '— Nessuna razza —' }),
           races.map((r) => el('option', { value: r.id, text: r.name, selected: r.id === c.raceId })),
@@ -810,6 +812,7 @@
         el('div', { class: 'grid-3' },
           nameField,
           cfg.isPlayer ? field('Nome del giocatore', inp.playerName, 'playerName') : null,
+          cfg.isPlayer ? field('Punti esperienza (PE)', inp.xp, 'xp') : null,
           field('Razza', inp.raceId, 'raceId'),
           field('Livello', inp.level, 'level', legendary ? '20-40 · rango leggendario = livello − 20' : null),
           field('Classe', cls.select, 'classId'),
@@ -848,7 +851,7 @@
           weapons: weapons.read(),
           notes: inp.notes.value.trim(),
         }, abilities.readAsi(), cls.read(), hp.read(), ac.read(), saves.read(), gridSize.read(), behavior ? behavior.read() : {}, { spellcasting: spells.read() }, inventory ? inventory.read() : {}, worldRefs.read());
-        if (cfg.isPlayer) data.playerName = inp.playerName.value.trim();
+        if (cfg.isPlayer) Object.assign(data, { playerName: inp.playerName.value.trim(), xp: readNumber(inp.xp) || 0 });
         else data.crOverride = inp.crOverride.value;
         // Leggendari: tipo, tetto e dati del percorso e delle trasformazioni restano quelli della scheda.
         if (legendary) Object.assign(data, { type: 'leggendario', abilityCap: readNumber(inp.abilityCap), legend: c.legend });

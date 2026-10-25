@@ -56,6 +56,7 @@ I dati delle versioni precedenti finiscono automaticamente nella **Sessione pred
 
 | Gruppo     | Voce             | Scorciatoia |
 |------------|------------------|-------------|
+| Gioco      | Scene (Scaletta, Linea, Incontri) | Alt+S |
 | Mappa      | Editor griglie   | Alt+1 |
 |            | Combattimento    | Alt+2 |
 |            | Esplorazione     | Alt+3 |
@@ -67,8 +68,8 @@ I dati delle versioni precedenti finiscono automaticamente nella **Sessione pred
 |            | Razze            | Alt+8 |
 | Strumenti  | Dadi             | Alt+9 |
 
-- Ogni voce ha la sua scorciatoia fissa (campo `key` di `MENU` in `js/config.js`): Mondo, aggiunta dopo, ha Alt+0
-  e non sposta le altre.
+- Ogni voce ha la sua scorciatoia fissa (campo `key` di `MENU` in `js/config.js`): Mondo, aggiunta dopo, ha Alt+0;
+  Scene, in cima al menù, ha Alt+S. Nessuna delle altre si è spostata.
 - Nel menù ci si sposta anche con le frecce su/giù (Home/Fine) e si apre con Invio.
 - La barra laterale si chiude e si riapre con « o **Ctrl+B**: da chiusa mostra solo le icone (il
   nome compare passandoci sopra). Lo stato viene ricordato e sugli schermi stretti parte chiusa.
@@ -656,7 +657,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 15)
+### Modello dati (versione 16)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -723,7 +724,18 @@ difficultyRules: { custom, thresholds: [20 × [facile, medio, difficile, mortale
            belowFirst, aboveLast, legendary: { 21-40: [4 soglie] }, countNeutralNpcs }   regole della difficoltà (globali)
 incantesimo e azione delle creature (Attacco, Tiro salvezza): { …, inflict: { type, customId, level, duration, save: { ability, dc } | null } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
+scenes: [{ id, title, kind, status, order, readAloud (HTML), revealed, pageId, map: { gridId, entry: { x, y } | null },
+           encounters: [incontro + templateId, run: { launched, combatId, outcome, defeated, down, xp, rewardsGiven }],
+           npcIds, eventIds, cityId, treasure: { xp, coins, items }, treasureGiven, effects: [{ when: inizio|fine, action }],
+           links: [{ outcome: sempre|vittoria|sconfitta|fuga|round|obiettivo, label, sceneId }], duration, tags, history,
+           sessionId, shared }]
+encounters: [{ id, name, creatures: [{ id, ref: { kind: npc|mondo, id }, qty, start: { kind: zona|celle, cells }, faction, ai }],
+           rewards, notes, tactics, start: { surprised, hidden, light, weather, hour }, end: [{ kind, rounds, text }], sessionId, shared }]
+sessione: { …, currentSceneId }   combattimento: { …, scene: { sceneId, encounterId } | null }   giocatore: { …, xp }
 ```
+
+**Migrazione dalla versione 15**: solo normalizzazione. Le sessioni restano senza scene (nessun dato cambia), i
+giocatori ricevono 0 PE e gli archivi (non i file di sessione) i tre incontri d'esempio, condivisi.
 
 **Migrazione dalla versione 14**: solo normalizzazione. I nemici standard ricevono `crOverride` vuoto (CS stimato dal
 livello), i boss `effectiveCr` vuoto (CS della scheda) e l'archivio le regole della difficoltà della Guida.
@@ -1043,6 +1055,62 @@ Metodo della Guida del Dungeon Master:
   moltiplicatori, gradini oltre la tabella), soglie a mano dei leggendari, opzione degli NPC neutrali, «Ripristina la
   Guida». Le regole sono nell'archivio (`difficultyRules`), quindi si esportano con lui.
 
+## Scene e incontri
+
+Logica pura e testata in `js/scene.js`, dati ed esempi in `js/scene-dati.js`, interfaccia in `js/ui-scene.js`. La
+scena è un contenitore: collega mappe, creature, NPC, eventi, quest, note e tesori che esistono già e li lancia.
+
+- **Scaletta** (voce Scene, Alt+S): scene della sessione in ordine, con ricerca (titolo, tag, testo), filtri per tipo
+  e stato, riordino a trascinamento (o ↑ ↓), duplicazione ed eliminazione. Le scene appartengono alla sessione; con
+  «Condividi con tutte le sessioni» diventano modelli. Esportazione, importazione e duplicazione delle sessioni le
+  portano con sé (id nuovi e riferimenti rimappati).
+- **Scena**: titolo, tipo (Combattimento, Esplorazione, Sociale, Enigma o trappola, Riposo, Altro), stato (Da fare,
+  In corso, Conclusa, Saltata), testo da leggere ai giocatori (editor delle note), pagina delle Note del master
+  (anche creata al volo), mappa della sessione con punto di entrata («B4»), incontri, NPC presenti, eventi
+  collegati, città, tesori e ricompense, effetti su quest e reputazione (all'inizio o alla fine), collegamenti alle
+  scene successive per esito («Se vincono → X», «Se fuggono → Y», «Sempre»), durata stimata e tag.
+- **Vista a linea**: le scene in fila con le frecce dei collegamenti (avanti sopra, indietro sotto), colorate per esito.
+- **Incontro**: righe di creature (Standard, Creature, Boss o NPC del Mondo, che entrano ostili) con quantità,
+  partenza (zona «Partenza nemici» o celle scelte, una per copia), fazione e IA; difficoltà in tempo reale con il
+  party attivo (indicatore della fase precedente, con Bilancia), PE totali e a testa; tesoro (PE a mano, monete,
+  oggetti), note e tattica; condizioni di inizio (sorpresa dei giocatori o dei nemici, nemici nascosti, luce, meteo,
+  ora) e di fine (vittoria, sconfitta, fuga, round massimo, obiettivo a tempo).
+- **Libreria degli incontri** (scheda Incontri): crea, modifica, duplica, elimina, esporta/importa JSON. Sono modelli:
+  aggiungerli a una scena ne crea una **copia indipendente**. Tre esempi originali: *Agguato nella palude*, *La
+  sentinella risvegliata*, *Il trono di cenere*.
+- **Genera incontro**: scelta della difficoltà e del tema (tipo di creatura o tabella degli incontri di un bioma);
+  propone fino a 5 gruppi dalla libreria (un tipo o un capo con i gregari) con PE adatti al party, modificabili.
+
+**Lancio e svolgimento**
+- **▶ Lancia scena**: la scena va In corso (effetti d'inizio, suono), la sua pagina delle note si apre da sola; con
+  una mappa di esplorazione parte l'Esplorazione col gruppo al punto di entrata, altrimenti il primo incontro non
+  ancora lanciato viene **preparato** nel Combattimento: giocatori del party nella loro zona (o al punto di entrata),
+  creature nelle celle scelte o nella zona dei nemici, iniziativa tirata, nessun turno iniziato. Il master conferma
+  con «Inizia combattimento». Per ogni incontro: **⚔ Prepara** (senza avviare) e **▶ Avvia ora** (tutto in un clic).
+- La **sorpresa** mette la condizione «Sorpreso» (nessuna azione né movimento fino alla fine del primo turno);
+  nemici nascosti, luce, meteo e ora vanno nel log.
+- **Scena in corso**: banner in cima alla sezione con testo da leggere («📢 Mostra ai giocatori» lo rivela e lo apre
+  grande), note, incontri da lanciare con la difficoltà, NPC, eventi, tesoro («Distribuisci il tesoro»),
+  collegamenti e i pulsanti **◀ Scena precedente** (questa torna Da fare), **Prossima scena ▶** (questa si conclude),
+  **Salta** e **🏁 Concludi** (esito e scena successiva proposta dai collegamenti).
+- Durante il combattimento, quando una condizione di fine è raggiunta, una riga del log invita a terminarlo.
+- **Fine del combattimento**: riepilogo con esito proposto (modificabile), creature sconfitte, in fuga, giocatori a
+  terra, PE dei nemici sconfitti (anche gli standard, dal loro CS) e tesoro; **🎁 Distribuisci ricompense** (PE
+  divisi, monete a un giocatore o divise con conversione in mo/ma/mr, oggetti all'inventario di chi si sceglie),
+  **🛏 Riposo breve** e **🏁 Concludi la scena** con la proposta della successiva. Tutto va nello storico della scena.
+- Lo stato (scena corrente, lanci, esiti, ricompense date, storico) è salvato con la sessione: si chiude l'app e si
+  riprende. Riaprire una scena conclusa non cancella nulla.
+- I **PE** dei giocatori sono sulla scheda (campo «Punti esperienza» e carta del giocatore).
+
+**Collegamenti**
+- Quest e reputazione: gli effetti della scena usano le stesse azioni degli eventi (`quest.op`, condivisa con
+  l'Esplorazione).
+- Note del master: dalla scena si apre la sua pagina; dalla pagina un pulsante «🎬 Scena» riporta alla scena.
+- Online (futuro): `scene.statoScenaPerGiocatore()` dà solo titolo, tipo, stato e il testo da leggere se rivelato.
+- Suoni nella categoria *Scene*: scena avviata, scena conclusa.
+- Riferimenti mancanti (mappa, creatura, NPC, evento, città, quest, fazione, oggetto, scena collegata, pagina):
+  avviso sulla scena o sull'incontro, voce disattivata o saltata, nessun errore.
+
 ## Dadi animati
 
 Il risultato si decide **prima**, con lo stesso generatore senza bias (`crypto.getRandomValues`): un
@@ -1080,7 +1148,7 @@ Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, 
   *Movimento* (passo, spento di base; movimento rifiutato); *Boss* (evocazione, ingresso in combattimento, cambio di
   fase, sconfitta); *Leggendario* (ascensione, sblocco di un nodo, trasformazione, ritorno alla forma normale);
   *Esplorazione* (evento o incontro, scoperta di un evento nascosto, ingresso in una mappa, tempo che passa o meteo
-  che cambia); *Mondo* (reputazione che sale o scende, quest accettata o completata, NPC che diventa ostile); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
+  che cambia); *Mondo* (reputazione che sale o scende, quest accettata o completata, NPC che diventa ostile); *Scene* (scena avviata, scena conclusa); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
   *Interfaccia* (conferma, errore, salvataggio della griglia, spenti di base).
 - **Da dove partono**: il combattimento traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme
   dei leggendari) in un solo punto (`mutate`), l'esplorazione dalle nuove righe del registro; dadi, boss,
@@ -1262,6 +1330,18 @@ Per la **difficoltà degli incontri**:
 - «Bilancia» (proposte, gruppi fissi, fascia impossibile) e budget per CS;
 - aggiornamento in tempo reale dell'indicatore del setup; migrazione v14 → v15, archivio e file di sessione.
 
+Per **scene e incontri**:
+- creazione, riordino, filtri e duplicazione delle scene; collegamenti con più esiti, vista a linea, conclusione,
+  riapertura e ritorno alla precedente;
+- incontro con quantità e posizioni (celle scelte e zona), punto di entrata, mappa mancante, Avvia ora,
+  esplorazione al punto di entrata;
+- difficoltà con il party e la quantità che cambiano, fazione non ostile, copia indipendente dal modello;
+- sorpresa, nemici nascosti, luce/meteo/ora; fine per vittoria, sconfitta, round massimo e obiettivo; riepilogo;
+- ricompense: PE divisi, monete divise con conversione e resto, a un giocatore, oggetti, oggetto eliminato;
+- effetti su quest e reputazione, vista dei giocatori, pagina delle note, testo sanificato, celle «B4»;
+- «Genera incontro»; riferimenti mancanti; migrazione v15 → v16, ripresa dopo la chiusura, archivio, file di
+  sessione e duplicazione con i riferimenti rimappati; aggiornamento in tempo reale nell'editor dell'incontro.
+
 Per **condizioni e concentrazione**:
 - tabella ed effetti di tutte le condizioni;
 - attacchi con vantaggio e svantaggio da più fonti (anche insieme), prono vicino e a distanza, critico automatico solo
@@ -1307,6 +1387,8 @@ js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
 js/difficolta-dati.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
+js/scene-dati.js      scene (dati): tipi, stati, esiti, condizioni di inizio e fine, incontri d'esempio
+js/scene.js           scene e incontri (logica pura): scaletta, linea, lancio, fine, ricompense, Genera incontro
 js/difficolta.js      difficoltà degli incontri (logica pura): soglie, PE, moltiplicatore, fasce, chi conta, Bilancia, Budget
 js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
 js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combattente), risorse, dadi vita, riposo breve e lungo
@@ -1369,6 +1451,7 @@ js/ui-mondo.js        sezione Mondo: Fazioni, Città, componenti comuni (fazione
 js/ui-party.js        Giocatori › Party: elenco, form, dettaglio con reputazione e diario
 js/ui-npc.js          Mondo › NPC: editor, pannello sulla griglia, dialogo giocabile, finestra di scambio
 js/ui-quest.js        Mondo › Quest: editor, offerta, consegna, diario
+js/ui-scene.js        Scene: scaletta, linea, editor di scene e incontri, libreria, lancio, scena in corso, ricompense
 js/ia-dati.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»

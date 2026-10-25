@@ -245,7 +245,23 @@
     return [...new Set(out)];
   }
 
+  // Azione «Quest» di eventi e scene: avvia, avanza, fallisci o completa. v: vista del Mondo (fazioni.view).
+  // Restituisce le righe per il registro.
+  function op(v, kind, questId, objectiveId, n, nowHours) {
+    if (!v) return ['⚠ Quest: nessun Mondo nella sessione.'];
+    const q = v.quests.find((x) => x.id === questId);
+    if (!q) return ['⚠ Quest eliminata: azione saltata.'];
+    const j = v.world.quests;
+    const party = DnD.party.active(v.parties, v.world);
+    if (kind === 'avvia') { offer(j, q); return accept(j, q, nowHours, party && party.id) ? ['📜 Quest «' + q.title + '» accettata.'] : ['📜 Quest «' + q.title + '» già ' + statusOf(j, q.id) + '.']; }
+    if (kind === 'avanza') return advance(j, [q], (q.objectives.find((o) => o.id === objectiveId) || q.objectives[0] || {}).kind, (o) => !objectiveId || o.id === objectiveId, n || 1);
+    if (kind === 'fallisci') { fail(j, q, nowHours); return ['📜 Quest «' + q.title + '» fallita.']; }
+    const r = complete(j, q, nowHours, true);
+    return [r.ok ? '📜 Quest «' + q.title + '» completata: consegna le ricompense dal diario del party.' : '📜 «' + q.title + '»: ' + r.reason + '.'];
+  }
+
   DnD.quest = {
+    op,
     normalizeQuest, normalizeObjective, normalizeRewards, normalizeEntry, normalizeJournal, entryOf, statusOf, requirementsMet,
     offer, accept, setStatus, fail, objectiveDone, allDone, advance, onKill, onTalk, onEvent, onReach, onCollect, expire, complete,
     objectiveText, journalList, perGiocatore, missingRefs,

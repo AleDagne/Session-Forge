@@ -5,11 +5,13 @@
   const APP_NAME = 'Session Forge';
 
   // Gruppi solo grafici: l'ordine delle voci resta quello di MENU.
-  const GROUPS = { mappa: 'Mappa', personaggi: 'Personaggi', libreria: 'Libreria', strumenti: 'Strumenti' };
+  const GROUPS = { gioco: 'Gioco', mappa: 'Mappa', personaggi: 'Personaggi', libreria: 'Libreria', strumenti: 'Strumenti' };
 
   // Icone SVG 24×24 a tratto (stroke = currentColor): un elenco di path "d".
-  // key = cifra della scorciatoia Alt+key: fissa per ogni voce (Mondo, aggiunta dopo, ha Alt+0 e non sposta le altre).
+  // key = tasto della scorciatoia Alt+key: fisso per ogni voce (Mondo, aggiunta dopo, ha Alt+0; Scene, in cima, Alt+S:
+  // nessuna delle altre si sposta).
   const MENU = [
+    { id: 'scene', key: 'S', label: 'Scene', group: 'gioco', icon: ['M4 5h16v14H4z', 'M4 9h16', 'M8 5l2 4', 'M13 5l2 4', 'M10 13l5 2.5-5 2.5z'] },
     { id: 'editor', key: '1', label: 'Editor griglie', group: 'mappa', icon: ['M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z', 'M9 3v15', 'M15 6v15'] },
     { id: 'combattimento', key: '2', label: 'Combattimento', group: 'mappa', icon: ['M4 4l11 11', 'M20 4L9 15', 'M4 4h4', 'M4 4v4', 'M20 4h-4', 'M20 4v4', 'M13 17l4 4', 'M11 17l-4 4', 'M15 19l2-2', 'M9 19l-2-2'] },
     { id: 'esplorazione', key: '3', label: 'Esplorazione', group: 'mappa', icon: ['M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z', 'M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z'] },

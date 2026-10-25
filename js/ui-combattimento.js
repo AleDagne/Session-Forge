@@ -175,6 +175,7 @@
   const partyFaction = (st) => { const v = worldView(st); const p = DnD.party.active(v.parties, v.world); return p ? p.factionId : 'giocatori'; };
   let pendingAggr = null;   // { attackerId, targetIds } dell'azione ostile in corso (provocazioni, uccisioni)
   let overNotified = null;  // id del combattimento per cui si è già annunciata la fine
+  let sceneEndNotified = '';  // combattimento ed esito della condizione di fine della scena già annunciati
   const noteAggression = (attackerId, targetIds) => { pendingAggr = { attackerId, targetIds: targetIds.filter(Boolean) }; };
 
   // Copia di un NPC piazzata sulla griglia -> combattente (stessa posizione, PF e stato della copia).
@@ -304,6 +305,13 @@
         const e = FZ.changeReputation({ world: v.world, party: DnD.party.active(v.parties, v.world) }, x.faction, DnD.mondoDati.REP_EVENTS.uccidiMembro, 'ucciso ' + x.name, 'combattimento');
         if (e) lines.push('⚑ Reputazione con «' + factionName(x.faction) + '»: ' + e.delta + ' (' + e.after + ').');
       }
+    }
+    // Combattimento da una scena: condizioni di fine dell'incontro (vittoria, sconfitta, fuga, round, obiettivo).
+    const fromScene = c.phase === 'attivo' ? DnD.scene.ofCombat(st, c) : null;
+    const end = fromScene ? DnD.scene.endCheck(c, fromScene.enc, relTable(st), pf) : null;
+    if (end && sceneEndNotified !== c.id + end.outcome) {
+      sceneEndNotified = c.id + end.outcome;
+      lines.push('🎬 Condizione di fine dell\'incontro: ' + DnD.sceneDati.OUTCOME_NAMES[end.outcome] + ' (' + end.text + '). Termina il combattimento per il riepilogo della scena.');
     }
     if (c.phase === 'attivo' && overNotified !== c.id) {
       const over = FZ.combatOver(c.combatants, relTable(st), pf);
@@ -1125,6 +1133,8 @@
     toast('Combattimento terminato.');
     // Combattimento preparato da un evento dell'esplorazione: esito e ritorno all'esplorazione.
     if (DnD.uiEsplorazione) DnD.uiEsplorazione.onCombatEnded(ended);
+    // Combattimento lanciato da una scena: riepilogo, ricompense, esito e scena successiva (con il riposo breve).
+    if (ended.scene && DnD.uiScene) { DnD.uiScene.onCombatEnded(ended, playerIds); return; }
     // Proposta rapida: riposo breve dei giocatori del combattimento.
     if (playerIds.length) openDialog('Combattimento terminato', el('p', { text: 'Riposo breve ora? I giocatori possono spendere i dadi vita.' }), [
       { text: 'No' },

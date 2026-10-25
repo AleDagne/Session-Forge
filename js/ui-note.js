@@ -45,6 +45,8 @@
     const resizer = el('div', { class: 'notes-resizer', role: 'separator', tabindex: 0, 'aria-orientation': 'vertical', 'aria-label': 'Ridimensiona le note',
       'aria-valuemin': String(MIN_WIDTH), 'aria-valuenow': String(width) });
     const sessionName = el('span', { class: 'muted small' });
+    // Scena collegata alla pagina (scene.js): si risale alla scena con un clic.
+    const sceneBar = el('div', { class: 'notes-scene small' });
     const panel = el('aside', { class: 'notes-panel', id: 'notes-panel', role: 'complementary', 'aria-label': 'Note del master', hidden: true },
       resizer,
       el('header', { class: 'notes-head' },
@@ -53,6 +55,7 @@
       el('div', { class: 'notes-pagebar' }, pageSel,
         ib('＋', 'Nuova pagina', () => newPage()), ib('✎', 'Rinomina pagina', () => renamePage()), ib('⧉', 'Duplica pagina', () => duplicatePage()),
         ib('↑', 'Sposta su', () => movePage(-1)), ib('↓', 'Sposta giù', () => movePage(1)), ib('🗑', 'Elimina pagina', () => deletePage())),
+      sceneBar,
       body,
       el('footer', { class: 'notes-foot' },
         status, words,
@@ -146,6 +149,10 @@
       clear(pageSel).append(...(list.length ? list.map((p) => el('option', { value: p.id, text: p.name, selected: cur && p.id === cur.id }))
         : [el('option', { value: '', text: N.DEFAULT_PAGE + ' (nuova)' })]));
       sessionName.textContent = 'Sessione: ' + session().name;
+      const sc = cur && DnD.scene ? DnD.scene.sceneForPage(store().state, session().id, cur.id) : null;
+      clear(sceneBar);
+      if (sc) sceneBar.append(el('button', { type: 'button', class: 'btn small', text: '🎬 Scena «' + sc.title + '»', title: 'Apri la scena collegata a questa pagina',
+        onclick: () => { if (DnD.uiScene) DnD.uiScene.openScene(sc.id); } }));
     }
     // Mostra nell'editor la pagina corrente della sessione corrente.
     function show() {
@@ -270,6 +277,14 @@
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('beforeunload', flush);
 
+    // Apre il pannello sulla pagina indicata (es. la pagina della scena corrente).
+    async function openPage(id) {
+      await flush();
+      pageId = id;
+      pref(PAGE_KEY, id);
+      if (isOpen) show(); else open();
+    }
+
     // Dopo un cambio di sessione, un'importazione o una cancellazione.
     function refresh() {
       if (shownFor && shownFor.sessionId !== session().id) pageId = null;
@@ -278,7 +293,7 @@
     if (pref(OPEN_KEY) === 'aperto' && !o.closed) open();
 
     return {
-      open, close, toggle, flush, refresh, fab, panel,
+      open, close, toggle, flush, refresh, openPage, fab, panel,
       isOpen: () => isOpen,
       editor: () => editor,
       status: () => status.dataset.state,

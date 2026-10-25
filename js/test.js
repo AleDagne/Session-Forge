@@ -647,11 +647,11 @@
   };
 
   test('ordine e gruppi delle voci di menù', () => {
-    eq(DnD.config.MENU.map((m) => m.label), ['Editor griglie', 'Combattimento', 'Esplorazione', 'Mondo', 'Nemici', 'Giocatori', 'Magie', 'Asset', 'Razze', 'Dadi']);
-    eq(DnD.config.MENU.map((m) => m.id), ['editor', 'combattimento', 'esplorazione', 'mondo', 'nemici', 'giocatori', 'magie', 'asset', 'razze', 'dadi'], 'Esplorazione dopo Combattimento, Mondo dopo Esplorazione');
-    eq(DnD.config.MENU.map((m) => m.group), ['mappa', 'mappa', 'mappa', 'mappa', 'personaggi', 'personaggi', 'libreria', 'libreria', 'libreria', 'strumenti']);
-    eq(DnD.config.MENU.length, 10, 'scorciatoie Alt+1…Alt+9 e Alt+0');
-    eq(DnD.config.MENU.map((m) => m.key).join(''), '1230456789', 'scorciatoie fisse: Mondo Alt+0, le altre come prima');
+    eq(DnD.config.MENU.map((m) => m.label), ['Scene', 'Editor griglie', 'Combattimento', 'Esplorazione', 'Mondo', 'Nemici', 'Giocatori', 'Magie', 'Asset', 'Razze', 'Dadi']);
+    eq(DnD.config.MENU.map((m) => m.id), ['scene', 'editor', 'combattimento', 'esplorazione', 'mondo', 'nemici', 'giocatori', 'magie', 'asset', 'razze', 'dadi'], 'Scene in cima, Esplorazione dopo Combattimento, Mondo dopo Esplorazione');
+    eq(DnD.config.MENU.map((m) => m.group), ['gioco', 'mappa', 'mappa', 'mappa', 'mappa', 'personaggi', 'personaggi', 'libreria', 'libreria', 'libreria', 'strumenti']);
+    eq(DnD.config.MENU.length, 11, 'scorciatoie Alt+S, Alt+1…Alt+9 e Alt+0');
+    eq(DnD.config.MENU.map((m) => m.key).join(''), 'S1230456789', 'scorciatoie fisse: Scene Alt+S, Mondo Alt+0, le altre come prima');
     ok(DnD.config.MENU.every((m) => m.icon.length > 0), 'ogni voce ha un\'icona');
     ok(!DnD.config.SECTIONS.includes('oggetti'), 'gli Oggetti sono dentro Strutture');
     eq(DnD.config.APP_NAME, 'Session Forge');
@@ -3599,7 +3599,7 @@
 
   test('Suoni: tutti gli eventi hanno etichetta, categoria e ricetta valida', () => {
     const S = SDD();
-    eq(S.CATEGORIES.map((c) => c.id), ['dadi', 'combattimento', 'turno', 'movimento', 'boss', 'leggendario', 'esplorazione', 'mondo', 'online', 'interfaccia']);
+    eq(S.CATEGORIES.map((c) => c.id), ['dadi', 'combattimento', 'turno', 'movimento', 'boss', 'leggendario', 'esplorazione', 'mondo', 'scene', 'online', 'interfaccia']);
     const ids = S.EVENTS.map((e) => e.id);
     eq(new Set(ids).size, ids.length, 'identificatori unici');
     const required = ['dadi-rotolio', 'dadi-tonfo', 'dadi-20', 'dadi-1', 'colpo', 'mancato', 'critico', 'danno', 'cura', 'a-terra', 'incantesimo', 'ts-riuscito', 'ts-fallito', 'azione-lieve',
@@ -4983,6 +4983,250 @@
       faction.dispatchEvent(new Event('change'));
       eq(badge(), '—', 'nemico neutrale: non conta');
       ok(box.querySelector('.diff-bar').getAttribute('aria-label') === 'Difficoltà dell\'incontro', 'aria-label in italiano');
+    } finally {
+      box.remove();
+      DnD.store = prevStore;
+    }
+  });
+
+  // --- Scene e incontri (scene.js) ---
+  const SC = () => DnD.scene;
+  const CINGHIALE = 'esempio-cinghiale-paludi';
+  // Archivio con 4 giocatori di 1° livello, una griglia di battaglia con le zone e tre scene collegate.
+  function sceneWorld() {
+    const st = DnD.dati.emptyState();
+    const sid = S().current(st).id;
+    st.players = [1, 2, 3, 4].map((i) => DnD.dati.normalizeCreature({ id: 'h' + i, name: 'Eroe ' + i, level: 1, maxHp: 10, sessionId: sid }, true));
+    st.savedGrids.push(DnD.dati.normalizeSavedGrid({ id: 'g1', name: 'Radura', w: 12, h: 8, kind: 'battaglia', sessionId: sid,
+      zones: [{ kind: 'giocatori', x: 0, y: 0, w: 2, h: 4 }, { kind: 'nemici', x: 9, y: 0, w: 3, h: 8 }] }));
+    const enc = SC().normalizeEncounter({ id: 'enc', name: 'Cinghiali', creatures: [{ id: 'r1', ref: { kind: 'npc', id: CINGHIALE }, qty: 3, start: { kind: 'celle', cells: [{ x: 5, y: 5 }, { x: 6, y: 5 }] } }],
+      end: [{ kind: 'vittoria' }, { kind: 'round', rounds: 3 }], rewards: { coins: { mo: 1 } } });
+    const mk = (id, title, order, extra) => SC().normalizeScene(Object.assign({ id, title, order, sessionId: sid }, extra));
+    st.scenes = [
+      mk('a', 'Il guado', 0, { kind: 'combattimento', map: { gridId: 'g1' }, encounters: [enc], tags: ['palude'],
+        links: [{ outcome: 'vittoria', sceneId: 'b' }, { outcome: 'fuga', sceneId: 'c' }, { outcome: 'sempre', sceneId: 'b' }] }),
+      mk('b', 'Il villaggio', 1, { kind: 'sociale' }),
+      mk('c', 'La fuga nel bosco', 2, { kind: 'esplorazione' }),
+    ];
+    return { st, sid, enc: st.scenes[0].encounters[0], scene: st.scenes[0] };
+  }
+
+  test('Scene: creazione, riordino, filtri e duplicazione', () => {
+    const w = sceneWorld();
+    eq(SC().sessionScenes(w.st, w.sid).map((s) => s.id), ['a', 'b', 'c'], 'scaletta in ordine');
+    SC().move(w.st.scenes, 'c', 0);
+    eq([SC().sessionScenes(w.st, w.sid).map((s) => s.id), w.st.scenes.map((s) => s.order)], [['c', 'a', 'b'], [1, 2, 0]], 'riordino');
+    eq(SC().filter(w.st.scenes, { kind: 'sociale' }).map((s) => s.id), ['b'], 'per tipo');
+    eq(SC().filter(w.st.scenes, { text: 'palude' }).map((s) => s.id), ['a'], 'per tag');
+    eq(SC().filter(w.st.scenes, { status: 'conclusa' }).length, 0, 'per stato');
+    w.scene.history.push({ at: new Date().toISOString(), text: 'x' });
+    w.scene.status = 'conclusa';
+    const d = SC().duplicate(w.scene, 3);
+    eq([d.id !== 'a', d.title, d.status, d.history.length, d.order, d.encounters[0].id !== 'enc', d.encounters[0].run, d.links.length], [true, 'Il guado (copia)', 'da-fare', 0, 3, true, null, 3]);
+    eq(SC().normalizeScene({}).status, 'da-fare', 'scena nuova: da fare');
+    eq(SC().neighbors(w.st.scenes, 'a').prev.id, 'c', 'precedente in scaletta');
+  });
+
+  test('Scene: collegamenti con più esiti, vista a linea e conclusione', () => {
+    const w = sceneWorld();
+    eq(SC().linksFor(w.scene, 'fuga').map((l) => l.sceneId), ['c', 'b'], 'fuga → C, poi «sempre»');
+    eq(SC().linksFor(w.scene, 'vittoria').map((l) => l.sceneId), ['b', 'b']);
+    const L = SC().line(w.st.scenes);
+    eq(L.edges.map((e) => [e.from, e.to, e.outcome]), [[0, 1, 'vittoria'], [0, 2, 'fuga'], [0, 1, 'sempre']], 'frecce');
+    SC().startScene(w.st, w.sid, 'a', new Date());
+    eq([w.scene.status, S().current(w.st).currentSceneId], ['in-corso', 'a'], 'avviata');
+    const res = SC().concludeScene(w.st, w.sid, 'a', 'fuga', new Date());
+    eq([w.scene.status, S().current(w.st).currentSceneId, res.next.map((n) => n.scene.id)], ['conclusa', '', ['c', 'b']], 'conclusa con le proposte');
+    ok(w.scene.history.some((h) => h.text.includes('fuga')), 'storico');
+    SC().startScene(w.st, w.sid, 'a', new Date());
+    eq([w.scene.status, w.scene.history.length], ['in-corso', 3], 'riaperta: lo storico resta');
+    SC().reopenScene(w.st, w.sid, 'a', new Date());
+    eq(w.scene.status, 'da-fare', 'si torna indietro');
+  });
+
+  test('Scene: incontro con quantità e posizioni, lancio che prepara combattimento e mappa', () => {
+    const w = sceneWorld();
+    const r = SC().buildCombat(w.st, w.scene, w.enc, { players: w.st.players, sessionId: w.sid });
+    const c = r.combat;
+    const pos = (name) => c.combatants.find((x) => x.name === name).pos;
+    eq([c.phase, c.scene, c.grid.sourceGridId, c.combatants.length], ['iniziativa', { sceneId: 'a', encounterId: 'enc' }, 'g1', 7], 'preparato, non avviato');
+    eq([pos('Cinghiale delle paludi 1'), pos('Cinghiale delle paludi 2')], [{ x: 5, y: 5 }, { x: 6, y: 5 }], 'celle scelte');
+    ok(pos('Cinghiale delle paludi 3').x >= 9, 'la terza copia nella zona dei nemici');
+    ok(c.combatants.filter((x) => x.kind === 'player').every((x) => x.pos && x.pos.x <= 1), 'giocatori nella loro zona');
+    ok(c.combatants.filter((x) => x.kind !== 'player').every((x) => x.faction === 'nemici' && x.control === 'ia'), 'fazione e IA');
+    eq(DnD.dati.normalizeCombat(c).scene, { sceneId: 'a', encounterId: 'enc' }, 'riferimento salvato');
+    w.scene.map.entry = { x: 6, y: 1 };
+    const e2 = SC().buildCombat(w.st, w.scene, w.enc, { players: w.st.players, sessionId: w.sid, start: 'avvia' });
+    ok(e2.combat.combatants.filter((x) => x.kind === 'player').every((x) => Math.max(Math.abs(x.pos.x - 6), Math.abs(x.pos.y - 1)) <= 2), 'giocatori al punto di entrata');
+    eq([e2.combat.phase, Boolean(e2.combat.currentId)], ['attivo', true], 'Avvia ora');
+    const noMap = SC().buildCombat(w.st, Object.assign({}, w.scene, { map: { gridId: '', entry: null } }), w.enc, { players: w.st.players, sessionId: w.sid });
+    eq([noMap.unplaced, noMap.combat.grid.zones.length], [[], 2], 'senza mappa: griglia vuota con le zone');
+    const ex = DnD.dati.normalizeSavedGrid({ id: 'mx', name: 'Valle', w: 10, h: 10, kind: 'esplorazione', sessionId: w.sid });
+    w.st.savedGrids.push(ex);
+    const e = SC().buildExploration(w.st, SC().normalizeScene({ title: 'Valle', map: { gridId: 'mx', entry: { x: 4, y: 3 } } }), w.st.players, 7);
+    eq([e.gridId, e.parties[0].pos, e.parties[0].memberIds.length], ['mx', { x: 4, y: 3 }, 4], 'esplorazione al punto di entrata');
+  });
+
+  test('Scene: difficoltà dell\'incontro con il party e copia dal modello', () => {
+    const w = sceneWorld();
+    const r = SC().evaluate(w.st, w.enc, w.st.players, w.sid);
+    eq([r.rawXp, r.band, r.perPlayerXp], [600, 'oltre', 150], '3 cinghiali (CS 1) contro 4 eroi di 1°');
+    w.enc.creatures[0].qty = 1;
+    eq(SC().evaluate(w.st, w.enc, w.st.players, w.sid).band, 'medio', 'quantità cambiata');
+    eq(SC().evaluate(w.st, w.enc, w.st.players.slice(0, 1), w.sid).band, 'oltre', 'party cambiato');
+    w.enc.creatures[0].faction = 'neutrali';
+    eq(SC().evaluate(w.st, w.enc, w.st.players, w.sid).count, 0, 'fazione non ostile: non conta');
+    const tpl = w.st.encounters.find((e) => e.id === 'incontro-esempio-agguato');
+    const copy = SC().fromTemplate(tpl);
+    copy.creatures[0].qty = 9;
+    copy.name = 'Copia';
+    eq([copy.templateId, copy.id !== tpl.id, tpl.creatures[0].qty, tpl.name, copy.creatures[0].id !== tpl.creatures[0].id], ['incontro-esempio-agguato', true, 3, 'Agguato nella palude', true], 'copia indipendente');
+    eq(w.st.encounters.filter((e) => e.shared).length, 3, 'tre incontri d\'esempio');
+  });
+
+  test('Scene: condizioni di inizio (sorpresa, nascosti) e di fine', () => {
+    const w = sceneWorld();
+    w.enc.start = SC().normalizeStart({ surprised: 'giocatori', hidden: true, light: 'buio', weather: 'pioggia', hour: 22 });
+    const r = SC().buildCombat(w.st, w.scene, w.enc, { players: w.st.players, sessionId: w.sid });
+    const c = r.combat;
+    ok(c.combatants.filter((x) => x.kind === 'player').every((x) => DnD.condizioni.has(x, 'sorpreso')), 'giocatori sorpresi');
+    ok(c.combatants.filter((x) => x.kind !== 'player').every((x) => !DnD.condizioni.has(x, 'sorpreso') && x.hidden), 'nemici nascosti, non sorpresi');
+    ok(DnD.condizioni.actionBlock(c.combatants[0]), 'il sorpreso non agisce');
+    ok(c.log.some((l) => l.text.includes('Buio') && l.text.includes('pioggia') && l.text.includes('22:00')), 'luce, meteo e ora nel log');
+    const t = FZ().table(w.st.factions);
+    eq(SC().endCheck(c, w.enc, t, 'giocatori'), null, 'ancora in corso');
+    c.round = 4;
+    eq(SC().endCheck(c, w.enc, t, 'giocatori').outcome, 'round', 'round massimo');
+    c.round = 1;
+    for (const x of c.combatants) if (x.kind !== 'player') x.hp = 0;
+    eq(SC().endCheck(c, w.enc, t, 'giocatori').outcome, 'vittoria', 'vittoria');
+    const sum = SC().summary(w.st, c, t, 'giocatori');
+    eq([sum.defeated.length, sum.xp, sum.down], [3, 600, []], 'riepilogo');
+    const lost = SC().normalizeEncounter({ end: [{ kind: 'sconfitta' }, { kind: 'obiettivo', rounds: 5, text: 'Sopravvivere' }] });
+    for (const x of c.combatants) x.hp = x.kind === 'player' ? 0 : 5;
+    eq(SC().endCheck(c, lost, t, 'giocatori').outcome, 'sconfitta', 'sconfitta');
+    for (const x of c.combatants) x.hp = 5;
+    c.round = 6;
+    eq(SC().endCheck(c, lost, t, 'giocatori'), { outcome: 'obiettivo', text: 'Sopravvivere (5 round)' }, 'obiettivo a tempo');
+  });
+
+  test('Scene: distribuzione delle ricompense (monete con conversione, oggetti, PE)', () => {
+    const w = sceneWorld();
+    const [p1, p2, p3] = w.st.players;
+    const item = w.st.equipment[0];
+    const lines = SC().distribute({ xp: 101, coins: { mo: 1, ma: 1 }, items: [{ equipmentId: item.id, qty: 2, to: 'h2' }, { equipmentId: 'sparito', qty: 1 }] }, [p1, p2], { coinsTo: 'dividi', equipment: w.st.equipment });
+    eq([p1.xp, p2.xp, p1.coins.ma, p1.coins.mr, p2.coins.ma, p2.coins.mr, p1.coins.mo], [50, 50, 5, 5, 5, 5, 0], '110 mr divisi in due: 5 ma e 5 mr a testa');
+    eq(p2.inventory.find((x) => x.equipmentId === item.id).qty, 2, 'oggetto al giocatore scelto');
+    ok(lines.some((l) => l.includes('non più presente')), 'oggetto eliminato: avviso');
+    SC().distribute({ coins: { mo: 1 } }, [p1, p2, p3], { coinsTo: 'dividi', equipment: [] });
+    eq([p1.coins.ma - 5, p1.coins.mr - 5, p3.coins.ma, p3.coins.mr], [3, 4, 3, 3], '1 mo in tre: il resto al primo');
+    SC().distribute({ coins: { mp: 2 } }, [p1, p2], { coinsTo: 'h2', equipment: [] });
+    eq(p2.coins.mp, 2, 'tutte a un giocatore');
+    eq(DnD.dati.normalizeCreature(p1, true).xp, 50, 'PE sulla scheda');
+  });
+
+  test('Scene: effetti su quest e fazioni, vista dei giocatori, note', () => {
+    const w = sceneWorld();
+    const qid = DnD.mondoDati.EXAMPLES.quests[0].id;
+    w.scene.effects = [SC().normalizeEffect({ when: 'inizio', action: { kind: 'reputazione', factionId: 'neutrali', delta: 10 } }), SC().normalizeEffect({ when: 'fine', action: { kind: 'quest', questId: qid, op: 'avvia' } })];
+    const lines = SC().startScene(w.st, w.sid, 'a', new Date());
+    const v = FZ().view(w.st, w.sid);
+    eq([DnD.party.active(v.parties, v.world).reputation.neutrali, lines.length], [10, 1], 'reputazione all\'inizio');
+    SC().concludeScene(w.st, w.sid, 'a', 'vittoria', new Date());
+    eq(DnD.quest.statusOf(v.world.quests, qid), 'attiva', 'quest avviata alla fine');
+    w.scene.readAloud = '<p>Il fiume ruggisce.</p>';
+    w.scene.encounters[0].tactics = 'segreto';
+    eq(SC().statoScenaPerGiocatore(w.scene).readAloud, null, 'testo nascosto finché non rivelato');
+    w.scene.revealed = true;
+    const pv = SC().statoScenaPerGiocatore(w.scene);
+    eq([pv.readAloud, Object.keys(pv)], ['<p>Il fiume ruggisce.</p>', ['id', 'title', 'kind', 'status', 'readAloud']], 'solo ciò che il master rivela');
+    const se = S().current(w.st);
+    const page = DnD.note.addPage(se.pages, 'Il guado', 'pg1');
+    w.scene.pageId = page.id;
+    eq(SC().sceneForPage(w.st, w.sid, 'pg1').id, 'a', 'dalla pagina alla scena');
+    eq(SC().normalizeScene({ readAloud: '<p onclick="x()">ok<script>bad()</script></p>' }).readAloud.includes('script'), false, 'testo sanificato come le note');
+    eq([SC().parseCells('b4, AA10 ,x').cells, SC().parseCells('b4, AA10 ,x').bad, SC().cellsText([{ x: 1, y: 3 }])], [[{ x: 1, y: 3 }, { x: 26, y: 9 }], ['x'], 'B4'], 'celle come sulla griglia');
+  });
+
+  test('Scene: «Genera incontro» dalla libreria con PE adatti al party', () => {
+    const w = sceneWorld();
+    const res = SC().generate(w.st, w.sid, { players: w.st.players, target: 'medio', theme: 'tipo:bestia', rng: () => 1 });
+    eq([res.total, res.options.length, res.options[0].names, res.options[0].result.band], [1, 1, ['1× Cinghiale delle paludi'], 'medio'], 'un cinghiale è Medio per 4 eroi di 1°');
+    const all = SC().generate(w.st, w.sid, { players: w.st.players, target: 'mortale', theme: '', rng: () => 1 });
+    ok(all.options.length > 0 && all.options.length <= DnD.sceneDati.GEN_OPTIONS && all.options.every((o) => o.result.band === 'mortale'), 'tutte nella fascia scelta');
+    ok(all.options.every((o) => o.rows.every((r) => r.ref.kind === 'npc' && w.st.npcs.some((n) => n.id === r.ref.id))), 'righe di creature della libreria');
+    eq(SC().candidates(w.st, w.sid, 'tipo:drago').map((c) => c.id), ['esempio-drago-cenere'], 'tema per tipo');
+    eq(SC().generate(w.st, w.sid, { players: w.st.players, target: 'facile', theme: 'tipo:drago' }).options, [], 'nessun gruppo adatto');
+  });
+
+  test('Scene: riferimenti mancanti senza errori', () => {
+    const w = sceneWorld();
+    const s = SC().normalizeScene({ title: 'Rotta', map: { gridId: 'nope' }, npcIds: ['nope'], eventIds: ['nope'], links: [{ sceneId: 'nope' }], pageId: 'nope',
+      encounters: [{ name: 'Vuoto', creatures: [{ ref: { kind: 'npc', id: 'nope' } }, { ref: { kind: 'npc', id: CINGHIALE }, qty: 1 }] }], treasure: { items: [{ equipmentId: 'nope' }] } });
+    const m = SC().missingRefs(w.st, s, w.sid);
+    for (const k of ['mappa eliminata', 'creatura di «Vuoto» eliminata', 'NPC eliminato', 'evento eliminato', 'scena collegata eliminata', 'pagina delle note eliminata', 'oggetto del tesoro eliminato']) ok(m.includes(k), k);
+    const r = SC().buildCombat(w.st, s, s.encounters[0], { players: w.st.players, sessionId: w.sid });
+    eq([r.missing.length, r.combat.combatants.length], [1, 5], 'creatura mancante saltata, mappa vuota');
+    ok(r.lines.some((l) => l.includes('non più presente')) && r.lines.some((l) => l.includes('vuota')), 'avvisi nel log');
+    eq(SC().line([s]).edges[0].missing, true, 'freccia disattivata');
+    eq(SC().evaluate(w.st, s.encounters[0], w.st.players, w.sid).count, 1, 'difficoltà con le sole creature presenti');
+  });
+
+  test('Scene: dati v16, ripresa dopo la chiusura, esportazione e importazione', () => {
+    const w = sceneWorld();
+    const mig = DnD.dati.normalizeState({ version: 15, races: [], npcs: [], players: [{ id: 'p', name: 'P' }] });
+    eq([mig.version, mig.scenes, mig.encounters.length, S().current(mig).currentSceneId, mig.players[0].xp], [DnD.dati.VERSION, [], 3, '', 0], 'v15 → v16: nessuna scena, esempi');
+    eq(DnD.dati.normalizeState({ version: 16, encounters: [] }).encounters, [], 'archivio già v16: niente esempi aggiunti');
+    SC().startScene(w.st, w.sid, 'a', new Date());
+    const r = SC().buildCombat(w.st, w.scene, w.enc, { players: w.st.players, sessionId: w.sid });
+    S().current(w.st).combat = r.combat;
+    SC().recordLaunch(w.scene, w.enc, r.combat.id, new Date());
+    const back = DnD.dati.importJSON(DnD.dati.exportJSON(w.st));
+    const bs = back.scenes.find((s) => s.id === 'a');
+    eq([S().current(back).currentSceneId, bs.status, bs.encounters[0].run.launched, S().current(back).combat.scene.sceneId, bs.history.length], ['a', 'in-corso', 1, 'a', 2], 'riaperta l\'app: scena, lancio e combattimento');
+    eq(SC().ofCombat(back, S().current(back).combat).enc.name, 'Cinghiali', 'combattimento ricollegato alla scena');
+    // File di sessione: id nuovi e riferimenti rimappati (scene collegate, creature della sessione, griglie).
+    w.st.npcs.push(DnD.dati.normalizeCreature({ id: 'bandito', name: 'Bandito', level: 3, sessionId: w.sid }, false));
+    w.st.encounters.push(SC().normalizeEncounter({ id: 'lib', name: 'Banditi', creatures: [{ ref: { kind: 'npc', id: 'bandito' }, qty: 2 }], sessionId: w.sid }));
+    w.scene.encounters[0].creatures.push(SC().normalizeRow({ ref: { kind: 'npc', id: 'bandito' } }));
+    const file = JSON.parse(JSON.stringify(S().exportSession(w.st, w.sid)));
+    const dst = DnD.dati.emptyState();
+    S().importSession(dst, file, DnD.dadi.uid);
+    const nsid = S().current(dst).id;
+    const ns = dst.scenes.filter((s) => s.sessionId === nsid);
+    const guado = ns.find((s) => s.title === 'Il guado');
+    const bandit = dst.npcs.find((n) => n.name === 'Bandito');
+    eq([ns.length, guado.links.every((l) => ns.some((s) => s.id === l.sceneId)), guado.map.gridId === dst.savedGrids.find((g) => g.name === 'Radura').id], [3, true, true], 'scene e collegamenti');
+    eq([guado.encounters[0].creatures[1].ref.id, dst.encounters.find((e) => e.name === 'Banditi').creatures[0].ref.id, guado.encounters[0].creatures[0].ref.id], [bandit.id, bandit.id, CINGHIALE], 'creature della sessione rimappate, condivise uguali');
+    S().duplicateSession(w.st, w.sid, 'Copia', DnD.dadi.uid);
+    const dsid = S().current(w.st).id;
+    const dup = w.st.scenes.filter((s) => s.sessionId === dsid);
+    eq([dup.length, dup.find((s) => s.title === 'Il guado').links.every((l) => dup.some((s) => s.id === l.sceneId))], [3, true], 'duplicazione della sessione');
+  });
+
+  test('Scene UI: la difficoltà dell\'incontro si aggiorna mentre cambiano le creature', async () => {
+    const mem = new Map();
+    const backend = { name: 'memoria', get: async (k) => (mem.has(k) ? mem.get(k) : null), set: async (k, v) => { mem.set(k, v); }, clear: async () => mem.clear() };
+    const prevStore = DnD.store;
+    DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;overflow:hidden;z-index:-1';
+    document.body.append(box);
+    try {
+      DnD.store.update((s) => { const sid = S().current(s).id; s.players = [1, 2, 3, 4].map((i) => DnD.dati.normalizeCreature({ id: 'h' + i, name: 'Eroe ' + i, level: 1, sessionId: sid }, true)); });
+      DnD.sezioni.scene.render(box);
+      ok(box.querySelector('.empty'), 'scaletta vuota');
+      box.querySelector('#scheda-scene-incontri').click();
+      ok(box.querySelectorAll('.card').length === 3, 'tre incontri d\'esempio in libreria');
+      [...box.querySelectorAll('button')].find((b) => b.textContent === '+ Nuovo incontro').click();
+      [...box.querySelectorAll('button')].find((b) => b.textContent === '+ Creatura').click();
+      const badge = () => box.querySelector('.diff-indicator .diff-badge').textContent;
+      eq(badge(), 'Medio', 'un cinghiale');
+      const qty = box.querySelector('.enc-row input[aria-label="Quantità"]');
+      qty.value = '2';
+      qty.dispatchEvent(new Event('input'));
+      eq(badge(), 'Mortale', 'due cinghiali');
+      DnD.sezioni.scene.reset();
     } finally {
       box.remove();
       DnD.store = prevStore;
