@@ -63,12 +63,14 @@
       (stats.spell ? ' · CD ' + stats.spell.dc : '');
   }
 
-  // cfg: { saveLabel, allowEdit, onSaved(creatures, edit) }
+  // cfg: { saveLabel, allowEdit, onSaved(creatures, edit), baseInput: { party, creatures } (setup del combattimento) }
   function open(cfg) {
     const st = DnD.store.state;
     const customs = customClasses();
     const body = el('div', { class: 'generator' });
-    const dialog = openDialog('Genera nemico', body, []);
+    // Difficoltà: i nemici generati (CS dal livello) insieme a quelli già scelti nel setup, contro il party.
+    const difficulty = DnD.uiDifficolta.indicator({ title: 'Difficoltà con questi nemici', compact: true, onBalance: () => balance() });
+    const dialog = openDialog('Genera nemico', el('div', {}, difficulty.node, body), []);
     dialog.classList.add('wide');
     let opts = null;
     let results = [];
@@ -114,6 +116,28 @@
       generate();
     });
 
+    const DF = DnD.difficolta;
+    // Nemici generati come un solo gruppo (stesso livello, stesso CS); gli altri sono fissi.
+    function encounterInput() {
+      const base = cfg.baseInput || { party: DF.partyFrom(DnD.uiDifficolta.partyPlayers().players), creatures: [] };
+      const lv = results.length ? results[0].creature.level : readNumber(inp.level);
+      const qty = results.length ? results.length : inp.quantity.value.trim() === '' ? 1 : readNumber(inp.quantity);
+      const gen = Number.isInteger(lv) && lv >= GEN.MIN_LEVEL && lv <= GEN.MAX_LEVEL && Number.isInteger(qty) && qty > 0
+        ? [{ id: '__generati', name: 'Nemici generati (liv. ' + lv + ')', cr: DF.standardCr(lv), count: Math.min(qty, GEN.MAX_QUANTITY) }] : [];
+      return { party: base.party, creatures: base.creatures.map((g) => Object.assign({}, g, { fixed: true })).concat(gen) };
+    }
+    const refreshDifficulty = () => difficulty.update(encounterInput());
+    function balance() {
+      DnD.uiDifficolta.balanceDialog(encounterInput(), (i, count) => {
+        if (count < 1) { toast('Già senza nemici generati l\'incontro ha questa difficoltà.'); return; }
+        inp.quantity.value = String(count);
+        if (results.length) generate();
+        else refreshDifficulty();
+      }, GEN.MAX_QUANTITY);
+    }
+    inp.level.addEventListener('input', () => { if (!results.length) refreshDifficulty(); });
+    inp.quantity.addEventListener('input', () => { if (!results.length) refreshDifficulty(); });
+
     function readOptions() {
       const custom = /^custom:(\d+)$/.exec(inp.cls.value);
       return {
@@ -154,6 +178,7 @@
     }
 
     function renderPreview() {
+      refreshDifficulty();
       const single = results.length === 1;
       clear(body).append(
         warningsBox(),
@@ -164,7 +189,7 @@
             creatureSheet(r.creature),
             el('button', { type: 'button', class: 'btn small', text: '🎲 Rigenera questo', onclick: () => { regenerateAt(i); renderPreview(); body.querySelectorAll('.gen-item')[i].open = true; } })))),
         el('div', { class: 'form-actions' },
-          el('button', { type: 'button', class: 'btn', text: '← Opzioni', onclick: () => clear(body).append(form) }),
+          el('button', { type: 'button', class: 'btn', text: '← Opzioni', onclick: () => { results = []; clear(body).append(form); refreshDifficulty(); } }),
           el('button', { type: 'button', class: 'btn', text: '🎲 Rigenera' + (single ? '' : ' tutti'), onclick: () => { results.forEach((r, i) => regenerateAt(i)); renderPreview(); } }),
           cfg.allowEdit && single ? el('button', { type: 'button', class: 'btn', text: 'Salva e modifica', onclick: () => save(true) }) : null,
           el('button', { type: 'button', class: 'btn primary', text: cfg.saveLabel || 'Salva', onclick: () => save(false) })));
@@ -179,6 +204,7 @@
     }
 
     body.append(form);
+    refreshDifficulty();
     inp.level.focus();
   }
 

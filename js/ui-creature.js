@@ -681,7 +681,7 @@
                   cfg.isPlayer ? null : el('span', { class: 'tag', text: 'Standard' }),
                   c.shared ? el('span', { class: 'tag accent', title: 'Visibile in tutte le sessioni', text: 'Condiviso' }) : null),
                 el('span', { class: 'ac-badge', title: 'Classe Armatura: ' + stats.ac.detail, text: 'CA ' + stats.ac.total })),
-              el('p', { class: 'muted', text: [raceName(c.raceId), C.className(c.classId), 'liv. ' + c.level].filter(Boolean).join(' · ') }),
+              el('p', { class: 'muted', text: [raceName(c.raceId), C.className(c.classId), 'liv. ' + c.level, cfg.isPlayer ? '' : 'GS ' + DnD.difficolta.crOf(c) + (c.crOverride ? '' : ' (stimato)')].filter(Boolean).join(' · ') }),
               cfg.isPlayer && c.playerName ? el('p', { class: 'small', text: 'Giocatore: ' + c.playerName }) : null,
               el('p', { text: 'PF ' + (cfg.isPlayer ? restHp(c) : c.maxHp) }),
               el('div', { class: 'stat-line' }, R.ABILITIES.map((ab) => el('span', { class: 'stat' },
@@ -732,7 +732,13 @@
         abilityCap: legendary ? numberInput(c.abilityCap, { min: 20, max: 30, 'data-key': 'abilityCap' }) : null,
         notes: el('textarea', { rows: 4, value: c.notes }),
         shared: el('input', { type: 'checkbox', checked: c.shared }),
+        // Solo i nemici: grado di sfida per la difficoltà degli incontri (vuoto = livello / 2, per difetto).
+        crOverride: cfg.isPlayer ? null : el('select', { 'data-key': 'crOverride' },
+          el('option', { value: '', text: 'Automatico' }),
+          DnD.creatureDati.CRS.map((x) => el('option', { value: x, text: x + ' (' + DnD.creature.formatXp(DnD.creature.xpForCr(x)) + ' PE)', selected: x === c.crOverride }))),
       };
+      // Testo della voce «Automatico» col CS stimato dal livello attuale.
+      const crAuto = () => { if (inp.crOverride) inp.crOverride.options[0].textContent = 'Automatico: ' + DnD.difficolta.standardCr(levelNow() || 1) + ' (livello / 2)'; };
 
       const getRace = () => races.find((r) => r.id === inp.raceId.value) || null;
       const levelNow = () => { const v = readNumber(inp.level); return isInt(v, minLv, maxLv) ? v : null; };
@@ -748,6 +754,7 @@
         weapons.refresh();
         gridSize.refresh();
         if (behavior) behavior.refresh();
+        crAuto();
       };
 
       const cls = classEditor(c, () => { refresh(); ac.classChanged(); spells.classChanged(); });
@@ -806,7 +813,8 @@
           field('Razza', inp.raceId, 'raceId'),
           field('Livello', inp.level, 'level', legendary ? '20-40 · rango leggendario = livello − 20' : null),
           field('Classe', cls.select, 'classId'),
-          legendary ? field('Tetto delle caratteristiche', inp.abilityCap, 'abilityCap', 'leggendari: 30') : null),
+          legendary ? field('Tetto delle caratteristiche', inp.abilityCap, 'abilityCap', 'leggendari: 30') : null,
+          inp.crOverride ? field('Grado di sfida (difficoltà)', inp.crOverride, 'crOverride', 'per la difficoltà degli incontri') : null),
         cls.customBox,
         icon.node,
         gridSize.node,
@@ -841,6 +849,7 @@
           notes: inp.notes.value.trim(),
         }, abilities.readAsi(), cls.read(), hp.read(), ac.read(), saves.read(), gridSize.read(), behavior ? behavior.read() : {}, { spellcasting: spells.read() }, inventory ? inventory.read() : {}, worldRefs.read());
         if (cfg.isPlayer) data.playerName = inp.playerName.value.trim();
+        else data.crOverride = inp.crOverride.value;
         // Leggendari: tipo, tetto e dati del percorso e delle trasformazioni restano quelli della scheda.
         if (legendary) Object.assign(data, { type: 'leggendario', abilityCap: readNumber(inp.abilityCap), legend: c.legend });
         else if (c.legendArchive) data.legendArchive = c.legendArchive;

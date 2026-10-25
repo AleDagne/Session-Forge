@@ -4831,6 +4831,164 @@
     eq(DnD.dati.normalizeCombatant({ name: 'Y' }).tempHp, 0, 'combattimenti salvati prima');
   });
 
+  // --- Difficoltà degli incontri (difficolta.js) ---
+  const DF = () => DnD.difficolta;
+  const lv = (...levels) => levels.map((l, i) => ({ id: 'p' + i, name: 'P' + i, level: l }));
+  const th4 = (r) => [r.facile, r.medio, r.difficile, r.mortale];
+
+  test('Difficoltà: soglie del party per livelli diversi', () => {
+    eq(th4(DF().partyThresholds([1, 1, 1, 1])), [100, 200, 300, 400], 'quattro di 1° livello');
+    eq(th4(DF().partyThresholds([5, 3])), [325, 650, 975, 1500], '5° + 3°');
+    eq(th4(DF().partyThresholds([20])), [2800, 5700, 8500, 12700], '20°');
+    eq(th4(DF().partyThresholds([11, 12, 13])), [2900, 5800, 8800, 13200], '11° + 12° + 13°');
+    eq([th4(DF().partyThresholds([])), DF().partyThresholds([]).size], [[0, 0, 0, 0], 0], 'party vuoto');
+  });
+
+  test('Difficoltà: moltiplicatori per numero di creature, party piccolo e grande', () => {
+    const f = (n, size) => DF().multiplier(n, size).factor;
+    eq([1, 2, 3, 6, 7, 10, 11, 14, 15, 30].map((n) => f(n, 4)), [1, 1.5, 2, 2, 2.5, 2.5, 3, 3, 4, 4], 'party di 4');
+    eq([1, 2, 3, 7, 15].map((n) => f(n, 2)), [1.5, 2, 2.5, 3, 5], 'party di 2: un gradino su (oltre ×4 = ×5)');
+    eq([1, 2, 3, 15].map((n) => f(n, 6)), [0.5, 1, 1.5, 3], 'party di 6: un gradino giù (sotto ×1 = ×0,5)');
+    eq([f(1, 3), f(1, 5)], [1, 1], '3 e 5 giocatori: nessuna correzione');
+    eq([f(0, 4), DF().multiplier(2, 2).shift, DF().multiplier(2, 7).shift], [0, 1, -1]);
+  });
+
+  test('Difficoltà: PE grezzi e modificati con CS frazionari, ricompensa', () => {
+    const r = DF().evaluate({ party: lv(1, 1, 1, 1), creatures: [{ cr: '1/8', count: 1 }, { cr: '1/4', count: 2 }, { cr: '1/2', count: 1 }] });
+    eq([r.rawXp, r.count, r.multiplier, r.adjustedXp, r.band, r.rewardXp, r.perPlayerXp], [225, 4, 2, 450, 'mortale', 225, 56]);
+    const z = DF().evaluate({ party: lv(1), creatures: [{ cr: '0', count: 3 }, { cr: '1/4', count: 0 }] });
+    eq([z.rawXp, z.count, z.groups.length, z.multiplier], [30, 3, 1, 2.5], 'CS 0 e gruppi vuoti');
+    ok(DF().detailText(r).includes('Moltiplicatore ×2') && DF().detailText(r).includes('56 a testa'), 'dettaglio del calcolo');
+    eq(DF().evaluate({ party: [], creatures: [{ cr: '1', count: 1 }] }).band, null, 'senza party nessuna fascia');
+    eq(DF().evaluate({ party: lv(3), creatures: [] }).warnings, [DnD.difficoltaDati.WARNINGS.noCreatures]);
+  });
+
+  test('Difficoltà: fasce al confine (soglia inclusa, «oltre» solo sopra il doppio del mortale)', () => {
+    const th = DF().partyThresholds([1, 1, 1, 1]);
+    const cases = { 0: 'banale', 99: 'banale', 100: 'facile', 199: 'facile', 200: 'medio', 299: 'medio', 300: 'difficile', 399: 'difficile', 400: 'mortale', 800: 'mortale', 801: 'oltre' };
+    for (const [xp, band] of Object.entries(cases)) eq(DF().classify(Number(xp), th), band, xp + ' PE');
+    const s = DF().scale(DF().evaluate({ party: lv(1, 1, 1, 1), creatures: [{ cr: '1/4', count: 3 }] }));
+    eq([s.max, s.segments.map((x) => x.band), Math.round(s.marker)], [800, ['banale', 'facile', 'medio', 'difficile', 'mortale'], 38], 'barra: fasce e segnaposto');
+  });
+
+  test('Difficoltà: CS di nemici standard, creature e boss (CS effettivo)', () => {
+    const std = DnD.dati.normalizeCreature({ name: 'Bandito', level: 7 }, false);
+    eq([std.crOverride, DF().crOf(std)], ['', '3'], 'standard: livello / 2');
+    eq([DF().standardCr(1), DF().standardCr(2), DF().standardCr(30)], ['0', '1', '15'], 'per difetto, minimo 0');
+    eq(DF().crOf(DnD.dati.normalizeCreature({ name: 'Capo', level: 7, crOverride: '1/2' }, false)), '1/2', 'CS scritto sulla scheda');
+    eq(DnD.dati.normalizeCreature({ name: 'X', crOverride: '99' }, false).crOverride, '', 'CS non valido');
+    ok(!('crOverride' in DnD.dati.normalizeCreature({ name: 'Eroe', level: 4 }, true)), 'non sui giocatori');
+    eq(DF().crOf(DnD.dati.normalizeCreature({ name: 'Lupo', type: 'creatura', cr: '1/4' }, false)), '1/4');
+    const boss = DnD.dati.normalizeCreature({ name: 'Re', type: 'boss', cr: '5', boss: { effectiveCr: '8' } }, false);
+    eq([boss.boss.effectiveCr, DF().crOf(boss)], ['8', '8'], 'boss: CS effettivo');
+    eq(DF().crOf(DnD.dati.normalizeCreature({ name: 'Re', type: 'boss', cr: '5' }, false)), '5', 'vuoto = quello della scheda');
+    const r = DF().evaluate({ party: lv(5, 5, 5, 5), creatures: [DF().group(boss, 1)] });
+    eq([r.rawXp, r.band], [3900, 'difficile'], 'PE dal CS effettivo');
+    ok(r.warnings.includes(DnD.difficoltaDati.WARNINGS.boss), 'avviso «incontro in fasi»');
+    ok(DF().evaluate({ party: lv(1, 1), creatures: [{ cr: '5', count: 1 }] }).warnings.includes(DnD.difficoltaDati.WARNINGS.single), 'un solo mostro molto forte');
+    eq(DnD.boss.promote(DnD.dati.normalizeCreature({ name: 'Capo', level: 9, crOverride: '4' }, false), {}).cr, '4', 'promozione a boss con il CS della scheda');
+  });
+
+  test('Difficoltà: NPC neutrali, alleati e fazioni non ostili esclusi', () => {
+    const t = FZ().table(FZ().builtinFactions('s'));
+    const c = (x, rules) => DF().counts(x, t, 'giocatori', rules);
+    eq([c({ id: 'a', faction: 'nemici' }), c({ id: 'b', faction: 'neutrali' }), c({ id: 'c', faction: 'giocatori' })], [true, false, false], 'per fazione');
+    const npc = (attitude, extra) => Object.assign({ id: 'n', faction: 'neutrali', npc: { attitude, defend: 'se' } }, extra);
+    eq([c(npc('indifferente')), c(npc('indifferente', { hostileTo: ['giocatori'] }))], [false, true], 'NPC: solo se ostile (anche personale)');
+    const opt = { countNeutralNpcs: true };
+    eq([c(npc('indifferente'), opt), c(npc('amichevole'), opt), c(npc('indifferente', { faction: 'giocatori' }), opt), c({ id: 'z', faction: 'neutrali' }, opt)],
+      [true, false, false, false], 'opzione: i neutrali che possono diventare ostili, mai amichevoli e alleati (né i non NPC)');
+  });
+
+  test('Difficoltà: leggendari (livello 21-40) e tabelle personalizzate', () => {
+    const W = DnD.difficoltaDati.WARNINGS;
+    const leg = DF().evaluate({ party: lv(20, 30), creatures: [{ cr: '20', count: 1 }] });
+    eq([th4(leg.thresholds), leg.thresholds.legendary], [[5600, 11400, 17000, 25400], 'riga20'], 'riga del 20');
+    ok(leg.warnings.includes(W.legendary), 'avviso');
+    const manual = { legendary: { 30: [3000, 6000, 9000, 14000], 15: [1, 2, 3, 4] } };
+    const m = DF().evaluate({ party: lv(20, 30), creatures: [{ cr: '20', count: 1 }] }, manual);
+    eq([th4(m.thresholds), m.thresholds.legendary, Object.keys(DF().normalizeRules(manual).legendary)], [[5800, 11700, 17500, 26700], 'manuale', ['30']], 'soglie a mano (solo 21-40)');
+    const custom = { custom: true, thresholds: [[10, 20, 30, 40]], multipliers: [{ min: 1, factor: 1 }, { min: 2, factor: 3 }] };
+    const enc = { party: lv(1, 1, 1, 1), creatures: [{ cr: '0', count: 2 }] };
+    eq([DF().evaluate(enc).band, DF().evaluate(enc).adjustedXp], ['banale', 30], 'Guida');
+    const cr = DF().evaluate(enc, custom);
+    eq([th4(cr.thresholds), cr.adjustedXp, cr.band], [[40, 80, 120, 160], 60, 'facile'], 'tabella personalizzata');
+    eq(th4(DF().evaluate(enc, Object.assign({}, custom, { custom: false })).thresholds), [100, 200, 300, 400], 'spenta: tabelle della Guida');
+    eq(DF().evaluate({ party: lv(1), creatures: [{ cr: '0', count: 2 }] }, custom).multiplier, 5, 'party piccolo oltre l\'ultima riga');
+    eq(DF().normalizeRules({ multipliers: [{ min: 2, factor: 9 }] }).multipliers, DnD.difficoltaDati.MULTIPLIERS, 'senza la riga per 1 creatura: quelle della Guida');
+    eq(DF().normalizeRules({ thresholds: [['x', 5]] }).thresholds[0], [25, 5, 75, 100], 'valori non validi: della Guida');
+  });
+
+  test('Difficoltà: «Bilancia» e budget per CS', () => {
+    const party = lv(1, 1, 1, 1);
+    const one = { party, creatures: [{ id: 'g', name: 'Goblin', cr: '1/4', count: 1 }] };
+    const pick = (target) => DF().balance(one, target)[0];
+    eq([pick('difficile').to, pick('difficile').result.band, pick('difficile').result.adjustedXp], [3, 'difficile', 300], 'difficile: 3 goblin');
+    eq([pick('mortale').to, pick('medio').to, pick('facile').to], [4, null, 2], 'mortale 4, medio impossibile, facile 2');
+    eq(one.creatures[0].count, 1, 'nessuna modifica senza conferma');
+    const mixed = { party, creatures: [{ id: 'n', name: 'NPC', cr: '1/2', count: 1, fixed: true }, { id: 'g', name: 'Goblin', cr: '1/4', count: 0 }] };
+    const props = DF().balance(mixed, 'medio');
+    eq([props.length, props[0].index, props[0].to, DF().balance(mixed, 'difficile')[0].to], [1, 1, 1, null], 'i gruppi fissi contano ma non si propongono');
+    eq(DF().balance({ party, creatures: [{ id: 'g', cr: '1/4', count: 3 }] }, 'difficile')[0].to, 3, 'già nella fascia');
+    eq(DF().budget('1/4', party), { medio: { count: 3, band: 'difficile' }, difficile: { count: 3, band: 'difficile' }, mortale: { count: 4, band: 'mortale' } }, 'budget CS 1/4');
+    eq(DF().budget('5', party).medio, { count: 1, band: 'oltre' }, 'già uno basta');
+    eq(DF().budget('1', lv(5, 5, 5, 5)), { medio: { count: 5, band: 'medio' }, difficile: { count: 7, band: 'difficile' }, mortale: { count: 9, band: 'mortale' } }, 'budget CS 1 a 5° livello');
+  });
+
+  test('Difficoltà: dati v15, migrazione, esportazione e importazione', () => {
+    const mig = DnD.dati.normalizeState({ version: 14, races: [], npcs: [{ id: 'b', name: 'Bandito', level: 6 }, { id: 'r', name: 'Re', type: 'boss', cr: '4' }], players: [] });
+    eq([mig.version, mig.npcs[0].crOverride, mig.npcs[1].boss.effectiveCr, mig.difficultyRules], [DnD.dati.VERSION, '', '', DF().defaultRules()], 'v14 → v15');
+    eq(DnD.dati.emptyState().difficultyRules, DF().defaultRules(), 'archivio nuovo');
+    const st = DnD.dati.emptyState();
+    const sid = S().current(st).id;
+    st.npcs.push(DnD.dati.normalizeCreature({ id: 'cap', name: 'Capitano', level: 8, crOverride: '6', sessionId: sid }, false));
+    st.npcs.push(DnD.dati.normalizeCreature({ id: 'rex', name: 'Rex', type: 'boss', cr: '5', boss: { effectiveCr: '7' }, sessionId: sid }, false));
+    st.difficultyRules = DF().normalizeRules({ custom: true, thresholds: [[10, 20, 30, 40]], legendary: { 25: [1, 2, 3, 4] }, countNeutralNpcs: true });
+    const back = DnD.dati.importJSON(DnD.dati.exportJSON(st));
+    eq([back.npcs.find((x) => x.id === 'cap').crOverride, back.npcs.find((x) => x.id === 'rex').boss.effectiveCr, back.difficultyRules], ['6', '7', st.difficultyRules], 'archivio');
+    const dst = DnD.dati.emptyState();
+    S().importSession(dst, JSON.parse(JSON.stringify(S().exportSession(st, sid))), DnD.dadi.uid);
+    eq([dst.npcs.find((x) => x.name === 'Capitano').crOverride, dst.npcs.find((x) => x.name === 'Rex').boss.effectiveCr], ['6', '7'], 'file di sessione');
+  });
+
+  test('Difficoltà UI: l\'indicatore del setup si aggiorna mentre cambiano nemici e giocatori', async () => {
+    const mem = new Map();
+    const backend = { name: 'memoria', get: async (k) => (mem.has(k) ? mem.get(k) : null), set: async (k, v) => { mem.set(k, v); }, clear: async () => mem.clear() };
+    const prevStore = DnD.store;
+    DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;overflow:hidden;z-index:-1';
+    document.body.append(box);
+    try {
+      DnD.store.update((s) => {
+        const sid = S().current(s).id;
+        s.npcs = [DnD.dati.normalizeCreature({ id: 'gob', name: 'Goblin', type: 'creatura', cr: '1/4', sessionId: sid }, false)];
+        s.players = [1, 2, 3, 4].map((i) => DnD.dati.normalizeCreature({ id: 'h' + i, name: 'Eroe ' + i, level: 1, sessionId: sid }, true));
+        s.parties = [];
+      });
+      DnD.sezioni.combattimento.render(box);
+      const badge = () => box.querySelector('.diff-indicator .diff-badge').textContent;
+      const meter = () => box.querySelector('.diff-bar');
+      eq(badge(), '—', 'nessun nemico');
+      const qty = box.querySelector('input[aria-label="Quantità di Goblin"]');
+      qty.value = '3';
+      qty.dispatchEvent(new Event('input'));
+      eq([badge(), meter().getAttribute('aria-valuenow'), meter().getAttribute('aria-valuetext')], ['Difficile', '300', 'Difficile, 300 PE modificati'], '3 goblin, 4 eroi');
+      const checks = box.querySelectorAll('.pick-list input[type="checkbox"]');
+      checks[0].checked = true;
+      checks[0].dispatchEvent(new Event('change'));
+      eq(badge(), 'Oltre il mortale', 'solo un giocatore scelto');
+      const faction = box.querySelectorAll('select[aria-label="Fazione"]')[4];
+      faction.value = 'neutrali';
+      faction.dispatchEvent(new Event('change'));
+      eq(badge(), '—', 'nemico neutrale: non conta');
+      ok(box.querySelector('.diff-bar').getAttribute('aria-label') === 'Difficoltà dell\'incontro', 'aria-label in italiano');
+    } finally {
+      box.remove();
+      DnD.store = prevStore;
+    }
+  });
+
   async function runTests() {
     const results = [];
     for (const { name, fn } of tests) {

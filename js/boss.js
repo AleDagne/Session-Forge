@@ -72,6 +72,8 @@
       phases: normalizePhases(b.phases),
       scaleByPlayers: Boolean(b.scaleByPlayers),
       aura: int(b.aura, 0, 0, MAX_AURA),
+      // Difficoltà: grado di sfida effettivo (azioni leggendarie e fasi), vuoto = quello della scheda.
+      effectiveCr: DnD.creatureDati.CRS.includes(String(b.effectiveCr)) ? String(b.effectiveCr) : '',
     };
   }
 
@@ -95,7 +97,9 @@
     const abilities = d.abilities || c.abilities;
     const level = c.level || 1;
     const crs = DnD.creatureDati.CRS;
-    const cr = crs.includes(String(Math.min(30, Math.max(1, Math.round(level))))) ? String(Math.min(30, Math.max(1, Math.round(level)))) : '1';
+    // Il CS scritto sulla scheda standard, se c'è; altrimenti il livello.
+    const cr = crs.includes(String(c.crOverride)) ? String(c.crOverride)
+      : crs.includes(String(Math.min(30, Math.max(1, Math.round(level))))) ? String(Math.min(30, Math.max(1, Math.round(level)))) : '1';
     // Armi risolte (catalogo compreso): bonus per colpire e danno diventano attacchi della scheda.
     const actions = arr(d.weapons).slice(0, 10).map((w) => {
       const entry = w.equipmentId ? arr(ctx.catalog).find((e) => e.id === w.equipmentId && e.weapon) : null;

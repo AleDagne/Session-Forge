@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 14;
+  const VERSION = 15;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -144,6 +144,7 @@
       version: VERSION, races: defaultRaces(), npcs: defaultCreatures(session.id), players: [], structures: defaultStructures(),
       equipment: DnD.attrezzatura.defaults(), mapObjects: defaultMapObjects(), tilesets: [], spells: defaultSpells(), savedGrids: [],
       biomes: DnD.biomi.examples(), events: DnD.eventi.examples(), pathTemplates: [DnD.percorso.exampleTemplate()], customConditions: [],
+      difficultyRules: DnD.difficolta.defaultRules(),
       // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
       factions: DnD.fazioni.builtinFactions(session.id).concat(world.factions), parties: [DnD.party.defaultParty(session.id, [])],
       cities: world.cities, worldNpcs: world.worldNpcs, quests: world.quests,
@@ -341,6 +342,8 @@
       origin: c.generated && c.origin && typeof c.origin === 'object'
         ? { raceId: str(c.origin.raceId, 64), level: int(c.origin.level, 1, 1, 20), classId: str(c.origin.classId, 40) } : null,
     };
+    // Difficoltà (difficolta.js): grado di sfida dei nemici standard, vuoto = stimato dal livello (livello / 2).
+    if (!isPlayer) out.crOverride = DnD.creatureDati.CRS.includes(String(c.crOverride)) ? String(c.crOverride) : '';
     // In modalità "da classe" le competenze sono sempre quelle della classe.
     if (out.saveMode === 'classe') {
       const info = DnD.classi.classInfo(out.classId, out.customClass);
@@ -1041,6 +1044,8 @@
       pathTemplates: unique(arr(raw.pathTemplates).map(DnD.percorso.normalizeTemplate)),
       // Condizioni personalizzate (libreria globale, condizioni.js).
       customConditions: unique(arr(raw.customConditions).map(DnD.condizioni.normalizeCustom)),
+      // Difficoltà degli incontri: tabelle personalizzate (regole della casa), soglie dei leggendari, NPC neutrali.
+      difficultyRules: DnD.difficolta.normalizeRules(raw.difficultyRules),
       factions,
       parties: unique(arr(raw.parties).map((p) => owned(DnD.party.normalizeParty(p)))),
       cities: unique(arr(raw.cities).map((c) => owned(DnD.citta.normalizeCity(c)))),

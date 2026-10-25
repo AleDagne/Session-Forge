@@ -144,13 +144,14 @@
       } }),
       el('p', { class: 'muted small', text: 'Con «Riduci animazioni» il risultato compare subito, senza movimento. Spazio salta l\'animazione. I suoni dei dadi sono nel gruppo «Suoni».' }));
     const soundGroup = DnD.uiSuoni.settingsGroup();
+    const difficultyGroup = DnD.uiDifficolta.settingsGroup();
     const panel = el('div', { class: 'settings-panel', id: 'settings-panel', role: 'dialog', 'aria-label': 'Impostazioni', hidden: true },
       el('h2', { text: 'Impostazioni' }),
       radios('tema', 'Tema', [['chiaro', 'Chiaro'], ['scuro', 'Scuro'], ['auto', 'Automatico']], 'theme'),
       radios('testo', 'Dimensione del testo', [['piccolo', 'Piccola'], ['normale', 'Normale'], ['grande', 'Grande']], 'textSize'),
       el('label', { class: 'check' }, reduce, ' Riduci animazioni'),
       el('label', { class: 'check', title: 'Barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel combattimento' }, bossFx, ' Effetti boss'),
-      movementGroup, combatGroup, restGroup, diceGroup, soundGroup.node,
+      movementGroup, combatGroup, restGroup, difficultyGroup.node, diceGroup, soundGroup.node,
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Dati' }),
         el('div', { class: 'settings-actions' },
@@ -179,6 +180,7 @@
         else input.value = s[input.dataset.setting];
       }
       soundGroup.sync();
+      difficultyGroup.sync();
       for (const k of ['diceMenu', 'diceCombat', 'diceExploration', 'diceSpeed', 'diceColor']) { const n = panel.querySelector('[data-setting="' + k + '"]'); if (n) n.disabled = !s.diceAnim; }
       const dark = I.isDark();
       clear(themeBtn).append(svgIcon(dark ? ICONS.sun : ICONS.moon));

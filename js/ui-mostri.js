@@ -139,6 +139,7 @@
           el('button', { class: 'btn', text: '← Elenco', onclick: () => { viewing = null; render(); } }),
           el('button', { class: 'btn', text: '🖨 Stampa', onclick: () => window.print() }),
           el('button', { class: 'btn primary', text: 'Modifica', onclick: () => { editing = c.id; render(); } }))),
+      el('div', { class: 'no-print' }, DnD.uiDifficolta.budgetBox(DnD.difficolta.crOf(c)).node),
       statblock(c));
   }
 
@@ -371,6 +372,10 @@
           ' (danni per round ' + e.dpr + (e.from ? ' da «' + e.from + '»' : '') + (e.bonus !== null ? ', ' + (e.bonusKind === 'salvezza' ? 'CD ' + e.bonus : 'per colpire ' + signed(e.bonus)) : '') + '). Il CS dichiarato non viene modificato.' }));
     };
 
+    // Budget per la difficoltà: quante creature di questo CS (effettivo, per i boss) servono con il party attuale.
+    const budget = DnD.uiDifficolta.budgetBox(DnD.difficolta.crOf(m));
+    derived.push(() => budget.update(DnD.difficolta.crOf(m)));
+
     const errorsTop = el('div', { class: 'error', 'aria-live': 'polite' });
     const extra = opts.extra ? opts.extra(m, { refresh, icon, gridSize, isNew: !existing }) : null;
     if (extra && extra.refresh) derived.push(extra.refresh);
@@ -379,6 +384,7 @@
       el('div', { class: 'grid-3' }, field('Nome', name, 'name'), field('Taglia', size), field('Tipo', ctype),
         field('Sottotipo', subtype), el('div', { class: 'field' }, el('label', { text: 'Allineamento' }), alignment, alignList), field('Grado di sfida', cr, 'cr')),
       el('p', { class: 'muted small' }, out(() => 'Competenza ' + signed(M.prof(m)) + ' · ' + M.formatXp(M.xpForCr(m.cr)) + ' PE · dado vita d' + M.hitDieFor(m.size))),
+      budget.node,
       icon.node, gridSize.node, opts.worldRefs === false ? null : DnD.uiMondo.worldRefsEditor(m, { live: true }).node, behavior.node,
       el('fieldset', {}, el('legend', { text: 'Difesa e punti ferita' }),
         el('div', { class: 'grid-3 tight' },

@@ -1,8 +1,26 @@
 # Ripresa del lavoro
 
-## Fase in corso: «FASE 2/5: Riposi e risorse» (23 ottobre 2026)
+## Fase in corso: «FASE 3/5: Difficoltà dell'incontro» (25 ottobre 2026)
 
-- Stato: **completata**, non ancora committata. Dati alla versione **14**, cache `session-forge-v28`.
+- Stato: **completata** e committata. Dati alla versione **15**, cache `session-forge-v29`.
+- `test.html`: **239/240** (10 test nuovi della fase, tutti passati). L'unico fallito è il noto «Boss UI: la
+  vignettatura…», che vuole una finestra visibile.
+- File nuovi: `js/difficolta-dati.js`, `js/difficolta.js`, `js/ui-difficolta.js`.
+- Toccati: `dati.js` (v15, `crOverride` dei nemici standard, `difficultyRules` nello stato), `boss.js`
+  (`effectiveCr`, promozione con il CS della scheda), `ui-combattimento.js` (indicatore e Bilancia nel setup,
+  generatore con la selezione), `ui-generatore.js`, `ui-creature.js` (campo CS e GS sulla carta), `ui-mostri.js` e
+  `ui-boss.js` (Budget, CS effettivo), `ui-esplorazione.js` (incontro casuale), `ui-impostazioni.js` (gruppo
+  Difficoltà), `css/style.css`, `index.html`, `test.html`, `sw.js`, README, CLAUDE.md.
+- Scelte: le tabelle personalizzate sono dati dell'archivio (non impostazioni del browser), così si esportano.
+  «Conta gli NPC che lo diventeranno» = opzione «NPC neutrali» (mai alleati o amichevoli). Bilancia cambia un solo
+  tipo alla volta; gli NPC piazzati restano fissi. L'indicatore negli «incontri» arriverà con la fase successiva
+  (il componente è `DnD.uiDifficolta.indicator`).
+- Da provare a mano: Bilancia e «Applica» nel setup e nel generatore; tabelle personalizzate salvate e ripristinate;
+  NPC ostili sulla griglia di partenza; leggendari con soglie a mano.
+
+## Fase precedente: «FASE 2/5: Riposi e risorse» (commit `1edcda1`)
+
+- Stato: completata. Dati alla versione 14, cache `session-forge-v28`.
 - `test.html`: **230/230** passati (7 test nuovi della fase). Attenzione: con la finestra di anteprima a 0×0 il test
   «Boss UI: la vignettatura…» fallisce (elementFromPoint): serve una finestra visibile.
 - File nuovi: `js/riposi-dati.js`, `js/riposi.js`, `js/ui-riposi.js`. Aiuto nuovo `DnD.ui.fill` in `ui-comune.js`.

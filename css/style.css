@@ -40,6 +40,15 @@
   --cond-token-bg: rgba(255, 255, 255, 0.92);
   --death-ok: #2f9e5b;
   --death-ko: #c2362b;
+  /* Difficoltà degli incontri: fasce della barra e testo sopra di esse */
+  --diff-banale: #9aa3b2;
+  --diff-facile: #2f9e5b;
+  --diff-medio: #c9a227;
+  --diff-difficile: #d9771f;
+  --diff-mortale: #c2362b;
+  --diff-oltre: #6b1f5c;
+  --diff-on: #14161c;
+  --diff-on-dark: #ffffff;
   --grid-bg: #e3e6eb;
   --grid-board: #fbfaf6;
   --grid-line: rgba(0, 0, 0, 0.10);
@@ -102,6 +111,14 @@
   --cond-token-bg: rgba(20, 22, 28, 0.92);
   --death-ok: #4cc27a;
   --death-ko: #ef6b5f;
+  --diff-banale: #6b7385;
+  --diff-facile: #3fb873;
+  --diff-medio: #d8b63a;
+  --diff-difficile: #ec8a35;
+  --diff-mortale: #ef6b5f;
+  --diff-oltre: #b05aa0;
+  --diff-on: #14161c;
+  --diff-on-dark: #14161c;
   --grid-bg: #14161c;
   --grid-board: #1d2129;
   --grid-line: rgba(255, 255, 255, 0.07);
@@ -1168,3 +1185,37 @@ input.short { max-width: 8rem; }
   .rep-list li { grid-template-columns: 1fr auto; }
   .rep-list li .rep-bar { grid-column: 1 / -1; }
 }
+
+/* ---------- Difficoltà degli incontri (ui-difficolta.js) ---------- */
+.diff-indicator { display: flex; flex-direction: column; gap: 0.35rem; }
+.diff-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.diff-head .btn { margin-left: auto; }
+.diff-badge { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; background: var(--hp-track); color: var(--text); }
+.diff-badge.diff-banale { background: var(--diff-banale); color: var(--diff-on); }
+.diff-badge.diff-facile { background: var(--diff-facile); color: var(--diff-on); }
+.diff-badge.diff-medio { background: var(--diff-medio); color: var(--diff-on); }
+.diff-badge.diff-difficile { background: var(--diff-difficile); color: var(--diff-on); }
+.diff-badge.diff-mortale { background: var(--diff-mortale); color: var(--diff-on-dark); }
+.diff-badge.diff-oltre { background: var(--diff-oltre); color: var(--diff-on-dark); }
+.diff-bar { position: relative; display: flex; height: 0.9rem; border-radius: 999px; overflow: visible; background: var(--hp-track); border: 1px solid var(--border); }
+.diff-seg { height: 100%; }
+.diff-seg:first-child { border-radius: 999px 0 0 999px; }
+.diff-seg:last-of-type { border-radius: 0 999px 999px 0; }
+.diff-seg.diff-banale { background: var(--diff-banale); }
+.diff-seg.diff-facile { background: var(--diff-facile); }
+.diff-seg.diff-medio { background: var(--diff-medio); }
+.diff-seg.diff-difficile { background: var(--diff-difficile); }
+.diff-seg.diff-mortale { background: var(--diff-mortale); }
+.diff-seg.diff-oltre { background: var(--diff-oltre); }
+.diff-marker { position: absolute; top: -0.3rem; bottom: -0.3rem; width: 0.3rem; margin-left: -0.15rem; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px var(--panel); transition: left 0.2s ease; }
+[data-reduce-motion] .diff-marker { transition: none; }
+.diff-warnings { margin: 0; padding-left: 1rem; }
+.diff-warnings:empty { display: none; }
+.diff-detail { margin: 0.25rem 0 0; white-space: pre-wrap; font-family: inherit; }
+.diff-budget p { margin: 0.25rem 0; }
+.diff-panel { margin-bottom: 1rem; }
+.diff-table { border-collapse: collapse; }
+.diff-table th, .diff-table td { padding: 0.15rem 0.3rem; text-align: center; }
+.diff-table input.qty { width: 5.5rem; }
+.diff-rules details { margin-top: 0.4rem; }
+.diff-proposals li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }

@@ -407,7 +407,9 @@
           el('div', { class: 'muted small', text: [p.effect !== 'nessuno' ? 'Effetto: ' + B.EFFECT_NAMES[p.effect] : '', p.temperament ? 'Temperamento: ' + p.temperament : '',
             p.enable.length ? 'Abilita: ' + p.enable.map((id) => (M.findAction(c, id) || { name: id }).name).join(', ') : '',
             p.disable.length ? 'Disabilita: ' + p.disable.map((id) => (M.findAction(c, id) || { name: id }).name).join(', ') : ''].filter(Boolean).join(' · ') })))),
-        el('p', { class: 'muted small', text: (c.boss.aura ? 'Aura: ' + c.boss.aura + ' celle · ' : '') + (c.boss.scaleByPlayers ? 'PF moltiplicati per il numero di giocatori' : 'PF fissi') }),
+        el('p', { class: 'muted small', text: (c.boss.aura ? 'Aura: ' + c.boss.aura + ' celle · ' : '') + (c.boss.scaleByPlayers ? 'PF moltiplicati per il numero di giocatori' : 'PF fissi') +
+          ' · CS effettivo ' + DnD.difficolta.crOf(c) + (c.boss.effectiveCr ? '' : ' (come la scheda)') }),
+        el('div', { class: 'no-print' }, DnD.uiDifficolta.budgetBox(DnD.difficolta.crOf(c)).node),
       ], { sideSwords: false }),
       DnD.uiMostri.statblock(c));
     root.append(f);
@@ -512,6 +514,16 @@
     drawPhases();
     const scale = el('input', { type: 'checkbox', checked: b.scaleByPlayers, onchange: (e) => { b.scaleByPlayers = e.target.checked; ctx.refresh(); } });
     const aura = numberInput(b.aura, { min: 0, max: B.MAX_AURA, class: 'qty', 'data-key': 'boss.aura', oninput: (e) => { b.aura = readNumber(e.target); ctx.refresh(); } });
+    // Difficoltà: CS effettivo (azioni leggendarie, fasi), vuoto = quello della scheda; avviso se diverso o se ha fasi o leggendarie.
+    const effCr = el('select', { 'aria-label': 'Grado di sfida effettivo', onchange: (e) => { b.effectiveCr = e.target.value; ctx.refresh(); } },
+      el('option', { value: '', text: 'Come la scheda', selected: !b.effectiveCr }),
+      K.CRS.map((x) => el('option', { value: x, text: x + ' (' + M.formatXp(M.xpForCr(x)) + ' PE)', selected: x === b.effectiveCr })));
+    const effNote = el('p', { class: 'warn small', 'aria-live': 'polite' });
+    const effRefresh = () => {
+      const strong = b.phases.length > 1 || m.legendary.length > 0;
+      effNote.textContent = strong && !b.effectiveCr ? '⚠ ' + DnD.difficoltaDati.WARNINGS.boss + ' Valuta un CS effettivo più alto di ' + m.cr + '.'
+        : b.effectiveCr && b.effectiveCr !== m.cr ? '⚠ La difficoltà usa il CS effettivo ' + b.effectiveCr + ' (scheda: ' + m.cr + '); i PE della ricompensa seguono lo stesso CS.' : '';
+    };
 
     // Anteprima viva: barra della vita e pedina con aura.
     const barBox = el('div', {});
@@ -546,7 +558,9 @@
         el('label', { class: 'check' }, scale, ' PF moltiplicati per il numero di giocatori'),
         el('div', { class: 'input-row' }, el('label', { class: 'inline' }, 'Aura sulla griglia (celle, 0 = nessuna) ', aura)),
         el('div', { class: 'error', 'data-error': 'boss.aura' }),
-        el('p', { class: 'muted small', text: 'Resistenza leggendaria e azioni leggendarie sono quelle della scheda (sopra).' }))],
+        el('p', { class: 'muted small', text: 'Resistenza leggendaria e azioni leggendarie sono quelle della scheda (sopra).' })),
+      el('fieldset', {}, el('legend', { text: 'Difficoltà' }),
+        el('label', { class: 'inline' }, 'CS effettivo ', effCr), effNote)],
       read: () => ({ boss: B.normalizeBoss(clone(b)) }),
       validate: () => {
         const errors = {};
@@ -557,7 +571,7 @@
         if (!(Number.isInteger(b.aura) && b.aura >= 0 && b.aura <= B.MAX_AURA)) errors['boss.aura'] = 'L\'aura va da 0 a ' + B.MAX_AURA + ' celle.';
         return errors;
       },
-      refresh: () => { if (preview) preview.update(); },
+      refresh: () => { effRefresh(); if (preview) preview.update(); },
     };
   }
 

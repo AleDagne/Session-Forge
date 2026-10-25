@@ -656,7 +656,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 14)
+### Modello dati (versione 15)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -718,9 +718,15 @@ giocatori e creature: { …, status: { hp (null = al massimo), tempHp, hitDiceUs
            resources: [{ id, label, max, value, reset: breve|lungo|alba|mai|manuale }] } }
 combattente: { …, tempHp, hitDice: { die, total, used }, resources, lastLongRest }   sessione: { …, restClock (ore) }
 customConditions: [{ id, name, icon, color, description, effects }]   condizioni personalizzate (libreria globale)
+nemico standard: { …, crOverride: '' (= livello / 2) | CS }   boss: { …, boss: { …, effectiveCr: '' (= cr) | CS } }
+difficultyRules: { custom, thresholds: [20 × [facile, medio, difficile, mortale]], multipliers: [{ min, factor }],
+           belowFirst, aboveLast, legendary: { 21-40: [4 soglie] }, countNeutralNpcs }   regole della difficoltà (globali)
 incantesimo e azione delle creature (Attacco, Tiro salvezza): { …, inflict: { type, customId, level, duration, save: { ability, dc } | null } }
 sorgente di un TileSet: { …, tileW, tileH, cover }   cover = taglio a copertura (bordi parziali)
 ```
+
+**Migrazione dalla versione 14**: solo normalizzazione. I nemici standard ricevono `crOverride` vuoto (CS stimato dal
+livello), i boss `effectiveCr` vuoto (CS della scheda) e l'archivio le regole della difficoltà della Guida.
 
 **Migrazione dalla versione 13**: giocatori e creature ricevono lo stato dei riposi con i valori di base (PF al
 massimo, nessun dado vita speso, dadi vita dal livello); i combattenti salvati ricevono PF temporanei 0 e i dadi vita
@@ -1001,6 +1007,42 @@ in `js/ui-riposi.js`.
 - **All'alba** (alle 6) tornano le risorse «all'alba».
 - L'azione **Riposo** degli eventi usa lo stesso riposo.
 
+## Difficoltà degli incontri
+
+Logica pura e testata in `js/difficolta.js`, tabelle in `js/difficolta-dati.js`, interfaccia in `js/ui-difficolta.js`.
+Metodo della Guida del Dungeon Master:
+
+- **Soglie del party**: per ogni personaggio la riga del suo livello (facile, medio, difficile, mortale), sommate.
+- **PE grezzi**: somma dei PE delle creature dal grado di sfida (anche 1/8, 1/4, 1/2). **Moltiplicatore** per numero
+  di creature (1 ×1, 2 ×1,5, 3-6 ×2, 7-10 ×2,5, 11-14 ×3, 15+ ×4): con meno di 3 giocatori un gradino su (oltre ×4 =
+  ×5), con 6 o più un gradino giù (sotto ×1 = ×0,5).
+- **Fasce** dei PE modificati: Banale sotto la soglia facile, poi Facile, Medio, Difficile, Mortale (la soglia è
+  inclusa: esattamente «facile» è già Facile), **Oltre il mortale** solo sopra il doppio della soglia mortale.
+- **Ricompensa**: i PE grezzi (senza moltiplicatore), divisi tra i giocatori.
+- **Chi conta**: creature, boss, nemici standard e NPC ostili al party secondo le fazioni del Mondo
+  (`fazioni.relazioneCombattenti`, anche le ostilità personali). Neutrali, alleati e fazioni non ostili sono esclusi;
+  con l'opzione «Conta anche gli NPC neutrali» contano anche gli NPC che potrebbero diventare ostili (mai quelli di
+  una fazione alleata o con atteggiamento amichevole).
+- **Grado di sfida**: creature dalla scheda; **nemici standard** dal campo «Grado di sfida (difficoltà)» della scheda,
+  «Automatico» = livello / 2 per difetto, minimo 0; **boss** dal «CS effettivo» (gruppo Difficoltà del form), vuoto
+  = quello della scheda, con avviso se il boss ha fasi o azioni leggendarie.
+- **Party**: i giocatori scelti, altrimenti il party attivo (o tutti i giocatori della sessione).
+- **Leggendari** (livelli 21-40): riga del livello 20 con un avviso, o soglie scritte a mano.
+
+**Interfaccia**:
+- **Indicatore** nel setup del combattimento (nemici scelti e NPC della griglia di partenza), nel generatore di nemici
+  (con i nemici già scelti) e nella finestra dell'incontro casuale dell'Esplorazione: barra a fasce colorate con il
+  segnaposto dei PE modificati, numeri reali, avvisi e «Dettaglio del calcolo» (anche come tooltip). Si aggiorna a
+  ogni modifica di quantità, giocatori, fazioni e griglia. È un `role="meter"` con valore e testo in italiano.
+- **⚖ Bilancia**: si sceglie la difficoltà; per ogni tipo di creatura propone quante ne servono cambiando solo quel
+  tipo (gli NPC piazzati e, nel generatore, i nemici già scelti restano fissi). Nulla cambia finché il master non
+  sceglie «Applica» e conferma.
+- **Budget** nella scheda e nel form di creature e boss: quante creature di quel CS servono per un incontro Medio,
+  Difficile e Mortale con il party attuale (o «già …» se una basta a superarlo).
+- **Impostazioni › Difficoltà › Tabelle e opzioni…**: «Usa tabelle personalizzate» (soglie per livello, righe dei
+  moltiplicatori, gradini oltre la tabella), soglie a mano dei leggendari, opzione degli NPC neutrali, «Ripristina la
+  Guida». Le regole sono nell'archivio (`difficultyRules`), quindi si esportano con lui.
+
 ## Dadi animati
 
 Il risultato si decide **prima**, con lo stesso generatore senza bias (`crypto.getRandomValues`): un
@@ -1212,6 +1254,14 @@ Per **riposi e risorse**:
 - combattimento: stato dalla scheda e ritorno, PF temporanei, riposo di un nemico (usi, ricariche, leggendarie);
 - migrazione, salvataggio ed esportazione.
 
+Per la **difficoltà degli incontri**:
+- soglie del party per livelli diversi; moltiplicatori per numero di creature e correzione per party piccolo e grande;
+- PE grezzi e modificati con CS frazionari e ricompensa; ogni fascia al confine (limite incluso, «oltre» escluso);
+- CS dei nemici standard (stimato e scritto), boss con CS effettivo e avvisi; NPC e neutrali esclusi (e l'opzione);
+- leggendari con la riga del 20 e soglie a mano; tabelle personalizzate e valori non validi;
+- «Bilancia» (proposte, gruppi fissi, fascia impossibile) e budget per CS;
+- aggiornamento in tempo reale dell'indicatore del setup; migrazione v14 → v15, archivio e file di sessione.
+
 Per **condizioni e concentrazione**:
 - tabella ed effetti di tutte le condizioni;
 - attacchi con vantaggio e svantaggio da più fonti (anche insieme), prono vicino e a distanza, critico automatico solo
@@ -1256,6 +1306,8 @@ css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti d
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
+js/difficolta-dati.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
+js/difficolta.js      difficoltà degli incontri (logica pura): soglie, PE, moltiplicatore, fasce, chi conta, Bilancia, Budget
 js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
 js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combattente), risorse, dadi vita, riposo breve e lungo
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
@@ -1295,6 +1347,7 @@ js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trap
 js/validazione.js     validazione dei form con messaggi in italiano
 js/dati.js            modello dati, migrazioni (fino alla versione 13), esempi, salvataggio (IndexedDB), import/export
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
+js/ui-difficolta.js   difficoltà: indicatore a fasce, Bilancia, Budget, tabelle personalizzate
 js/ui-riposi.js       riposi: elenco «Risorse», finestra del riposo, riposo delle schede e del party
 js/ui-condizioni.js   condizioni: simboli sulla scheda e sulla pedina, finestra, personalizzate, «Condizione inflitta»
 js/ui-tileset.js      disegno delle tilemap, vista con zoom/pan, anteprime, importazione immagini

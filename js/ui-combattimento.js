@@ -167,6 +167,8 @@
   // degli effetti ad area, provocazione degli NPC neutrali e fine del combattimento.
   const FZ = DnD.fazioni;
   const NP = DnD.npc;
+  const DF = DnD.difficolta;
+  const UD = DnD.uiDifficolta;
   const worldView = (st) => FZ.view(st || DnD.store.state);
   const relTable = (st) => FZ.table(worldView(st).factions);
   const factionName = (id) => { const f = worldView().factions.find((x) => x.id === id); return f ? f.name : 'fazione eliminata'; };
@@ -798,10 +800,13 @@
   }
 
   // ---------- Setup ----------
-  // Genera nemici al volo: vengono salvati in Nemici e aggiunti al setup (uno per ciascuno).
+  // Genera nemici al volo: vengono salvati in Nemici e aggiunti al setup (uno per ciascuno). La difficoltà del
+  // generatore parte dalla selezione del setup (setupInput, assegnato da renderSetup).
+  let setupInput = null;
   function generateAndAdd() {
     DnD.uiGeneratore.open({
       saveLabel: 'Salva e aggiungi al combattimento',
+      baseInput: setupInput ? setupInput() : null,
       onSaved: (creatures) => {
         for (const c of creatures) setup.npcs[c.id] = 1;
         render();
@@ -814,6 +819,7 @@
     const vPlayers = DnD.sessioni.visible(st, 'players');
     const vNpcs = DnD.sessioni.visible(st, 'npcs');
     const vGrids = DnD.sessioni.visible(st, 'savedGrids');
+    setupInput = null;
     if (!vPlayers.length && !vNpcs.length) {
       root.append(DnD.ui.emptyState('Nessun personaggio in questa sessione',
         'Per iniziare un combattimento servono nemici o giocatori della sessione «' + session().name + '» (o condivisi con tutte le sessioni).', [
@@ -829,8 +835,8 @@
       return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + R.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
     };
     const summary = (c) => (DnD.boss.isMonster(c)
-      ? [c.type === 'boss' ? 'Boss' : 'Creatura', 'GS ' + c.cr, 'PF ' + M.hpInfo(c).total, 'CA ' + c.ac]
-      : playerSummary(c));
+      ? [c.type === 'boss' ? 'Boss' : 'Creatura', 'GS ' + DF.crOf(c) + (DF.crOf(c) !== c.cr ? ' effettivo' : ''), 'PF ' + M.hpInfo(c).total, 'CA ' + c.ac]
+      : playerSummary(c).concat(vPlayers.includes(c) ? [] : ['GS ' + DF.crOf(c)]));
     const qtyInputs = {};
     const errorBox = el('div', { class: 'error', 'aria-live': 'polite' });
     // Controllo (Manuale o IA) e fazione per riga: di base giocatori Manuale, nemici IA.
@@ -845,15 +851,55 @@
       return el('span', { class: 'control-pickers' },
         el('select', { class: 'small-select', 'aria-label': 'Controllo', onchange: (e) => { setup.control[id] = e.target.value; } },
           el('option', { value: 'manuale', text: '👤 Manuale', selected: control === 'manuale' }), el('option', { value: 'ia', text: '🤖 IA', selected: control === 'ia' })),
-        el('select', { class: 'small-select', 'aria-label': 'Fazione', onchange: (e) => { setup.faction[id] = e.target.value; } },
+        el('select', { class: 'small-select', 'aria-label': 'Fazione', onchange: (e) => { setup.faction[id] = e.target.value; refreshDifficulty(); } },
           wv.factions.map((f) => el('option', { value: f.id, text: f.name, selected: f.id === faction }))));
     }
     const activeParty = DnD.party.active(wv.parties, wv.world);
 
+    // Difficoltà (difficolta.js): giocatori scelti (o il party attivo) contro i nemici ostili al party e gli NPC
+    // della griglia di partenza che contano (ostili, o neutrali con l'opzione). Si aggiorna a ogni modifica.
+    function encounterInput() {
+      const chosen = vPlayers.filter((p) => setup.players.has(p.id));
+      const party = DF.partyFrom(chosen.length ? chosen : UD.partyPlayers(st).players);
+      const t = relTable(st);
+      const pf = partyFaction(st);
+      const rules = UD.rules();
+      const creatures = [];
+      for (const n of vNpcs) {
+        const q = qtyInputs[n.id] ? readNumber(qtyInputs[n.id]) : setup.npcs[n.id] || 0;
+        if (!Number.isInteger(q) || q <= 0) continue;
+        if (DF.counts({ id: n.id, faction: setup.faction[n.id] || defaultFactionOf(n.id, 'npc') }, t, pf, rules)) creatures.push(DF.group(n, Math.min(q, MAX_COPIES)));
+      }
+      const g = vGrids.find((x) => x.id === setup.gridId);
+      for (const it of g ? g.items.filter((y) => y.otype === 'npc' && !y.npcState.dead) : []) {
+        const npc = (st.worldNpcs || []).find((n) => n.id === it.npcId);
+        if (!npc) continue;
+        const fid = NP.factionOf(npc, it.npcState, wv.cities);
+        const att = NP.attitudeOf(npc, it.npcState, FZ.reputationOf(wv.world, activeParty, fid));
+        const x = { id: it.id, faction: fid, npc: NP.combatData(npc, it.npcState, it.id, att), hostileTo: it.npcState.hostile ? [pf] : it.npcState.hostileTo };
+        if (DF.counts(x, t, pf, rules)) creatures.push(DF.group(Object.assign({}, npc.stats, { id: it.id, name: it.name || npc.name }), 1, { fixed: true }));
+      }
+      return { party, creatures };
+    }
+    const difficulty = UD.indicator({
+      title: 'Difficoltà dell\'incontro',
+      onBalance: () => {
+        const input = encounterInput();
+        UD.balanceDialog(input, (i, count) => { setup.npcs[input.creatures[i].id] = count; render(); }, MAX_COPIES);
+      },
+    });
+    setupInput = encounterInput;
+    const partyNote = el('p', { class: 'muted small' });
+    function refreshDifficulty() {
+      difficulty.update(encounterInput());
+      partyNote.textContent = (vPlayers.some((p) => setup.players.has(p.id)) ? 'Party: i giocatori scelti.' : 'Party: ' + UD.partyPlayers(st).label + ' (nessun giocatore scelto).') +
+        ' Contano i nemici ostili al party e gli NPC ostili della griglia di partenza.';
+    }
+
     const playersBox = vPlayers.length
       ? el('ul', { class: 'pick-list' }, vPlayers.map((p) => el('li', {},
         el('label', { class: 'check' },
-          el('input', { type: 'checkbox', checked: setup.players.has(p.id), onchange: (e) => { if (e.target.checked) setup.players.add(p.id); else setup.players.delete(p.id); } }),
+          el('input', { type: 'checkbox', checked: setup.players.has(p.id), onchange: (e) => { if (e.target.checked) setup.players.add(p.id); else setup.players.delete(p.id); refreshDifficulty(); } }),
           ' ', el('b', { text: p.name }),
           el('span', { class: 'muted small', text: ' · ' + [p.playerName].concat(summary(p)).filter(Boolean).join(' · ') })), ' ', controlPickers(p.id, 'player'))))
       : el('p', { class: 'empty', text: 'Nessun giocatore. Creali nella sezione Giocatori.' });
@@ -862,7 +908,7 @@
       ? el('ul', { class: 'pick-list' }, vNpcs.map((n) => {
         qtyInputs[n.id] = numberInput(setup.npcs[n.id] || 0, {
           min: 0, max: MAX_COPIES, class: 'qty', 'aria-label': 'Quantità di ' + n.name,
-          oninput: (e) => { setup.npcs[n.id] = readNumber(e.target); },
+          oninput: (e) => { setup.npcs[n.id] = readNumber(e.target); refreshDifficulty(); },
         });
         return el('li', {}, qtyInputs[n.id], ' ', el('b', { text: n.name }), ' ',
           el('span', { class: 'tag' + (n.type === 'boss' ? ' boss-tag' : n.type === 'creatura' ? ' accent' : ''), text: n.type === 'boss' ? '👑 Boss' : n.type === 'creatura' ? 'Creatura' : 'Standard' }),
@@ -920,7 +966,7 @@
       render();
     }
 
-    const gridSelect = el('select', { onchange: (e) => { setup.gridId = e.target.value; } },
+    const gridSelect = el('select', { onchange: (e) => { setup.gridId = e.target.value; refreshDifficulty(); } },
       el('option', { value: '', text: 'Griglia vuota' }),
       vGrids.map((g) => el('option', { value: g.id, text: g.name, selected: g.id === setup.gridId })));
     const gridPanel = el('section', { class: 'panel' },
@@ -936,6 +982,7 @@
 
     root.append(
       el('div', { class: 'section-head' }, el('h1', { text: 'Nuovo combattimento' })),
+      el('section', { class: 'panel diff-panel' }, difficulty.node, partyNote),
       el('div', { class: 'grid-2' },
         el('section', { class: 'panel' },
           el('div', { class: 'history-head' },
@@ -954,6 +1001,7 @@
       el('div', { class: 'form-actions' }, errorBox,
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: setup.simulated, onchange: (e) => { setup.simulated = e.target.checked; } }), ' Combattimento simulato (IA)'),
         el('button', { class: 'btn primary', text: 'Tira l\'iniziativa', onclick: start })));
+    refreshDifficulty();
   }
 
   // ---------- Iniziativa ----------

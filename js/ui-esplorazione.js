@@ -297,8 +297,13 @@
     const st = DnD.store.state;
     const npc = st.npcs.find((n) => n.id === q.encounter.refId);
     if (!npc) { dropPrompt(q.id); toast('⚠ Incontro: creatura non più presente.', 'error'); return; }
+    // Difficoltà dell'incontro contro i membri del gruppo in esplorazione.
+    const DF = DnD.difficolta;
+    const difficulty = DnD.uiDifficolta.indicator({ title: 'Difficoltà', compact: true });
+    difficulty.update({ party: DF.partyFrom(X.partyMembers(world())), creatures: [DF.group(npc, q.encounter.qty)] });
     openDialog('Incontro casuale', el('div', { class: 'form' },
       el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(npc.icon, 40), el('b', { text: q.encounter.qty + '× ' + npc.name })),
+      difficulty.node,
       el('p', { class: 'muted small', text: 'd100 = ' + q.encounter.roll + '. Il master decide: combattimento, evitarlo (Salta) o rimandare.' })), [
       { text: 'Rimanda', onclick: () => { snoozed = true; render(); } },
       { text: 'Salta', onclick: () => { dropPrompt(q.id); mutate((w) => X.log(w, '⏭ Incontro con ' + npc.name + ' evitato.', 'incontro'), false); afterAction(); } },
