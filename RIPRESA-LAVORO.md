@@ -1,5 +1,39 @@
 # Ripresa del lavoro
 
+## Fase «FASE 5/5: Nebbia di guerra, luce e visione» (26 ottobre 2026)
+
+- Stato: **completata**, non ancora committata. Dati alla versione **18**, cache `session-forge-v32`.
+- `test.html`: **273/273** in una finestra visibile (10 test nuovi della fase; aggiornato quello delle strutture
+  d'esempio della versione 1, che ora comprende Finestra e Grata).
+- File nuovi: `js/visione-dati.js`, `js/visione.js` (logica pura), `js/ui-visione.js` (disegno, strumenti, pannello).
+- Toccati: `dati.js` (v18, `blocksSight` e `light` di strutture, `senses`/`light` dei combattenti, esempi Finestra, Grata,
+  Braciere, Lanterna appesa), `oggetti-mappa.js`, `esplorazione.js` (nebbia unificata: `discoveryView`, `reveal`, stanze,
+  torcia del gruppo che si consuma), `griglia.js` (visione e nebbia nel ridimensionamento, annulla/ripeti, copia nel
+  combattimento e «Salva come nuova griglia»), `regole.js` e `creature.js` (sensi), `condizioni.js` (opzione `vision` di
+  `attackMods`), `ia.js` (`visible` = `visione.canSee`), `ui-griglia.js` (`opts.vision`: livello sopra pedine e tile,
+  pedine/oggetti nascosti nell'anteprima), `ui-editor-griglie.js` (pannello «Luce e visione»), `ui-combattimento.js`
+  (vantaggio/svantaggio dalla luce con la causa nel log, torcia nel menu della pedina, round che consumano le torce,
+  incantesimi di luce e oscurità, `visionAfter`, indicatore della luce nella barra del turno), `ui-esplorazione.js`,
+  `ui-mappa-esplorazione.js` (tolti gli strumenti della vecchia nebbia: niente doppioni), `ui-strutture.js`,
+  `ui-oggetti-mappa.js`, CSS (`--vision-*`), `index.html`, `test.html`, `sw.js`, README, CLAUDE.md.
+- Scelte:
+  - Notte = buio (la luna non c'è); crepuscolo = penombra; il bioma limita la luce del giorno (luce «Automatica», solo per
+    le mappe di esplorazione, predefinita in quelle nuove).
+  - La penombra non cambia gli attacchi (regole 5e), solo la Percezione; il buio sì (svantaggio a chi non vede, vantaggio a
+    chi non è visto). Accecato e invisibile restano nelle condizioni.
+  - L'IA ignora chi non vede se vede qualcun altro; se non vede nessuno si avvicina al più vicino (lo «sente»).
+  - Incantesimi di luce riconosciuti dal nome (`SPELLS` in `visione-dati.js`); la sorgente nasce sul primo bersaglio.
+  - Nelle mappe di esplorazione i raggi della luce usano la scala (una torcia non illumina 1,5 km).
+  - Nascondere a mano (modalità Mista) dimentica la cella e vince sulla visione; «Nascondi tutto» azzera anche le stanze.
+- Provato nel browser (store in memoria): Editor con braciere e muro (luce sfumata fermata dal muro), «Vedi da un punto»
+  con scurovisione, Combattimento al buio (vantaggio del goblin con scurovisione e causa nel log, «Accendi una torcia»,
+  indicatore «☀ luce intensa (🔥 torcia)», nebbia esplorata), Esplorazione di notte con la torcia del gruppo.
+- Da provare a mano: strumenti Stanza e Blocco vista con il trascinamento, pennello a rettangolo e riempimento nel
+  combattimento, «Come i giocatori» con più giocatori, incantesimo Oscurità vero (libreria Magie) con la concentrazione
+  che si spezza, tema chiaro, mappa 100×100 piena di tile.
+- Nota: il server di sviluppo (`python -m http.server`) lascia al browser copie vecchie degli script: dopo le modifiche
+  serve una ricarica forzata (Ctrl+F5) anche di `test.html`.
+
 ## Fase extra (fuori dalla numerazione): «Scheda del giocatore in stile D&D 5e» (26 ottobre 2026)
 
 - Stato: **completata** e committata. Dati alla versione **17**, cache `session-forge-v31`. La prossima è la

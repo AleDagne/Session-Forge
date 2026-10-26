@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 17;
+  const VERSION = 18;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -93,7 +93,12 @@
       s('Colonna', '#b9b4a8', 'cerchio', 1, 1),
       s('Albero', '#2f7d3b', 'cerchio', 2, 2),
       s('Tavolo', '#8a5a33', 'rettangolo', 2, 1),
-    ];
+    ].concat(visionStructures());
+  }
+  // Esempi della visione (v18): bloccano il passaggio ma non la vista.
+  function visionStructures() {
+    const s = (id, name, color, w, h) => normalizeStructure({ id, name, color, mode: 'preset', preset: 'rettangolo', w, h, blocksSight: false });
+    return [s('st-finestra', 'Finestra', '#9fc4d8', 1, 1), s('st-grata', 'Grata', '#5b6270', 3, 1)];
   }
 
   // Incantesimi di esempio (descrizioni brevi, modificabili o eliminabili).
@@ -129,6 +134,14 @@
       o('mo-leva', 'Leva', 'leva', 'leva', '#9aa0ab'),
       o('mo-trappola', 'Trappola a lame', 'trappola', 'trappola', '#d4453a', { hidden: true, trap: { dcFind: 14, dcDisarm: 13, effect: { kind: 'salvezza', dice: '2d10', type: 'tagliente', ability: 'DES', dc: 13, half: true } } }),
       o('mo-barile', 'Barile', 'barile', 'barile', '#8a6a3a', { blocks: true }),
+    ].concat(visionMapObjects());
+  }
+  // Esempi della visione (v18): oggetti che fanno luce.
+  function visionMapObjects() {
+    const o = (id, name, otype, icon, color, extra) => normalizeMapObject(Object.assign({ id, name, otype, icon: { kind: 'library', icon, color } }, extra));
+    return [
+      o('mo-braciere', 'Braciere', 'altro', 'torcia', '#d9822b', { blocks: true, interactive: true, light: { on: true, bright: 20, dim: 20, color: '#ff9a3c', flicker: true } }),
+      o('mo-lanterna', 'Lanterna appesa', 'altro', 'torcia', '#e8c34a', { interactive: true, light: { on: true, bright: 15, dim: 15, color: '#ffd27a', flicker: false } }),
     ];
   }
 
@@ -555,6 +568,9 @@
       mode,
       shapeMode,
       preset,
+      // Visione: blocca la vista (di base sì: una finestra o una grata no) e luce emessa (facoltativa).
+      blocksSight: s.blocksSight !== false,
+      light: DnD.visione.normalizeEmitter(s.light),
     }, shape, { tiles });
   }
 
@@ -571,6 +587,7 @@
     const shape = tiles ? { w: tiles.w, h: tiles.h, cells: tiles.cells } : normalizeShape(s, G().MAX_SIZE);
     return Object.assign({
       id: id(s.id), sourceId: str(s.sourceId, 64), name: str(s.name, 60) || 'Struttura', color: hex(s.color, '#7d7f86'),
+      blocksSight: s.blocksSight !== false, light: DnD.visione.normalizeEmitter(s.light),
     }, clampTo(pos(s) || { x: 0, y: 0 }, shape.w, shape.h, d || G().dims(null)), shape, { tiles });
   }
 
@@ -777,6 +794,10 @@
       classId: str(c.classId, 40),
       level: int(c.level, 1, 1, 30),
       hidden: Boolean(c.hidden),
+      // Visione: sensi in piedi (scurovisione, vista cieca, vista pura, percezione tellurica, raggio massimo) e
+      // sorgente di luce portata (torcia, lanterna…), accesa o spenta, con i minuti rimasti.
+      senses: DnD.visione.normalizeSenses(c.senses),
+      light: DnD.visione.normalizeCarried(c.light),
       // Ultimo tiro salvezza fallito (per la Resistenza leggendaria).
       pendingSave: c.pendingSave && typeof c.pendingSave === 'object' ? {
         full: arr(ps.full).slice(0, 10).map((x) => ({ amount: int(obj(x).amount, 0, 0, 100000), type: str(obj(x).type, 40) })),
@@ -1012,6 +1033,14 @@
     return raw;
   }
 
+  // Versione 18 (luce, visione e nebbia di guerra): solo normalizzazione (nebbia spenta, giorno, nessuna sorgente);
+  // gli archivi ricevono gli esempi (Finestra, Grata, Braciere, Lanterna appesa).
+  function migrateV18(raw) {
+    if (!raw || typeof raw !== 'object' || raw.version >= 18) return raw;
+    if (raw.kind !== 'sessione' && typeof raw.version === 'number') raw.addVisionExamples = true;
+    return raw;
+  }
+
   // Esempi originali del Mondo (mondo-dati.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
   function defaultWorld(sessionId) {
     const E = DnD.mondoDati.EXAMPLES;
@@ -1039,7 +1068,7 @@
     // Versioni 6, 7 e 8: immagini "stirate" -> tilemap su tileset, TileSet con sorgenti e livelli generici,
     // poi Attrezzatura, oggetti di mappa e creature (sui dati grezzi, prima di tutto); 9: boss d'esempio;
     // 10: biomi ed eventi.
-    raw = migrateV17(migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw)))))))))));
+    raw = migrateV18(migrateV17(migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))))))));
     const { sessions, currentSessionId } = normalizeSessions(raw);
     // Chi non appartiene a una sessione esistente (es. dati precedenti) va nella prima.
     const ids = new Set(sessions.map((x) => x.id));
@@ -1091,6 +1120,10 @@
     if (raw.addSheetExamples) {
       for (const b of DnD.scheda.exampleBackgrounds(sessions[0].id)) if (!out.backgrounds.some((x) => x.id === b.id)) out.backgrounds.push(b);
       for (const f of DnD.scheda.exampleFeats(sessions[0].id)) if (!out.feats.some((x) => x.id === f.id)) out.feats.push(f);
+    }
+    if (raw.addVisionExamples) {
+      for (const x of visionStructures()) if (!out.structures.some((e) => e.id === x.id)) out.structures.push(x);
+      for (const x of visionMapObjects()) if (!out.mapObjects.some((e) => e.id === x.id)) out.mapObjects.push(x);
     }
     if (raw.addSceneExamples) for (const e of DnD.scene.examples(sessions[0].id)) if (!out.encounters.some((x) => x.id === e.id)) out.encounters.push(e);
     if (raw.addWorldExamples) {

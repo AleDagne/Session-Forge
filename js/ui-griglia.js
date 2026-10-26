@@ -82,6 +82,8 @@
   //   painter: strumenti delle tile { active(), down(cell, e), move(cell, e), up(cell, e), draw(ctx, view, s), hint() }
   //   overlay(ctx, view, s): disegno aggiuntivo sopra le pedine (anteprima del piano dell'IA)
   //   underlay(ctx, view, s): disegno aggiuntivo sotto le pedine (biomi ed eventi dell'esplorazione)
+  //   vision: livello di luce e nebbia (ui-visione.js): draw(ctx, view, s) sopra pedine e tile, hideToken(t) e
+  //     hideItem(it) per l'anteprima «Vedi come»
   //   undo(), redo(), canUndo(), canRedo(): annulla/ripeti gestiti da chi usa la griglia (esplorazione)
   //   movement: { begin(combatantId) -> null (movimento libero) | { route(target) -> { path, cost, end, stopped,
   //     label }, normal: Set, dash: Set (chiavi delle celle raggiungibili) }, apply(doc, combatantId, route) }
@@ -330,7 +332,7 @@
       return null;
     }
     function placeStructure(tpl, p) {
-      const placed = DnD.dati.normalizePlacedStructure(Object.assign({ id: DnD.dadi.uid(), sourceId: tpl.id, name: tpl.name, color: tpl.color },
+      const placed = DnD.dati.normalizePlacedStructure(Object.assign({ id: DnD.dadi.uid(), sourceId: tpl.id, name: tpl.name, color: tpl.color, blocksSight: tpl.blocksSight, light: tpl.light },
         G.placedFields(tpl), p));
       commit((d) => d.grid.structures.push(placed));
       return placed;
@@ -898,6 +900,7 @@
         }
       }
       for (const it of d.grid.items) {
+        if (opts.vision && opts.vision.hideItem(it)) continue;
         if (it.otype === 'npc') { drawNpcItem(ctx, it, s); continue; }
         ctx.save();
         if (it.hidden) ctx.globalAlpha = 0.5;
@@ -938,7 +941,7 @@
       if (drag && drag.type === 'move' && drag.moved && drag.mv) drawReach(ctx, drag.mv, s);
 
       // Pedine: prima quelle a terra, per ultima quella di turno.
-      const tokens = d.combatants.filter((t) => t.pos)
+      const tokens = d.combatants.filter((t) => t.pos && !(opts.vision && opts.vision.hideToken(t)))
         .sort((a, b) => (R.isDown(b) - R.isDown(a)) || ((a.id === d.currentId) - (b.id === d.currentId)));
       for (const t of tokens) {
         const moving = drag && drag.type === 'move' && drag.moved && drag.hit.kind === 'token' && drag.hit.id === t.id;
@@ -949,6 +952,8 @@
       // Immagini "sopra le pedine" (tetti, rami): semitrasparenti se c'è una pedina sotto, se richiesto.
       for (const e of above) drawPlacedTiles(ctx, e, s, true, tokensOn(e), W, H);
       if (d.grid.tileMap) drawGridMap(ctx, d.grid.tileMap, s, true, tokenCells, W, H);
+      // Luce, buio e nebbia di guerra: livello a parte, ricalcolato solo quando cambia qualcosa.
+      if (opts.vision) opts.vision.draw(ctx, view, s, W, H);
 
       if (selection && selection.kind !== 'token' && entity(selection)) {
         const p = entityPos(selection);

@@ -228,6 +228,8 @@
       if (x.effect === 'contro-prono') (near ? adv : dis).push('bersaglio ' + x.cause + (near ? ', entro 1 cella' : ', a distanza'));
       if (x.effect === 'critico-mischia' && o.melee && near && !autoCrit) autoCrit = 'bersaglio ' + x.cause + ', in mischia entro 1 cella';
     }
+    // Luce e visione (visione.attackVision): bersaglio non visto, attaccante non visto dal bersaglio.
+    if (o.vision) { adv.push(...o.vision.adv); dis.push(...o.vision.dis); }
     return Object.assign(combine(o.base || 'normale', uniq(adv), uniq(dis)), { autoCrit, blocked });
   }
   const uniq = (l) => [...new Set(l)];

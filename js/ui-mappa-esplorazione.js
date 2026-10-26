@@ -1,8 +1,8 @@
-// Mappa di esplorazione sul canvas della griglia: disegno della sovrapposizione dei biomi (con legenda), degli
-// eventi piazzati (icona, area, occhio barrato per quelli nascosti) e della nebbia di scoperta; pannello degli
-// strumenti per l'Editor griglie (Bioma: pennello, riempi, rettangolo, gomma, contagocce, genera da bioma;
-// Evento: piazza, area, modifica la copia, aggiorna dal modello; Nebbia: rivela/nascondi) e, nella schermata
-// Esplorazione, strumenti del master (interagisci con un evento, rivela/nascondi la nebbia).
+// Mappa di esplorazione sul canvas della griglia: disegno della sovrapposizione dei biomi (con legenda) e degli
+// eventi piazzati (icona, area, occhio barrato per quelli nascosti); pannello degli strumenti per l'Editor griglie
+// (Bioma: pennello, riempi, rettangolo, gomma, contagocce, genera da bioma; Evento: piazza, area, modifica la copia,
+// aggiorna dal modello) e, nella schermata Esplorazione, lo strumento del master «Interagisci». La nebbia di scoperta
+// è la nebbia di guerra di «Luce e visione» (visione.js, ui-visione.js), unica per tutte le griglie.
 (function (DnD) {
   'use strict';
 
@@ -100,16 +100,6 @@
     ctx.restore();
   }
 
-  // Nebbia: celle mai viste oscurate (in trasparenza per il master, piene nella vista dei giocatori).
-  function drawFog(ctx, view, s, grid, opts, W, H) {
-    if (!grid.fog || !grid.fog.enabled) return;
-    const r = visibleRange(view, s, grid, W || 1e5, H || 1e5);
-    ctx.save();
-    ctx.fillStyle = opts && opts.playerView ? 'rgb(12,12,16)' : 'rgba(12,12,16,0.55)';
-    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (grid.fog.seen[y * grid.w + x] !== '1') ctx.fillRect(view.panX + x * s, view.panY + y * s, s + 0.5, s + 0.5);
-    ctx.restore();
-  }
-
   // Legenda dei biomi usati dalla mappa.
   function legend(grid) {
     const idx = biomeIndex();
@@ -126,7 +116,6 @@
   const TOOLS = {
     'b-pennello': '🖌 Pennello', 'b-riempi': '🪣 Riempi', 'b-rettangolo': '▭ Rettangolo', 'b-gomma': '🧽 Gomma', 'b-contagocce': '💧 Contagocce',
     'e-piazza': '📍 Piazza evento', 'e-area': '▦ Celle dell\'area', 'e-interagisci': '👆 Interagisci',
-    'f-rivela': '☀ Rivela', 'f-nascondi': '🌫 Nascondi',
   };
   const HINTS = {
     'b-pennello': 'Trascina per dipingere il bioma scelto.', 'b-riempi': 'Clicca: riempie l\'area contigua con il bioma scelto.',
@@ -134,7 +123,6 @@
     'b-contagocce': 'Clicca una cella per scegliere il suo bioma.',
     'e-piazza': 'Clicca una cella: piazza una copia del modello scelto.', 'e-area': 'Clicca o trascina sulle celle per aggiungerle (o toglierle) all\'area dell\'evento selezionato.',
     'e-interagisci': 'Clicca un evento sulla mappa: si apre la finestra evento.',
-    'f-rivela': 'Trascina per rivelare celle della nebbia.', 'f-nascondi': 'Trascina per nascondere celle.',
   };
 
   // opts: { getGrid(), widget(), mode: 'editor' | 'gioco', onInteract(inst) (gioco), onChange() }
@@ -179,11 +167,6 @@
         setTool('b-pennello');
         return false;
       }
-      if (tool === 'f-rivela' || tool === 'f-nascondi') {
-        if (!g.fog.enabled) g.fog.enabled = true;
-        X.setSeen(g, [cell], tool === 'f-rivela');
-        return true;
-      }
       if (tool === 'e-piazza') {
         const t = DnD.store.state.events.find((e) => e.id === templateId);
         if (!t) { toast('Scegli un modello di evento.', 'error'); return false; }
@@ -226,7 +209,7 @@
         hover = cell;
         if (!drag || !dragging || !cell) { if (W()) W().requestDraw(); return; }
         if (tool === 'b-rettangolo') { drag.b = cell; W().requestDraw(); return; }
-        if (['b-pennello', 'b-gomma', 'f-rivela', 'f-nascondi', 'e-area'].includes(tool)) {
+        if (['b-pennello', 'b-gomma', 'e-area'].includes(tool)) {
           if (applyAt(cell, tool === 'e-area' ? drag.adding : undefined)) { drag.changed = true; changed(); }
         }
       },
@@ -247,7 +230,6 @@
         if (mode === 'editor') {
           drawBiomes(ctx, view, s, g, Wd, Hd);
           drawEvents(ctx, view, s, g, { master: true, selectedId, onLoad: () => W().requestDraw() });
-          drawFog(ctx, view, s, g, { playerView: false }, Wd, Hd);
         } else if (selectedId) {
           drawEvents(ctx, view, s, { events: (g.events || []).filter((i) => i.id === selectedId) }, { master: true, selectedId, onLoad: () => W().requestDraw() });
         }
@@ -329,9 +311,7 @@
       const setMap = (fn) => { const before = W().tileSnapshot(); fn(ensureMap(g)); W().commitTiles(before); changed(); refresh(); };
       const events = g.events || [];
       if (mode === 'gioco') {
-        node.append(el('div', { class: 'explore-tool-row' }, el('span', { class: 'muted small', text: 'Master:' }), toolBtn('e-interagisci'), toolBtn('f-rivela'), toolBtn('f-nascondi'),
-          el('button', { type: 'button', class: 'btn small', text: g.fog.enabled ? '🌫 Nebbia attiva' : '🌫 Nebbia spenta', 'aria-pressed': String(g.fog.enabled),
-            onclick: () => { g.fog.enabled = !g.fog.enabled; changed(); refresh(); } })));
+        node.append(el('div', { class: 'explore-tool-row' }, el('span', { class: 'muted small', text: 'Master:' }), toolBtn('e-interagisci'), opts.extra ? opts.extra() : null));
         return;
       }
       node.append(
@@ -371,11 +351,7 @@
                   el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Azzera lo stato', 'aria-label': 'Azzera lo stato', onclick: () => { const before = W().tileSnapshot(); inst.state = E.normalizeInstance({}).state; W().commitTiles(before); changed(); refresh(); } }),
                   el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Togli dalla mappa', 'aria-label': 'Togli dalla mappa', onclick: () => { const before = W().tileSnapshot(); g.events = g.events.filter((x) => x.id !== inst.id); if (selectedId === inst.id) selectedId = null; W().commitTiles(before); changed(); refresh(); } })));
             })) : el('p', { class: 'muted small', text: 'Nessun evento piazzato.' })),
-          el('fieldset', {}, el('legend', { text: 'Nebbia di scoperta' }),
-            el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.enabled, onchange: (e) => { g.fog.enabled = e.target.checked; W().commitTiles(W().tileSnapshot()); changed(); } }), ' Attiva (celle mai viste oscurate)'),
-            el('div', { class: 'explore-tool-row' }, toolBtn('f-rivela'), toolBtn('f-nascondi'),
-              el('button', { type: 'button', class: 'btn small', text: 'Rivela tutto', onclick: () => { const before = W().tileSnapshot(); g.fog.seen = '1'.repeat(g.w * g.h); W().commitTiles(before); changed(); } }),
-              el('button', { type: 'button', class: 'btn small', text: 'Nascondi tutto', onclick: () => { const before = W().tileSnapshot(); g.fog.seen = '0'.repeat(g.w * g.h); W().commitTiles(before); changed(); } })))));
+          el('p', { class: 'muted small', text: '🌫 La nebbia di scoperta è nel pannello «Luce e visione» (sotto), con la luce automatica dall\'ora e dal bioma.' })));
     }
 
     return {
@@ -401,5 +377,5 @@
     };
   }
 
-  DnD.uiMappaEsplorazione = { create, combinePainters, drawBiomes, drawEvents, drawFog, legend, eyeSlash, TOOLS };
+  DnD.uiMappaEsplorazione = { create, combinePainters, drawBiomes, drawEvents, legend, eyeSlash, TOOLS };
 })(globalThis.DnD = globalThis.DnD || {});

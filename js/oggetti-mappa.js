@@ -40,6 +40,9 @@
       interactive: o.interactive === undefined ? true : Boolean(o.interactive),
       hidden: Boolean(o.hidden),
       blocks: Boolean(o.blocks),
+      // Visione (visione.js): blocca la vista (le porte solo da chiuse) e luce emessa (facoltativa).
+      blocksSight: Boolean(o.blocksSight),
+      light: DnD.visione.normalizeEmitter(o.light),
       state: o.state === 'aperto' ? 'aperto' : 'chiuso',
       lock: {
         locked: Boolean(lock.locked), dcPick: int(lock.dcPick, 15, 1, 40), dcForce: int(lock.dcForce, 15, 1, 40), keyId: str(lock.keyId, 64),

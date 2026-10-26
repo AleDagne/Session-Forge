@@ -376,11 +376,11 @@
       g.background.x = (g.background.x || 0) + dx;
       g.background.y = (g.background.y || 0) + dy;
     }
-    // Esplorazione: biomi e nebbia seguono le celle, gli eventi fuori dall'area si tolgono.
-    if (DnD.esplorazione && (g.biomeMap || (g.events && g.events.length) || g.fog)) {
+    // Esplorazione e visione: biomi, nebbia, sorgenti e stanze seguono le celle, gli eventi fuori dall'area si tolgono.
+    if (DnD.esplorazione && (g.biomeMap || (g.events && g.events.length) || g.fog || g.vision)) {
       const ex = DnD.esplorazione.resizeExtras(g, old.w, old.h, w, h, dx, dy);
       if (ex.lostEvents) lost.push(ex.lostEvents + (ex.lostEvents === 1 ? ' evento' : ' eventi'));
-      Object.assign(g, { biomeMap: ex.biomeMap, fog: ex.fog, events: ex.events });
+      Object.assign(g, { biomeMap: ex.biomeMap, fog: ex.fog, vision: ex.vision, events: ex.events });
     }
     g.w = w;
     g.h = h;
@@ -428,6 +428,9 @@
       biomeMap: doc.grid.biomeMap || null,
       events: doc.grid.events || [],
       fog: doc.grid.fog || null,
+      // Luce e visione: sorgenti, celle della vista e stanze rientrano in Annulla/Ripeti.
+      vision: doc.grid.vision || null,
+      lights: Object.fromEntries(doc.combatants.filter((c) => c.light !== undefined).map((c) => [c.id, c.light])),
       positions: Object.fromEntries(doc.combatants.map((c) => [c.id, c.pos])),
       tokenDims: Object.fromEntries(doc.combatants.map((c) => [c.id, tokenDims(c)])),
       // Movimento del turno (residuo): annulla/ripeti di uno spostamento restituisce anche il movimento.
@@ -444,7 +447,9 @@
     if (snap.biomeMap !== undefined) doc.grid.biomeMap = clone(snap.biomeMap);
     if (snap.events !== undefined) doc.grid.events = clone(snap.events);
     if (snap.fog) doc.grid.fog = clone(snap.fog);
+    if (snap.vision) doc.grid.vision = clone(snap.vision);
     for (const c of doc.combatants) {
+      if (snap.lights && snap.lights[c.id] !== undefined) c.light = clone(snap.lights[c.id]);
       c.pos = snap.positions[c.id] ? Object.assign({}, snap.positions[c.id]) : null;
       if (snap.tokenDims && snap.tokenDims[c.id]) Object.assign(c, snap.tokenDims[c.id]);
       if (snap.movement && snap.movement[c.id]) c.movement = clone(snap.movement[c.id]);
@@ -509,6 +514,9 @@
       labels: clone(combat.grid.labels),
       zones: clone(combat.grid.zones),
       tileMap: clone(combat.grid.tileMap || null),
+      // Luce, sorgenti, stanze e nebbia (celle esplorate comprese) viaggiano con la griglia.
+      vision: clone(combat.grid.vision || null),
+      fog: clone(combat.grid.fog || null),
       positions: combat.combatants.filter((c) => c.pos).map((c) => ({ key: combatantKey(c), x: c.pos.x, y: c.pos.y })),
     }, gridProps(combat.grid));
   }
@@ -526,6 +534,10 @@
     combat.grid.zones = copy(saved.zones);
     combat.grid.tileMap = clone(saved.tileMap || null);
     Object.assign(combat.grid, gridProps(saved));
+    const d = dims(saved);
+    // Il combattimento lavora su una copia di luce, sorgenti, stanze e nebbia (nulla torna alla griglia salvata).
+    combat.grid.vision = saved.vision ? clone(saved.vision) : DnD.visione.emptyVision(d.w, d.h);
+    combat.grid.fog = saved.fog ? clone(saved.fog) : DnD.visione.emptyFog(d.w, d.h);
     combat.grid.sourceGridId = saved.id;
     for (const c of combat.combatants) c.pos = null;
     const board = boardOf(combat.grid, combat.combatants);

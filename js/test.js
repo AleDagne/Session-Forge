@@ -377,7 +377,7 @@
     eq(DnD.validazione.validateStructure(Object.assign({}, s, { cells: '0000' })).cells, 'Riempi almeno una cella.');
     eq(Object.keys(DnD.validazione.validateStructure(Object.assign({}, s, { mode: 'custom', w: 11 }))), ['w']);
     const v1 = DnD.dati.importJSON(JSON.stringify({ version: 1, races: [], npcs: [{ name: 'X' }], players: [] }));
-    eq(v1.structures.map((x) => x.name), ['Muro', 'Colonna', 'Albero', 'Tavolo']);
+    eq(v1.structures.map((x) => x.name), ['Muro', 'Colonna', 'Albero', 'Tavolo', 'Finestra', 'Grata']);
     eq(v1.npcs[0].icon.shape, 'cerchio');
     eq(v1.savedGrids, []);
   });
@@ -5446,6 +5446,302 @@
       box.remove();
       DnD.store = prevStore;
     }
+  });
+
+  // --- Luce, visione e nebbia di guerra (fase 5/5) ---
+  const V = () => DnD.visione;
+  const VC = () => DnD.condizioni;
+  // Griglia di prova normalizzata (strutture, oggetti, piedi per cella, visione e nebbia).
+  const vGrid = (o) => DnD.dati.normalizeSavedGrid(Object.assign({ id: 'vg', name: 'Prova', w: 20, h: 20, structures: [], items: [] }, o || {}));
+  const vWall = (id, x, y, w, h, extra) => Object.assign({ id, name: 'Muro', x, y }, G().shapeFrom(w, h, () => true), extra || {});
+  const vC = (o) => Object.assign({ id: 'c', name: 'Pedina', kind: 'player', faction: 'giocatori', hp: 10, maxHp: 10, w: 1, h: 1, conditions: [], senses: {} }, o);
+  const vCtx = (g, list, opts) => V().context(g, list, opts);
+
+  test('Visione: linea di vista con muri, porte, finestre e pedine 2×2', () => {
+    const g = vGrid({ structures: [vWall('m', 5, 0, 1, 20), vWall('f', 10, 0, 1, 20, { blocksSight: false })] });
+    const a = vC({ id: 'a', pos: { x: 2, y: 5 } });
+    const b = vC({ id: 'b', kind: 'npc', faction: 'nemici', pos: { x: 8, y: 5 } });
+    const c = vC({ id: 'c', kind: 'npc', faction: 'nemici', pos: { x: 12, y: 5 } });
+    let ctx = vCtx(g, [a, b, c]);
+    ok(!V().canSee(ctx, a, b).seen && V().canSee(ctx, a, b).cause === 'linea', 'il muro blocca la vista');
+    ok(V().canSee(ctx, b, c).seen, 'la finestra (struttura che non blocca la vista) lascia vedere');
+    ok(G().isCellBlocked(g, 10, 5), 'ma blocca il movimento');
+    // Varco con una porta nel muro: chiusa blocca, aperta si vede.
+    g.structures[0].cells = g.structures[0].cells.slice(0, 5) + '0' + g.structures[0].cells.slice(6);
+    g.items.push(DnD.dati.normalizePlacedItem({ id: 'p', name: 'Porta', otype: 'porta', x: 5, y: 5 }));
+    ctx = vCtx(g, [a, b]);
+    ok(!V().canSee(ctx, a, b).seen, 'porta chiusa: non si vede');
+    g.items[0].state = 'aperto';
+    ctx = vCtx(g, [a, b]);
+    ok(V().canSee(ctx, a, b).seen, 'porta aperta: si vede');
+    eq(V().lineOfSight(ctx.sm, { x: 2, y: 5 }, { x: 8, y: 5 }), V().lineOfSight(ctx.sm, { x: 8, y: 5 }, { x: 2, y: 5 }), 'simmetrica');
+    // Pedina 2×2: basta una cella del suo ingombro.
+    const g2 = vGrid({ structures: [vWall('m', 5, 0, 1, 6)] });
+    const big = vC({ id: 'g', w: 2, h: 2, pos: { x: 2, y: 5 } });
+    const t = vC({ id: 't', kind: 'npc', faction: 'nemici', pos: { x: 8, y: 5 } });
+    ok(V().canSee(vCtx(g2, [big, t]), big, t).seen, 'la riga in basso della pedina 2×2 vede oltre la fine del muro');
+    ok(!V().canSee(vCtx(g2, [t]), vC({ id: 's', pos: { x: 2, y: 5 } }), t).seen, 'una pedina 1×1 dietro il muro no');
+  });
+
+  test('Visione: luce, scurovisione, penombra e sorgenti con piedi per cella diversi', () => {
+    const g = vGrid({ vision: { ambient: 'buio' } });
+    const human = vC({ id: 'h', pos: { x: 2, y: 2 } });
+    const elf = vC({ id: 'e', pos: { x: 2, y: 3 }, senses: { darkvision: 60 } });
+    const orc = vC({ id: 'o', kind: 'npc', faction: 'nemici', pos: { x: 8, y: 2 } });
+    let ctx = vCtx(g, [human, elf, orc]);
+    eq([V().canSee(ctx, human, orc).seen, V().canSee(ctx, human, orc).cause], [false, 'buio'], 'buio: un umano non vede');
+    eq([V().canSee(ctx, elf, orc).seen, V().canSee(ctx, elf, orc).level, V().canSee(ctx, elf, orc).how], [true, 1, 'darkvision'], 'scurovisione: il buio conta come penombra');
+    const far = vC({ id: 'f', kind: 'npc', faction: 'nemici', pos: { x: 2, y: 17 } }); // 14 celle = 70 ft
+    ok(!V().canSee(vCtx(g, [elf, far]), elf, far).seen, 'oltre il raggio della scurovisione non si vede');
+    g.vision.ambient = 'crepuscolo';
+    ctx = vCtx(g, [human, elf, orc]);
+    eq([V().canSee(ctx, human, orc).level, V().canSee(ctx, elf, orc).level], [1, 2], 'penombra: vista leggermente oscurata; con la scurovisione come luce intensa');
+    eq(V().perceptionMods(ctx, human, { x: 8, y: 2 }).dis.length, 1, 'penombra: svantaggio alla Percezione');
+    // Torcia: 20 ft intensa + 20 ft penombra = 4 + 4 celle da 5 ft, 2 + 2 celle da 10 ft.
+    g.vision.ambient = 'buio';
+    const torch = vC({ id: 'h', pos: { x: 2, y: 2 }, light: { kind: 'torcia', on: true, minutes: 60 } });
+    let lm = V().lightMap(g, [torch], V().sightMap(g));
+    eq([lm.level[2 * 20 + 6], lm.level[2 * 20 + 7], lm.level[2 * 20 + 10], lm.level[2 * 20 + 11]], [2, 1, 1, 0], 'celle da 5 ft');
+    g.feetPerCell = 10;
+    lm = V().lightMap(g, [torch], V().sightMap(g));
+    eq([lm.level[2 * 20 + 4], lm.level[2 * 20 + 5], lm.level[2 * 20 + 6], lm.level[2 * 20 + 7]], [2, 1, 1, 0], 'celle da 10 ft');
+    // La luce non passa i muri.
+    g.feetPerCell = 5;
+    g.structures.push(DnD.dati.normalizePlacedStructure(vWall('m', 4, 0, 1, 20), g));
+    lm = V().lightMap(g, [torch], V().sightMap(g));
+    eq([lm.level[2 * 20 + 3], lm.level[2 * 20 + 5]], [2, 0], 'il muro ferma la luce');
+    // Sorgente piazzata e oggetto che fa luce.
+    const g2 = vGrid({ vision: { ambient: 'notte', lights: [{ id: 'l', x: 10, y: 10, bright: 10, dim: 10 }] },
+      items: [{ id: 'br', name: 'Braciere', otype: 'altro', x: 2, y: 15, light: { on: true, bright: 5, dim: 5 } }] });
+    lm = V().lightMap(g2, [], V().sightMap(g2));
+    eq([lm.level[10 * 20 + 12], lm.level[10 * 20 + 13], lm.level[15 * 20 + 3], lm.level[15 * 20 + 5]], [2, 1, 2, 0], 'sorgente piazzata e braciere');
+    g2.vision.lights[0].on = false;
+    eq(V().lightMap(g2, [], V().sightMap(g2)).level[10 * 20 + 12], 0, 'sorgente spenta');
+  });
+
+  test('Visione: vista cieca, vista pura, percezione tellurica, accecato e invisibile', () => {
+    const g = vGrid({ vision: { ambient: 'buio', lights: [{ id: 'd', x: 10, y: 5, dark: true, bright: 0, dim: 15 }] } });
+    const bat = vC({ id: 'b', kind: 'npc', faction: 'nemici', pos: { x: 2, y: 5 }, senses: { blindsight: 30 } });
+    const devil = vC({ id: 'd', kind: 'npc', faction: 'nemici', pos: { x: 5, y: 5 }, senses: { truesight: 60, darkvision: 120 } });
+    const elf = vC({ id: 'e', pos: { x: 6, y: 5 }, senses: { darkvision: 60 } });
+    const mole = vC({ id: 'm', kind: 'npc', faction: 'nemici', pos: { x: 6, y: 12 }, senses: { tremorsense: 60 } });
+    const inDark = vC({ id: 'x', pos: { x: 10, y: 5 } });
+    const ctx = vCtx(g, [bat, devil, elf, mole, inDark]);
+    eq(V().canSee(ctx, bat, elf).how, 'blindsight', 'vista cieca: vede senza luce');
+    eq([V().canSee(ctx, elf, inDark).seen, V().canSee(ctx, elf, inDark).cause], [false, 'magico'], 'buio magico: la scurovisione non vede');
+    eq(V().canSee(ctx, devil, inDark).how, 'truesight', 'la vista pura vede nel buio magico');
+    eq(V().canSee(ctx, mole, elf).how, 'tremorsense', 'percezione tellurica: sente chi tocca il suolo');
+    ok(!V().canSee(ctx, mole, Object.assign({}, elf, { moveMode: 'volare' })).seen, 'non chi vola');
+    // Invisibile: solo vista pura o vista cieca nel raggio.
+    const ghost = vC({ id: 'g', kind: 'npc', faction: 'nemici', pos: { x: 7, y: 5 } });
+    VC().apply(ghost, { type: 'invisibile' });
+    const ctx2 = vCtx(g, [elf, ghost, devil]);
+    eq(V().canSee(ctx2, elf, ghost).cause, 'invisibile', 'invisibile: non si vede');
+    ok(V().canSee(ctx2, devil, ghost).seen, 'la vista pura lo vede');
+    // Accecato: nessuna cella visibile oltre la propria; lo svantaggio viene dalle condizioni, senza doppioni.
+    const blind = vC({ id: 'k', pos: { x: 3, y: 3 } });
+    VC().apply(blind, { type: 'accecato' });
+    const lit = vGrid();
+    const v = V().viewOf(vCtx(lit, [blind]), blind);
+    eq(v.reduce((s, x) => s + (x ? 1 : 0), 0), 1, 'accecato: solo la propria cella');
+    const foe = vC({ id: 'f', kind: 'npc', faction: 'nemici', pos: { x: 4, y: 3 } });
+    eq(V().attackVision(vCtx(lit, [blind, foe]), blind, foe).dis, [], 'la visione non ripete «accecato»');
+    eq(VC().attackMods(blind, foe, { melee: true, distance: 1 }).mode, 'svantaggio', 'svantaggio dalle condizioni');
+  });
+
+  test('Visione: svantaggio al buio, vantaggio contro chi non vede, causa nel log', () => {
+    const g = vGrid({ vision: { ambient: 'buio' } });
+    const human = vC({ id: 'h', pos: { x: 2, y: 2 } });
+    const orc = vC({ id: 'o', kind: 'npc', faction: 'nemici', pos: { x: 3, y: 2 }, senses: { darkvision: 60 } });
+    const ctx = vCtx(g, [human, orc]);
+    const hv = V().attackVision(ctx, human, orc);
+    eq([hv.dis.length, hv.dis[0].startsWith('buio'), hv.adv.length], [1, true, 0], 'l\'umano attacca al buio: svantaggio («buio»)');
+    const ov = V().attackVision(ctx, orc, human);
+    eq([ov.adv.length, ov.dis.length], [1, 0], 'l\'orco con la scurovisione attacca chi non lo vede: vantaggio');
+    const mods = VC().attackMods(human, orc, { melee: true, distance: 1, vision: hv });
+    eq([mods.mode, VC().modsText(mods).includes('buio')], ['svantaggio', true], 'attackMods con la visione: causa nel testo');
+    // Penombra: nessun effetto sugli attacchi (solo sulla Percezione).
+    g.vision.ambient = 'crepuscolo';
+    eq(V().attackVision(vCtx(g, [human, orc]), human, orc), { adv: [], dis: [] }, 'penombra: attacco normale');
+  });
+
+  test('Visione: luce ambientale per ora e bioma, torcia che si spegne, incantesimi', () => {
+    eq([V().ambientLevel('giorno'), V().ambientLevel('crepuscolo'), V().ambientLevel('notte'), V().ambientLevel('buio')], [2, 1, 0, 0]);
+    eq([V().ambientLevel('auto', { hour: 12 }), V().ambientLevel('auto', { hour: 6 }), V().ambientLevel('auto', { hour: 23 })], [2, 1, 0], 'dall\'ora');
+    eq([V().ambientLevel('auto', { hour: 12, biomeLight: 'penombra' }), V().ambientLevel('auto', { hour: 12, biomeLight: 'buio' })], [1, 0], 'dal bioma (foresta, caverna)');
+    eq([V().discoveryRadius(4, 0, false, null), V().discoveryRadius(4, 0, true, null), V().discoveryRadius(4, 0, false, { kind: 'torcia', on: true, minutes: 10 })], [1, 3, 3], 'scoperta al buio, con scurovisione o torcia');
+    // La torcia dura un'ora di gioco: si spegne con il tempo (anche a round nel combattimento).
+    const pc = vC({ id: 'h', name: 'Mira', pos: { x: 0, y: 0 } });
+    V().setCarried(pc, 'torcia', true);
+    eq([pc.light.on, pc.light.minutes], [true, 60]);
+    eq(V().tickLights(null, [pc], 30), [], 'mezz\'ora: ancora accesa');
+    const lines = V().tickLights(null, [pc], 30);
+    eq([pc.light.on, lines.length], [false, 1], 'dopo un\'ora si spegne');
+    V().setCarried(pc, 'torcia', true);
+    eq(pc.light.minutes, 60, 'riaccesa: una torcia nuova');
+    // Incantesimi: Oscurità a concentrazione, che svanisce quando la concentrazione finisce.
+    const g = vGrid();
+    const caster = vC({ id: 'w', name: 'Maga', pos: { x: 1, y: 1 } });
+    const spell = { id: 'sp-osc', name: 'Oscurità', concentration: true };
+    ok(V().castLight(g, caster, spell, { x: 10, y: 10 }).includes('buio magico'));
+    caster.concentration = { spellId: 'sp-osc', name: 'Oscurità', round: 1 };
+    eq(V().lightMap(g, [caster], V().sightMap(g)).level[10 * 20 + 10], 0, 'buio magico anche di giorno');
+    eq(V().pruneLinked(g, [caster]), [], 'concentrazione attiva: resta');
+    caster.concentration = null;
+    eq([V().pruneLinked(g, [caster]).length, g.vision.lights.length], [1, 0], 'concentrazione finita: sparisce');
+    eq(V().spellEffect({ name: 'Luce' }), { source: 'luce' });
+  });
+
+  test('Visione: nebbia manuale, automatica e mista, memoria, stanze e pennelli', () => {
+    const g = vGrid({ fog: { enabled: true, mode: 'manuale' }, structures: [vWall('m', 6, 0, 1, 20)] });
+    const pc = vC({ id: 'p', pos: { x: 2, y: 2 } });
+    const pv = V().playersView(vCtx(g, [pc]));
+    eq(V().cellStates(g, pv.cells)[2 * 20 + 3], 0, 'manuale: la visione non rivela');
+    V().paintFog(g, V().brushCells(g, 'rettangolo', { x: 0, y: 0 }, { x: 1, y: 1 }), true);
+    eq([V().cellStates(g, pv.cells)[0], V().cellStates(g, pv.cells)[1 * 20 + 1], V().cellStates(g, pv.cells)[2]], [2, 2, 0], 'rettangolo rivelato a mano');
+    eq(V().brushCells(g, 'cerchio', { x: 10, y: 10 }, { x: 12, y: 10 }).length, 21, 'pennello a cerchio di raggio 2');
+    const fill = V().brushCells(g, 'riempi', { x: 2, y: 2 });
+    ok(fill.length === 7 * 20 && fill.some((c) => c.x === 6) && !fill.some((c) => c.x === 7), 'riempimento fino al muro (compreso)');
+    // Automatica: rivela ciò che vedono i giocatori e lo ricorda.
+    g.fog.mode = 'auto';
+    eq(V().cellStates(g, pv.cells)[2 * 20 + 3], 2, 'automatica: visibile');
+    eq(V().cellStates(g, pv.cells)[2 * 20 + 8], 0, 'dietro il muro no');
+    ok(V().remember(g, pv.cells) > 0);
+    pc.pos = { x: 10, y: 19 };
+    const pv2 = V().playersView(vCtx(g, [pc]));
+    eq([V().cellStates(g, pv2.cells)[2 * 20 + 3], V().cellStates(g, pv2.cells)[19 * 20 + 11]], [1, 2], 'memoria: esplorata (velo più tenue)');
+    eq(V().cellStates(g, pv2.cells)[0], 1, 'automatica: i ritocchi del master non contano');
+    // Mista: visione più ritocchi (nascondere batte la visione).
+    g.fog.mode = 'mista';
+    V().paintFog(g, [{ x: 11, y: 19 }], false);
+    eq([V().cellStates(g, pv2.cells)[19 * 20 + 11], V().cellStates(g, pv2.cells)[0]], [0, 2], 'mista: nascosta a mano, rivelata a mano');
+    V().hideAll(g);
+    eq([g.fog.seen.includes('1'), g.fog.manual.includes('1')], [false, false], 'Nascondi tutto');
+    V().revealAll(g);
+    ok(V().cellStates(g, null).every((x) => x === 2), 'Rivela tutto');
+    // Stanza: si rivela quando si apre una porta che la tocca (una volta sola).
+    const r = vGrid({ fog: { enabled: true, mode: 'manuale' }, vision: { rooms: [{ id: 'st', name: 'Cripta', cells: [{ x: 10, y: 10 }, { x: 11, y: 10 }] }] },
+      items: [{ id: 'p', name: 'Porta', otype: 'porta', x: 9, y: 10 }] });
+    eq(V().roomsSweep(r, [pc]), [], 'porta chiusa');
+    r.items[0].state = 'aperto';
+    eq([V().roomsSweep(r, [pc]).length, V().cellStates(r, null)[10 * 20 + 11], r.vision.rooms[0].revealed], [1, 2, true], 'porta aperta: la stanza si rivela');
+    eq(V().roomsSweep(r, [pc]), [], 'una volta sola');
+  });
+
+  test('Visione: pedine nascoste ai giocatori e visioneGiocatore()', () => {
+    const g = vGrid({ fog: { enabled: true, mode: 'auto', ghosts: true }, structures: [vWall('m', 6, 0, 1, 20)],
+      items: [{ id: 'tr', name: 'Trappola', otype: 'trappola', x: 3, y: 3, hidden: true }, { id: 'fz', name: 'Forziere', otype: 'forziere', x: 4, y: 3 }, { id: 'fz2', name: 'Forziere lontano', otype: 'forziere', x: 15, y: 3 }] });
+    const pc = vC({ id: 'p', pos: { x: 2, y: 2 } });
+    const near = vC({ id: 'n', name: 'Goblin', kind: 'npc', faction: 'nemici', pos: { x: 4, y: 4 } });
+    const far = vC({ id: 'f', name: 'Orco', kind: 'npc', faction: 'nemici', pos: { x: 10, y: 4 } });
+    const pv = V().playersView(vCtx(g, [pc, near, far]));
+    eq([pv.seenIds.has('n'), pv.seenIds.has('f')], [true, false], 'il nemico dietro il muro non è visto');
+    const out = V().visioneGiocatore({ grid: g, combatants: [pc, near, far] });
+    eq(out.combatants.map((c) => c.id), ['p', 'n'], 'pedine: solo quelle che i giocatori vedono');
+    eq(out.items.map((i) => i.id), ['fz'], 'oggetti nascosti e celle non rivelate esclusi');
+    eq([out.cells.length, out.cells[2 * 20 + 8], out.cells[2 * 20 + 3]], [400, '0', '2'], 'celle: nascoste e visibili');
+    ok(!('trap' in out.items[0]) && !('contents' in out.items[0]), 'niente contenuti né trappole');
+    // Ultima posizione nota (fantasma): il goblin si sposta dietro il muro.
+    V().refreshFog(g, [pc, near, far]);
+    near.pos = { x: 12, y: 12 };
+    V().refreshFog(g, [pc, near, far]);
+    const out2 = V().visioneGiocatore({ grid: g, combatants: [pc, near, far] });
+    eq([out2.combatants.map((c) => c.id), out2.ghosts], [['p'], [{ x: 4, y: 4 }]], 'fantasma all\'ultima posizione nota');
+    // Senza nebbia: tutto tranne i nascosti.
+    g.fog.enabled = false;
+    eq(V().visioneGiocatore({ grid: g, combatants: [pc, near, far] }).combatants.length, 3);
+  });
+
+  test('Visione UI: nebbia dopo il cambio di tema e di zoom, pedine nascoste nell\'anteprima', () => {
+    const g = vGrid({ fog: { enabled: true, mode: 'auto' }, vision: { ambient: 'notte' }, structures: [vWall('m', 6, 0, 1, 20)] });
+    const pc = vC({ id: 'p', pos: { x: 2, y: 2 }, light: { kind: 'torcia', on: true, minutes: 60 } });
+    const orc = vC({ id: 'o', kind: 'npc', faction: 'nemici', pos: { x: 10, y: 2 } });
+    const doc = { grid: g, combatants: [pc, orc] };
+    const fake = { requestDraw() {}, tileSnapshot: () => G().gridSnapshot(doc), commitTiles() {}, updateUi() {} };
+    const ui = DnD.uiVisione.create({ getDoc: () => doc, widget: () => fake, mode: 'combattimento' });
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 300;
+    const ctx = cv.getContext('2d');
+    const a = ui.compute();
+    ui.draw(ctx, { panX: 0, panY: 0, zoom: 1 }, 32);
+    ui.draw(ctx, { panX: 15, panY: -8, zoom: 2.5 }, 80);
+    ok(ui.compute() === a, 'zoom e pan riusano lo stesso livello (nessun ricalcolo)');
+    // Velo del master: cella nascosta al buio, coperta ma non opaca (il master vede tutto).
+    const px = (cvs, x, y) => Array.from(cvs.getContext('2d').getImageData(x, y, 1, 1).data);
+    const hidden = px(a.shade, 15, 15)[3];
+    ok(hidden > 120 && hidden < 255, 'velo semitrasparente sulle celle non rivelate (' + hidden + ')');
+    eq(px(a.shade, 2, 3)[3], 0, 'nessun velo nella luce della torcia');
+    const root = document.documentElement;
+    const prev = root.dataset.theme;
+    try {
+      root.dataset.theme = prev === 'dark' ? 'light' : 'dark';
+      window.dispatchEvent(new Event('themechange'));
+      const b = ui.compute();
+      ok(b !== a && b.shade, 'cambio di tema: ricalcolato con i colori del tema');
+      ok(px(b.shade, 15, 15)[3] === hidden, 'stessa copertura nel nuovo tema');
+    } finally {
+      if (prev === undefined) delete root.dataset.theme; else root.dataset.theme = prev;
+      window.dispatchEvent(new Event('themechange'));
+    }
+    // Anteprima «come i giocatori»: l'orco dietro il muro non si vede.
+    ui.setViewAs('giocatori');
+    eq([ui.hideToken(pc), ui.hideToken(orc)], [false, true]);
+    ui.setViewAs('master');
+    eq(ui.hideToken(orc), false, 'il master vede sempre tutto');
+    eq(ui.levelAt(2, 2), 2, 'indicatore della luce sulla pedina');
+  });
+
+  test('Visione: prestazioni su una griglia 100×100', () => {
+    const structures = [];
+    for (let i = 0; i < 12; i++) structures.push(vWall('m' + i, 8 * i + 4, (i * 13) % 60, 1, 30));
+    const g = vGrid({ w: 100, h: 100, structures, vision: { ambient: 'notte', lights: [{ id: 'l', x: 50, y: 50, bright: 40, dim: 40 }] }, fog: { enabled: true, mode: 'auto' } });
+    const party = [0, 1, 2, 3].map((i) => vC({ id: 'p' + i, pos: { x: 10 + i * 20, y: 80 }, senses: { darkvision: i % 2 ? 60 : 0 }, light: i === 0 ? { kind: 'torcia', on: true, minutes: 60 } : null }));
+    const enemies = [0, 1, 2, 3, 4, 5].map((i) => vC({ id: 'e' + i, kind: 'npc', faction: 'nemici', pos: { x: 15 * i + 3, y: 20 } }));
+    const t0 = performance.now();
+    const r = V().refreshFog(g, party.concat(enemies));
+    const ms = performance.now() - t0;
+    ok(r.explored > 0, 'celle esplorate');
+    ok(ms < 1500, 'ricalcolo della nebbia in ' + Math.round(ms) + ' ms');
+    const t1 = performance.now();
+    for (let i = 0; i < 20; i++) V().signature(g, party.concat(enemies));
+    ok(performance.now() - t1 < 500, 'firma per il ricalcolo a richiesta');
+  });
+
+  test('Visione: salvataggio, migrazione v17 → v18, copie e ridimensionamento', () => {
+    // Griglie e combattenti precedenti: nebbia spenta, giorno, nessuna sorgente, nulla cambia.
+    const st = DnD.dati.normalizeState({ version: 17, races: [], npcs: [], players: [], structures: [{ id: 's', name: 'Muro', w: 3, h: 1 }],
+      savedGrids: [{ id: 'g', name: 'Vecchia', w: 10, h: 10, structures: [{ id: 'm', name: 'Muro', x: 1, y: 1, w: 3, h: 1, cells: '111' }], fog: { enabled: true, seen: '1'.repeat(100) } }] });
+    const g = st.savedGrids[0];
+    eq([g.vision.ambient, g.vision.lights.length, g.fog.mode, g.fog.seen.length, g.structures[0].blocksSight], ['giorno', 0, 'mista', 100, true], 'griglia v17');
+    ok(st.structures.some((x) => x.name === 'Finestra' && !x.blocksSight) && st.mapObjects.some((x) => x.name === 'Braciere' && x.light), 'esempi agli archivi migrati');
+    eq(st.structures.find((x) => x.id === 's').blocksSight, true, 'le strutture esistenti bloccano la vista');
+    // Salvataggio: tutto passa la normalizzazione.
+    const full = vGrid({ vision: { ambient: 'notte', stepped: true, lights: [{ id: 'l', x: 3, y: 3, kind: 'torcia', minutes: 30 }], sight: '1'.repeat(5), rooms: [{ id: 'r', name: 'Sala', cells: [{ x: 1, y: 1 }] }] },
+      fog: { enabled: true, mode: 'auto', manual: '12', opacity: 0.7, ghosts: true, lastKnown: { e1: { x: 2, y: 2 } } } });
+    const again = DnD.dati.normalizeSavedGrid(JSON.parse(JSON.stringify(full)));
+    eq([again.vision, again.fog], [full.vision, full.fog], 'salvataggio e ripristino');
+    // Combattente: sensi e sorgente.
+    const c = DnD.dati.normalizeCombatant({ id: 'x', name: 'X', maxHp: 5, senses: { darkvision: 60 }, light: { kind: 'lanterna', on: false } });
+    eq([c.senses.darkvision, c.light], [60, { kind: 'lanterna', on: false, minutes: 360 }]);
+    eq(DnD.dati.normalizeCombatant({ id: 'y', name: 'Y', maxHp: 5 }).light, null, 'combattenti precedenti: nessuna sorgente');
+    // Dalla razza (metri) e dal Percorso leggendario.
+    eq(V().sensesFromRace({ darkvision: 18 }).darkvision, 60);
+    eq(V().sensesOf({ senses: {}, legend: { senses: { 'vista pura': 9 } } }).truesight, 30, 'sensi del Percorso leggendario');
+    // Copia nel combattimento e ritorno con «Salva come nuova griglia».
+    const combat = { grid: { structures: [], items: [], labels: [], zones: [], tileMap: null }, combatants: [] };
+    G().applySavedGrid(combat, full, DnD.dadi.uid);
+    combat.grid.vision.ambient = 'giorno';
+    eq(full.vision.ambient, 'notte', 'il combattimento lavora su una copia');
+    eq(G().createSavedGrid(combat, 'Copia', 'n', null).vision.lights.length, 1);
+    // Ridimensionamento: sorgenti e celle seguono.
+    const r = G().resizeGrid(full, 22, 20, { x: 'sinistra', y: 'sotto' }).grid;
+    eq([r.vision.lights[0].x, r.vision.sight.slice(0, 7), r.fog.manual.slice(0, 4)], [5, '0011111', '0012'], 'ridimensionata a sinistra');
+    // Annulla/Ripeti con la visione.
+    const doc = { grid: full, combatants: [] };
+    const snap = G().gridSnapshot(doc);
+    full.vision.lights = [];
+    G().restoreSnapshot(doc, snap);
+    eq(full.vision.lights.length, 1, 'annulla una sorgente tolta');
   });
 
   async function runTests() {

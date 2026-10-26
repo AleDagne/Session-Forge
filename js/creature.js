@@ -455,6 +455,8 @@
       w: dims.w, h: dims.h, speeds: DnD.movimento.speedsFromCreature(c.speed), icon: Object.assign({}, c.icon), pos: null, weapons: [],
       defenses: { vuln: c.vulnerabilities.slice(), res: c.resistances.slice(), imm: c.immunities.slice() },
       creature: combatState(c),
+      // Sensi della scheda (in metri) in piedi, per la luce e la visione (visione.js).
+      senses: DnD.visione.sensesFromCreature(c),
       control: 'ia', faction: 'nemici', behavior: DnD.ia.normalizeBehavior(c.behavior), abilities: Object.assign({}, c.abilities),
       classId: '', level: Math.max(1, Math.round(crValue(c.cr))), hidden: false,
       spellcasting: innate.length ? {

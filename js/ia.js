@@ -258,34 +258,20 @@
         if (props.cost > (cost.get(k) || 1)) cost.set(k, Math.min(4, props.cost));
       });
     }
-    return { w: d.w, h: d.h, blocked, cost };
+    // Visione (visione.js): celle che bloccano la vista, luce e sensi per i bersagli visibili.
+    const vision = DnD.visione.context(grid, state.combatants, { tilesets: state.tilesets });
+    return { w: d.w, h: d.h, blocked, cost, vision };
   }
   const cellCost = (map, x, y) => map.cost.get(G().key(x, y)) || 1;
 
-  // Linea di vista tra il centro di due celle (Bresenham): bloccata se una cella intermedia è bloccata.
-  function lineOfSight(map, a, b) {
-    let x = a.x;
-    let y = a.y;
-    const dx = Math.abs(b.x - a.x);
-    const dy = -Math.abs(b.y - a.y);
-    const sx = a.x < b.x ? 1 : -1;
-    const sy = a.y < b.y ? 1 : -1;
-    let err = dx + dy;
-    for (;;) {
-      if (x === b.x && y === b.y) return true;
-      if (!(x === a.x && y === a.y) && map.blocked.has(G().key(x, y))) return false;
-      const e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x += sx; }
-      if (e2 <= dx) { err += dx; y += sy; }
-    }
-  }
-  const footprintCells = (c, pos) => { const d = G().tokenDims(c); const out = []; for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) out.push({ x: pos.x + i, y: pos.y + j }); return out; };
-  // Visibile se almeno una cella del bersaglio è in linea di vista da una cella di chi guarda.
+  // Linea di vista tra il centro di due celle (visione.js): bloccano le celle che bloccano la vista (strutture con
+  // «Blocca la vista», porte chiuse, tile bloccanti), non le finestre.
+  const lineOfSight = (map, a, b) => DnD.visione.lineOfSight(map.vision.sm, a, b);
+  // Visibile se chi guarda lo vede (visione.canSee): linea di vista da una cella dell'ingombro, luce e sensi
+  // (scurovisione, vista cieca, vista pura, percezione tellurica), invisibilità; i nascosti e chi è a terra no.
   function visible(map, viewer, target, viewerPos) {
     if (!target.pos || target.hidden || !alive(target)) return false;
-    const from = footprintCells(viewer, viewerPos || viewer.pos);
-    const to = footprintCells(target, target.pos);
-    return from.some((a) => to.some((b) => lineOfSight(map, a, b)));
+    return DnD.visione.canSee(map.vision, viewer, target, viewerPos).seen;
   }
 
   // ---------- Percorso minimo ----------
@@ -345,8 +331,9 @@
     const hpPct = mover.hp / mover.maxHp;
     if (P.aborted || now() > deadline) return fallback(state, map, mover, hostiles, plan, header, attacks);
 
-    // Gli invisibili non si vedono: li attacca solo se non c'è nessun altro (senza sapere bene dove sono).
-    const seen = hostiles.filter((t) => visible(map, mover, t) && !DnD.condizioni.has(t, 'invisibile'));
+    // Ignora chi non vede (buio, fuori vista, invisibile) se vede qualcun altro; altrimenti si avvicina al più vicino
+    // che sente (senza sapere bene dove sia). I sensi speciali (vista cieca, tellurica, pura) contano come vista.
+    const seen = hostiles.filter((t) => visible(map, mover, t));
     const pool = seen.length ? seen : hostiles;
     const dmgType = attacks.length && attacks[0].parts && attacks[0].parts[0] ? attacks[0].parts[0].type : '';
     // Costo per raggiungere una posizione di mischia accanto al bersaglio (o Infinity).
@@ -363,7 +350,7 @@
     const info = pool.map((t) => ({ t, path: reachCost(t, 1).cost, weak: weakness(t, mover, state.combatants, dmgType, state.relations), thr: threat(t, state.catalog), line: G().tokenDistance(mover, t) }));
     plan.scores = info.map((x) => ({ id: x.t.id, name: x.t.name, percorso: x.path === Infinity ? null : x.path, distanza: x.line,
       debolezza: Math.round(x.weak.score * 100) / 100, minaccia: Math.round(x.thr.score * 10) / 10 }));
-    if (!seen.length) plan.reminders.push('Non vede nessun avversario: si avvicina al più vicino.');
+    if (!seen.length) plan.reminders.push('Non vede nessun avversario (buio, fuori vista o invisibile): si avvicina al più vicino che sente.');
 
     // Bersaglio secondo un criterio (con casualità: talvolta il secondo migliore).
     const pick = (list, key, desc) => {

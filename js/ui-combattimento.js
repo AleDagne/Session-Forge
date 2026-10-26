@@ -20,6 +20,7 @@
   const setup = { players: new Set(), npcs: {}, gridId: '', control: {}, faction: {}, simulated: false }; // selezione del setup (non persistita)
   let selectedId = null; // combattente selezionato (scheda e pedina)
   let grid = null;       // widget della griglia: creato una volta, così vista e annulla/ripeti sopravvivono ai render
+  let vision = null;     // luce, visione e nebbia di guerra sulla griglia (ui-visione.js)
 
   const session = (st) => DnD.sessioni.current(st || DnD.store.state);
   const combat = () => session().combat;
@@ -48,7 +49,34 @@
     const distance = a.pos && t.pos ? G.tokenDistance(a, t) : null;
     let map = null;
     const canSee = (x, y) => { if (!x.pos || !y.pos) return true; map = map || IA.buildMap(aiState()); return IA.visible(map, x, y); };
-    return C.attackMods(a, t, { melee: !ranged && (distance === null || distance <= 1), distance, base, byId, canSee });
+    // Luce e visione: svantaggio contro chi non si vede (buio, fuori vista), vantaggio contro chi non vede.
+    const vision = a.pos && t.pos ? V.attackVision(V.context(combat().grid, combat().combatants, { tilesets: DnD.tilemap.tilesetIndex(DnD.store.state.tilesets) }), a, t) : null;
+    return C.attackMods(a, t, { melee: !ranged && (distance === null || distance <= 1), distance, base, byId, canSee, vision });
+  }
+  // ---------- Luce, visione e nebbia (visione.js) ----------
+  const V = DnD.visione;
+  // Dopo ogni modifica: sorgenti delle concentrazioni finite, nebbia dei giocatori (memoria, stanze, fantasmi).
+  function visionAfter(c) {
+    if (!c || !c.grid.vision) return;
+    for (const line of V.pruneLinked(c.grid, c.combatants)) log(c, 'sistema', '✨ ' + line);
+    for (const line of V.refreshFog(c.grid, c.combatants, { tilesets: DnD.tilemap.tilesetIndex(DnD.store.state.tilesets) }).lines) log(c, 'sistema', line);
+  }
+  // Luce sulla pedina: icona e nome del livello («☀ luce intensa»).
+  function lightText(x) {
+    if (!x.pos || !vision) return '';
+    const lv = vision.levelAt(x.pos.x, x.pos.y);
+    const src = x.light && x.light.on ? V.sourceById(x.light.kind) : null;
+    return DnD.visioneDati.LEVEL_ICONS[lv] + ' ' + DnD.visioneDati.LEVEL_NAMES[lv].toLowerCase() + (src ? ' (' + src.icon + ' ' + src.name.toLowerCase() + ')' : '');
+  }
+  // Sorgente portata da una pedina: accendi, spegni o scegli quale (torcia, lanterna…).
+  function lightDialog(x) {
+    const sel = el('select', { 'aria-label': 'Sorgente di luce' }, el('option', { value: '', text: '— nessuna —' }),
+      DnD.visioneDati.SOURCES.map((s) => el('option', { value: s.id, text: s.icon + ' ' + s.name + ' (' + s.bright + ' + ' + s.dim + ' ft' + (s.minutes ? ', ' + s.minutes + ' min' : '') + ')', selected: x.light && x.light.kind === s.id })));
+    openDialog('Sorgente di luce di ' + x.name, el('div', { class: 'form' }, field('Porta', sel),
+      el('p', { class: 'muted small', text: 'La torcia dura un\'ora di gioco (10 round = 1 minuto); spenta non si consuma.' })), [
+      { text: 'Annulla' },
+      { text: 'Applica', class: 'primary', onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === x.id); const line = V.setCarried(t, sel.value, true); if (line) log(c, 'sistema', line); }) },
+    ]);
   }
   // Azioni bloccate dalle condizioni (il master può permetterle): il motivo, oppure null.
   const blockedBy = (x) => (x.forceActions ? null : C.actionBlock(x));
@@ -373,8 +401,8 @@
     return { combatants: c.combatants, grid: c.grid, catalog: st.equipment, tilesets: DnD.tilemap.tilesetIndex(st.tilesets), round: c.round, seed: c.ai.seed, rules: rules(), relations: relTable(st) };
   }
   // Impronta di ciò che cambia il piano: posizioni, PF, ingombri, controllo, fazioni e oggetti della griglia.
-  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.freeMovement, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden, x.movement, x.conditions, x.moveMode, x.hostileTo, x.joinRound]),
-    c.grid.items.map((it) => [it.id, it.x, it.y, it.state]), c.grid.structures.length, c.grid.ignoreCollisions]);
+  const aiSignature = (c) => JSON.stringify([c.round, c.currentId, c.freeMovement, c.combatants.map((x) => [x.id, x.pos, x.hp, x.w, x.h, x.control, x.faction, x.hidden, x.movement, x.conditions, x.moveMode, x.hostileTo, x.joinRound, x.light]),
+    c.grid.items.map((it) => [it.id, it.x, it.y, it.state, it.light]), c.grid.structures.length, c.grid.ignoreCollisions, c.grid.vision]);
   // Piano del combattente di turno, se è controllato dall'IA: si ricalcola quando cambia il turno o la griglia,
   // o su richiesta (Ricalcola, Cambia bersaglio: il bersaglio scelto resta finché non si ricalcola).
   function currentAiPlan(force) {
@@ -569,15 +597,19 @@
 
   function getGrid() {
     if (!grid) {
+      vision = DnD.uiVisione.create({ getDoc: () => combat(), widget: () => grid, mode: 'combattimento' });
       grid = DnD.uiGriglia.create({
         getDoc: combat,
-        update: (fn) => DnD.store.update(() => fn(combat())),
+        // Spostamenti e strumenti della griglia: la nebbia dei giocatori si aggiorna subito.
+        update: (fn) => DnD.store.update(() => { fn(combat()); visionAfter(combat()); }),
+        painter: vision.painter,
+        vision,
         tools: ['seleziona', 'misura'],
         showCombatants: true,
         onSelect: (id) => selectCombatant(id, 'grid'),
         tokenActions,
         movement: { begin: movementBegin, apply: movementApply },
-        turnInfo: (x) => speedText(x, true),
+        turnInfo: (x) => speedText(x, true) + (lightText(x) ? ' · ' + lightText(x) : ''),
         // Residuo sopra la pedina di turno; anteprima del piano dell'IA: percorso tratteggiato e bersagli evidenziati.
         overlay: (ctx, view, s) => {
           const c = combat();
@@ -617,7 +649,8 @@
             },
           },
           getItem: () => combat() && combat().grid.items.find((x) => x.id === id),
-          update: (fn) => { DnD.store.update((st) => fn(session(st).combat.grid.items.find((x) => x.id === id), st)); render(); },
+          // Porte aperte e luci accese: la nebbia (stanze, celle viste) si aggiorna subito.
+          update: (fn) => { DnD.store.update((st) => { const c = session(st).combat; fn(c.grid.items.find((x) => x.id === id), st); visionAfter(c); }); render(); },
           log: (text) => { DnD.store.update(() => log(combat(), 'sistema', text)); render(); },
           combatants: () => order(),
           applyDamage: (targetId, amount, type, text) => {
@@ -637,6 +670,7 @@
           updateOriginalBtn,
           el('button', { type: 'button', class: 'btn small', text: 'Carica griglia…', onclick: () => DnD.uiGriglia.savedGridsDialog(loadGrid) }),
           el('label', { class: 'check small', title: 'Nessun limite di velocità (eventi, teletrasporti)' }, freeBox, ' Movimento libero'),
+          vision.quickBar(),
         ],
       });
     }
@@ -677,6 +711,10 @@
       C.has(x, 'prono') ? { text: '⤒ Rialzati (metà velocità)', onclick: () => moveAction(id, 'rialzati') } : null,
       Mv.movementOf(x).moves.length ? { text: '↶ Annulla spostamento', onclick: () => moveAction(id, 'annulla') } : null,
       { text: '⚕ Condizioni e concentrazione…', onclick: () => conditionsDialog(byId(id)) },
+      x.light ? { text: x.light.on ? '🌑 Spegni: ' + V.sourceById(x.light.kind).name.toLowerCase() : '🔥 Accendi: ' + V.sourceById(x.light.kind).name.toLowerCase(),
+        onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === id); log(c, 'sistema', V.setCarried(t, t.light.kind)); }) }
+        : { text: '🔥 Accendi una torcia', onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === id); log(c, 'sistema', V.setCarried(t, 'torcia', true)); }) },
+      { text: '🔦 Sorgente di luce…', onclick: () => lightDialog(byId(id)) },
       { text: x.ignoreSpeed ? '🦶 Rispetta la velocità' : '🦶 Ignora velocità', onclick: () => mutate((c) => {
         const t = c.combatants.find((y) => y.id === id);
         t.ignoreSpeed = !t.ignoreSpeed;
@@ -780,6 +818,7 @@
       // Mondo: provocazioni degli NPC neutrali, uccisioni (quest, reputazione) e fine per fazioni.
       const c = session(st).combat;
       if (c) conditionsAfter(c, beforeHp);
+      if (c) visionAfter(c);
       if (c) worldAfter(c, st, beforeHp, aggr);
       // Boss: passaggi di fase e sconfitte (anche più fasi con un solo colpo), con le note nel log.
       if (c && c.phase === 'attivo') events = DnD.boss.checkCombat(c, (type, text) => log(c, type, text));
@@ -1099,6 +1138,8 @@
       // Fine del turno di chi ha appena giocato: durate in round, salvezze ripetute, «fino alla fine del turno di…».
       if (c.currentId) for (const line of C.endTurn(c.combatants, c.currentId, dice())) log(c, 'sistema', line);
       if (newRound) log(c, 'round', '— Round ' + res.round + ' —');
+      // Torce e sorgenti a durata: un round = 6 secondi di gioco.
+      if (newRound) for (const line of V.tickLights(c.grid, c.combatants, DnD.visioneDati.ROUND_MINUTES)) log(c, 'sistema', '🔥 ' + line);
       // NPC diventati ostili: entrano nell'ordine di iniziativa da questo round.
       if (newRound) for (const x of c.combatants.filter((y) => y.joinRound && y.joinRound <= res.round)) { x.joinRound = 0; log(c, 'sistema', x.name + ' entra nell\'ordine di iniziativa.'); }
       const prev = c.currentId;
@@ -1416,6 +1457,9 @@
       }, dice());
       // Concentrazione: inizia prima di applicare gli effetti (quella precedente finisce con i suoi).
       const concLines = sp.concentration ? C.startConcentration(a, sp, c.combatants, c.round) : [];
+      // Luce e Oscurità (riconosciuti dal nome): la sorgente nasce sul primo bersaglio o su chi lancia, legata alla concentrazione.
+      const lightAt = (targets[0] && targets[0].pos) || a.pos;
+      if (lightAt && V.spellEffect(sp)) concLines.push(V.castLight(c.grid, a, sp, lightAt));
       const e = sp.effect;
       const dmgType = e.damageType ? ' ' + e.damageType : '';
       const diceText = (r) => (r ? DnD.dadi.formatExpr(r.count, r.sides, r.modifier) + ': ' + rollText(r.rolls, r.modifier) + ' = ' + Math.max(0, r.total) : '');

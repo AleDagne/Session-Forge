@@ -36,12 +36,8 @@
   const formatDistance = (cells, s) => cells + (cells === 1 ? ' cella' : ' celle') + ' = ' + fmt(cells * s.value) + ' ' + UNIT_NAMES[s.unit];
 
   // ---------- Campi delle griglie ----------
-  function normalizeFog(f, w, h) {
-    f = obj(f);
-    let seen = typeof f.seen === 'string' ? f.seen.replace(/[^01]/g, '0') : '';
-    seen = (seen + '0'.repeat(w * h)).slice(0, w * h);
-    return { enabled: Boolean(f.enabled), seen };
-  }
+  // Nebbia: unica per tutte le griglie (visione.js): celle esplorate, ritocchi del master, modalità.
+  const normalizeFog = (f, w, h) => DnD.visione.normalizeFog(f, w, h);
   // Tipo, scala, biomi, eventi e nebbia (vuoti per le griglie di battaglia, che restano come prima).
   function normalizeGridExtras(g, w, h) {
     g = obj(g);
@@ -52,25 +48,23 @@
       biomeMap: B().normalizeMap(g.biomeMap, w, h),
       events: arr(g.events).slice(0, 500).map((i) => E().normalizeInstance(i, w, h)),
       fog: normalizeFog(g.fog, w, h),
+      // Luce e visione (visione.js): luce ambientale, sorgenti, celle della vista, stanze.
+      vision: DnD.visione.normalizeVision(g.vision, w, h),
     };
   }
   // Contenuto di esplorazione da copiare tra bozza e griglia salvata.
-  const extrasOf = (g) => clone({ kind: g.kind || 'battaglia', scale: g.scale || DEFAULT_SCALE, biomeMap: g.biomeMap || null, events: g.events || [], fog: g.fog || { enabled: false, seen: '' } });
+  const extrasOf = (g) => clone({ kind: g.kind || 'battaglia', scale: g.scale || DEFAULT_SCALE, biomeMap: g.biomeMap || null, events: g.events || [],
+    fog: g.fog || DnD.visione.emptyFog(g.w, g.h), vision: g.vision || DnD.visione.emptyVision(g.w, g.h) });
 
-  // Ridimensionamento: biomi e nebbia seguono le celle, gli eventi fuori dall'area si tolgono.
+  // Ridimensionamento: biomi, nebbia e visione seguono le celle, gli eventi fuori dall'area si tolgono.
   function resizeExtras(g, ow, oh, nw, nh, dx, dy) {
     const shift = (c) => ({ x: c.x + dx, y: c.y + dy });
     const inside = (c) => c.x >= 0 && c.y >= 0 && c.x < nw && c.y < nh;
-    const fogCells = [];
-    for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
-      const ox = x - dx;
-      const oy = y - dy;
-      fogCells.push(ox >= 0 && oy >= 0 && ox < ow && oy < oh && g.fog && g.fog.seen[oy * ow + ox] === '1' ? '1' : '0');
-    }
     const events = (g.events || []).map((i) => Object.assign({}, i, { cells: i.cells.map(shift).filter(inside) })).filter((i) => i.cells.length);
+    const v = DnD.visione.resize(g.vision, g.fog, ow, oh, nw, nh, dx, dy);
     return {
       biomeMap: B().reshapeMap(g.biomeMap, ow, oh, nw, nh, dx, dy),
-      fog: { enabled: Boolean(g.fog && g.fog.enabled), seen: fogCells.join('') },
+      fog: v.fog, vision: v.vision,
       events, lostEvents: (g.events || []).length - events.length,
     };
   }
@@ -90,6 +84,8 @@
       icon: DnD.icone.normalizeIcon(p.icon || { kind: 'library', icon: 'cavaliere', color: '#c9a227' }, false),
       pos: { x: int(pos.x, 0, 0, 99), y: int(pos.y, 0, 0, 99) },
       memberIds: arr(p.memberIds).filter((x) => typeof x === 'string').slice(0, 30),
+      // Sorgente di luce del gruppo (torcia, lanterna…): conta per la scoperta al buio.
+      light: DnD.visione.normalizeCarried(p.light),
     };
   }
   function normalizeLog(l) {
@@ -251,6 +247,8 @@
     ex.time.day += Math.floor(h / 24);
     ex.time.hour = round2(h % 24);
     const people = ex.parties.reduce((n, p) => n + p.memberIds.length, 0);
+    // Torce e lanterne del gruppo si consumano con il tempo.
+    for (const line of DnD.visione.tickLights(null, ex.parties, hours * 60)) log(w, '🔥 ' + line, 'tempo');
     if (dawns > 0) {
       for (const p of ex.parties.flatMap((x) => partyMembers(w, x))) {
         const back = DnD.riposi.dawn(DnD.riposi.fromSheet(p, w.st, memberState(ex, p.id, p)));
@@ -500,31 +498,33 @@
     return near.length;
   }
 
-  // ---------- Nebbia di scoperta ----------
-  // Rivela le celle nel raggio di scoperta del bioma (più la visibilità del meteo) attorno a ogni pedina.
+  // ---------- Nebbia di scoperta (la nebbia di guerra di visione.js) ----------
+  // Celle che il gruppo vede ora: il raggio di scoperta del bioma più la visibilità del meteo, corretto dalla luce
+  // (luce della mappa: Automatica = ora e bioma) e alzato dalla scurovisione dei membri o da una sorgente accesa.
+  function discoveryView(w) {
+    const g = w.grid;
+    const out = new Uint8Array(g.w * g.h);
+    const ambient = g.vision ? g.vision.ambient : 'giorno';
+    for (const p of w.ex.parties) {
+      const b = biomeAt(w, p.pos.x, p.pos.y);
+      const base = Math.max(0, (b ? b.discovery : 2) + (w.ex.weather ? w.ex.weather.visibility || 0 : 0));
+      const level = DnD.visione.ambientLevel(ambient, { hour: w.ex.time.hour, biomeLight: b ? b.light : 'normale' });
+      const dark = partyMembers(w, p).some((m) => { const r = (w.st.races || []).find((x) => x.id === m.raceId); return Boolean(r && r.darkvision); });
+      for (const c of DnD.visione.discoveryCells(g, p.pos, DnD.visione.discoveryRadius(base, level, dark, p.light))) out[c.y * g.w + c.x] = 2;
+    }
+    return out;
+  }
+  // Rivela (e ricorda) le celle viste dal gruppo, secondo la modalità della nebbia.
   function reveal(w) {
     const g = w.grid;
     if (!g.fog || !g.fog.enabled) return 0;
-    const a = g.fog.seen.split('');
-    let n = 0;
-    for (const p of w.ex.parties) {
-      const b = biomeAt(w, p.pos.x, p.pos.y);
-      const r = Math.max(0, (b ? b.discovery : 2) + (w.ex.weather ? w.ex.weather.visibility || 0 : 0));
-      for (let y = p.pos.y - r; y <= p.pos.y + r; y++) for (let x = p.pos.x - r; x <= p.pos.x + r; x++) {
-        if (x < 0 || y < 0 || x >= g.w || y >= g.h) continue;
-        if ((x - p.pos.x) ** 2 + (y - p.pos.y) ** 2 > r * r + r) continue;
-        if (a[y * g.w + x] !== '1') { a[y * g.w + x] = '1'; n++; }
-      }
-    }
-    g.fog.seen = a.join('');
-    return n;
+    // Stanze: si rivelano quando il gruppo ci entra (o si apre una porta che le tocca).
+    for (const line of DnD.visione.roomsSweep(g, w.ex.parties.map((p) => ({ id: p.id, pos: p.pos, w: 1, h: 1, kind: 'player' })))) log(w, line, 'evento');
+    return DnD.visione.remember(g, discoveryView(w));
   }
-  const isSeen = (g, x, y) => !g.fog || !g.fog.enabled || g.fog.seen[y * g.w + x] === '1';
-  function setSeen(g, cells, seen) {
-    const a = g.fog.seen.split('');
-    for (const c of cells) if (c.x >= 0 && c.y >= 0 && c.x < g.w && c.y < g.h) a[c.y * g.w + c.x] = seen ? '1' : '0';
-    g.fog.seen = a.join('');
-  }
+  const isSeen = (g, x, y) => !g.fog || !g.fog.enabled || g.fog.seen[y * g.w + x] === '1' || (g.fog.mode !== 'auto' && g.fog.manual[y * g.w + x] === '1');
+  // Ritocco del master (rivela o nasconde), come il pennello della nebbia.
+  const setSeen = (g, cells, seen) => DnD.visione.paintFog(g, cells, seen);
 
   // ---------- Pila delle mappe ----------
   // Entra in una mappa: la posizione attuale va sulla pila, il gruppo si sposta sul punto d'entrata.
@@ -584,6 +584,6 @@
     KINDS, UNITS, UNIT_NAMES, UNIT_KM, SCALE_PRESETS, DEFAULT_SCALE, LOG_MAX,
     normalizeScale, scaleKm, scaleLabel, formatDistance, normalizeFog, normalizeGridExtras, extrasOf, resizeExtras,
     normalizeState, normalizeParty, normalizeMember, create, biomeAt, activeParty, partyMembers, memberState, placeName, log, queue, eventCtx, worldOf, questOp,
-    advanceTime, rest, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
+    advanceTime, rest, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, discoveryView, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
   };
 })(globalThis.DnD = globalThis.DnD || {});

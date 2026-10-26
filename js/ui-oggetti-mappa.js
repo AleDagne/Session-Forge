@@ -24,6 +24,7 @@
 
   function flagsText(o) {
     return [OM.TYPE_NAMES[o.otype], o.container ? 'contenitore' : '', o.hidden ? 'nascosto' : '', o.otype === 'porta' ? 'blocca se chiusa' : o.blocks ? 'blocca il movimento' : '',
+      o.blocksSight && o.otype !== 'porta' ? 'blocca la vista' : '', o.light ? 'fa luce (' + o.light.bright + ' + ' + o.light.dim + ' ft)' : '',
       o.lock.locked ? 'chiuso a chiave (CD ' + o.lock.dcPick + ')' : '', o.trap.enabled ? 'trappola (CD ' + o.trap.dcFind + '/' + o.trap.dcDisarm + ')' : ''].filter(Boolean).join(' · ');
   }
 
@@ -101,6 +102,7 @@
       interactive: el('input', { type: 'checkbox', checked: o.interactive }),
       hidden: el('input', { type: 'checkbox', checked: o.hidden }),
       blocks: el('input', { type: 'checkbox', checked: o.blocks }),
+      blocksSight: el('input', { type: 'checkbox', checked: o.blocksSight }),
       state: el('select', {}, el('option', { value: 'chiuso', text: 'Chiuso', selected: o.state === 'chiuso' }), el('option', { value: 'aperto', text: 'Aperto', selected: o.state === 'aperto' })),
       locked: el('input', { type: 'checkbox', checked: o.lock.locked }),
       dcPick: numberInput(o.lock.dcPick, { min: 1, max: 40 }),
@@ -118,6 +120,8 @@
       reusable: el('input', { type: 'checkbox', checked: o.trap.reusable }),
     };
     const icon = DnD.uiIcone.iconPicker(o.icon, true, 'Icona sulla griglia');
+    // Luce e visione: luce emessa (braciere, lanterna) e blocco della vista (le porte solo da chiuse).
+    const light = DnD.uiVisione.emitterEditor(o.light);
     const tilesBox = el('div', { class: 'image-box' });
     const cutter = DnD.uiTile.cutter({ mode: 'struttura', tilesetId: cut && cut.tilesetId, srcId: cut && cut.srcId, selection: cut && cut.selection, container: tilesBox, onChange: (st) => { cut = st; }, height: 260 });
     tilesBox.append(cutter.node, el('small', { class: 'hint', text: 'Ogni tile incluso occupa una cella della griglia (l\'oggetto blocca solo con «Blocca il movimento», le porte quando sono chiuse).' }));
@@ -148,7 +152,9 @@
       field('Descrizione', inp.description),
       el('div', { class: 'check-row' },
         el('label', { class: 'check' }, inp.container, ' Contenitore'), el('label', { class: 'check' }, inp.interactive, ' Interagibile'),
-        el('label', { class: 'check' }, inp.hidden, ' Nascosto (solo master)'), el('label', { class: 'check' }, inp.blocks, ' Blocca il movimento')),
+        el('label', { class: 'check' }, inp.hidden, ' Nascosto (solo master)'), el('label', { class: 'check' }, inp.blocks, ' Blocca il movimento'),
+        el('label', { class: 'check', title: 'Le porte bloccano la vista solo da chiuse' }, inp.blocksSight, ' Blocca la vista')),
+      light.node,
       el('fieldset', {}, el('legend', { text: 'Aspetto sulla griglia' }),
         el('div', { class: 'radio-row' }, modeRadio('icon', 'Icona (1×1)'), modeRadio('tiles', 'Tile da immagine')),
         icon.node, tilesBox, el('div', { class: 'error', 'data-error': 'tiles' })),
@@ -171,6 +177,7 @@
         id: o.id, name: inp.name.value.trim(), otype: inp.otype.value, description: inp.description.value.trim(),
         icon: iconResult.icon || o.icon, mode, tiles,
         container: inp.container.checked, interactive: inp.interactive.checked, hidden: inp.hidden.checked, blocks: inp.blocks.checked, state: inp.state.value,
+        blocksSight: inp.blocksSight.checked, light: light.read(),
         lock: { locked: inp.locked.checked, dcPick: readNumber(inp.dcPick), dcForce: readNumber(inp.dcForce), keyId: inp.keyId.value },
         trap: {
           enabled: inp.trap.checked || inp.otype.value === 'trappola', dcFind: readNumber(inp.dcFind), dcDisarm: readNumber(inp.dcDisarm),
@@ -262,7 +269,9 @@
           b(it.state === 'aperto' ? 'Chiudi' : 'Apri', () => act((x) => OM.toggleOpen(x, hasKey(x)).text), !it.interactive),
           it.lock.locked ? check('Scassina (DES)', 'DES', OM.pickLock) : null,
           it.lock.locked || it.state !== 'aperto' ? check('Sfonda (FOR)', 'FOR', OM.forceOpen) : null,
-          b(it.hidden ? 'Rivela ai giocatori' : 'Nascondi', () => act((x) => { x.hidden = !x.hidden; return x.name + (x.hidden ? ' è nascosto.' : ' è visibile.'); }))),
+          b(it.hidden ? 'Rivela ai giocatori' : 'Nascondi', () => act((x) => { x.hidden = !x.hidden; return x.name + (x.hidden ? ' è nascosto.' : ' è visibile.'); })),
+          // Luce emessa dall'oggetto (braciere, lanterna): accendi e spegni.
+          it.light ? b(it.light.on ? '🌑 Spegni' : '🔥 Accendi', () => act((x) => { x.light.on = !x.light.on; return x.name + (x.light.on ? ' viene acceso.' : ' viene spento.'); })) : null),
         it.trap.enabled ? el('div', { class: 'head-actions' },
           check('Cerca trappole (SAG)', 'SAG', OM.findTrap),
           it.trap.armed ? check('Disinnesca (DES)', 'DES', OM.disarmTrap) : null,

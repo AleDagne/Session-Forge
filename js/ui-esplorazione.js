@@ -23,6 +23,7 @@
   let root = null;
   let grid = null;          // widget della mappa (creato una volta: vista e zoom sopravvivono ai render)
   let tools = null;         // strumenti del master sulla mappa
+  let vision = null;        // luce, visione e nebbia di guerra (ui-visione.js)
   let snoozed = false;      // «Rimanda»: la finestra evento non si riapre da sola finché non arriva altro
   let lastQueue = 0;
   const undoStack = [];
@@ -43,11 +44,11 @@
   function snapshot(st) {
     const e = session(st).exploration;
     const ids = new Set([e.gridId].concat(e.stack.map((s) => s.gridId)));
-    return clone({ ex: e, grids: st.savedGrids.filter((g) => ids.has(g.id)).map((g) => ({ id: g.id, events: g.events, fog: g.fog, biomeMap: g.biomeMap })), players: st.players });
+    return clone({ ex: e, grids: st.savedGrids.filter((g) => ids.has(g.id)).map((g) => ({ id: g.id, events: g.events, fog: g.fog, vision: g.vision, biomeMap: g.biomeMap })), players: st.players });
   }
   function restore(st, snap) {
     session(st).exploration = clone(snap.ex);
-    for (const g of snap.grids) { const t = gridOf(st, g.id); if (t) Object.assign(t, clone({ events: g.events, fog: g.fog, biomeMap: g.biomeMap })); }
+    for (const g of snap.grids) { const t = gridOf(st, g.id); if (t) Object.assign(t, clone({ events: g.events, fog: g.fog, vision: g.vision, biomeMap: g.biomeMap })); }
     st.players = clone(snap.players);
   }
   // Riposo del gruppo attivo (esplorazione.rest): anteprima su una copia, poi il riposo vero con l'annulla.
@@ -114,15 +115,36 @@
     return e.parties.map((p) => {
       const hp = p.memberIds.reduce((s, id) => s + (e.members[id] ? e.members[id].hp : 0), 0);
       const max = p.memberIds.reduce((s, id) => s + (e.members[id] ? e.members[id].maxHp : 0), 0) || 1;
-      return { id: p.id, name: p.name, icon: p.icon, pos: Object.assign({}, p.pos), w: 1, h: 1, hp: Math.max(1, hp), maxHp: max, kind: 'player', speed: 9 };
+      return { id: p.id, name: p.name, icon: p.icon, pos: Object.assign({}, p.pos), w: 1, h: 1, hp: Math.max(1, hp), maxHp: max, kind: 'player', speed: 9, light: p.light };
     });
+  }
+  // Torcia (o altra sorgente) del gruppo: conta per la scoperta al buio e fa luce sulla mappa.
+  function partyLight(id, kind) {
+    let line = '';
+    mutate((w) => {
+      const p = w.ex.parties.find((x) => x.id === id);
+      if (!p) return;
+      line = DnD.visione.setCarried(p, kind === undefined ? (p.light ? p.light.kind : 'torcia') : kind);
+      if (line) X.log(w, line, 'sistema');
+      X.reveal(w);
+    }, true);
   }
   function getGrid() {
     if (grid) return grid;
+    vision = DnD.uiVisione.create({
+      getDoc: () => { const w = world(); return w && w.grid ? { grid: w.grid, combatants: tokens(w.ex) } : null; }, widget: () => grid, mode: 'esplorazione',
+      otherPainter: () => tools.painter,
+      // Luce automatica: ora del giorno e bioma della pedina attiva. Celle viste: il raggio di scoperta del gruppo.
+      env: () => { const w = world(); if (!w || !w.grid) return {}; const p = X.activeParty(w.ex); const b = X.biomeAt(w, p.pos.x, p.pos.y); return { hour: w.ex.time.hour, biomeLight: b ? b.light : 'normale' }; },
+      playersView: () => { const w = world(); return { cells: X.discoveryView(w), seenIds: new Set(w.ex.parties.map((p) => p.id)) }; },
+      onChange: () => DnD.store.save(),
+    });
     tools = UM().create({
       getGrid: () => { const w = world(); return w && w.grid; }, widget: () => grid, mode: 'gioco',
       onInteract: (inst) => interact(inst),
       onChange: () => DnD.store.save(),
+      otherPainter: () => vision.painter,
+      extra: () => vision.quickBar(),
     });
     grid = DnD.uiGriglia.create({
       getDoc: () => {
@@ -142,9 +164,16 @@
       },
       tools: ['seleziona', 'misura'],
       showCombatants: false,
-      painter: tools.painter,
+      painter: UM().combinePainters(tools.painter, vision.painter),
+      vision,
       onSelect: (id) => { if (id && ex() && ex().parties.some((p) => p.id === id) && ex().activeParty !== id) { DnD.store.update(() => { ex().activeParty = id; }); render(); } },
-      tokenActions: (id) => [{ text: '⭐ Rendi attiva', onclick: () => { DnD.store.update(() => { ex().activeParty = id; }); render(); } }],
+      tokenActions: (id) => {
+        const p = ex() && ex().parties.find((x) => x.id === id);
+        const src = p && p.light ? DnD.visione.sourceById(p.light.kind) : null;
+        return [{ text: '⭐ Rendi attiva', onclick: () => { DnD.store.update(() => { ex().activeParty = id; }); render(); } },
+          { text: src && p.light.on ? '🌑 Spegni: ' + src.name.toLowerCase() : '🔥 Accendi ' + (src ? src.name.toLowerCase() : 'una torcia'), onclick: () => partyLight(id) },
+          p && p.light ? { text: '✕ Posa la sorgente di luce', onclick: () => partyLight(id, '') } : null].filter(Boolean);
+      },
       // Copie degli NPC del Mondo sulla mappa: pannello NPC (Parla, Commercia, Quest, Attacca…).
       onObject: (id) => DnD.uiOggettiMappa.openPanel({
         getItem: () => { const w = world(); return w && w.grid ? w.grid.items.find((x) => x.id === id) : null; },
@@ -156,10 +185,6 @@
         if (!w || !w.grid) return;
         UM().drawBiomes(ctx, view, s, w.grid, W, H);
         UM().drawEvents(ctx, view, s, w.grid, { master: true, onLoad: () => grid.requestDraw() });
-      },
-      overlay: (ctx, view, s) => {
-        const w = world();
-        if (w && w.grid) UM().drawFog(ctx, view, s, w.grid, { playerView: false });
       },
       undo, redo, canUndo: () => undoStack.length > 0, canRedo: () => redoStack.length > 0,
     });

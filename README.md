@@ -193,7 +193,9 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
 - **Magie** – libreria degli incantesimi (come prima).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
-    **Da immagine** (vedi [Tile](#tile)), colore libero.
+    **Da immagine** (vedi [Tile](#tile)), colore libero, **Blocca la vista** (di base sì; *Finestra* e *Grata*
+    d'esempio bloccano il passaggio ma non la vista) e **luce** emessa (vedi [Luce, visione e nebbia di
+    guerra](#luce-visione-e-nebbia-di-guerra)).
   - **Oggetti**, con due sotto-schede:
     - **Attrezzatura**: catalogo degli oggetti di gioco (Armi, Armature, Scudi, Equipaggiamento d'avventura,
       Strumenti, Consumabili, Oggetti magici, Tesori e gemme, Altro) con nome, descrizione, peso, costo e
@@ -207,7 +209,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
       scelti. Le armi scritte a mano restano valide.
     - **Oggetti di mappa** (forzieri, porte, leve, trappole, barili, altari…): tipo, aspetto (icona della
       libreria, immagine, forma o tile da immagine, 1×1 di base), *Contenitore*, *Interagibile*, *Nascosto
-      (solo master)* — sulla griglia è semitrasparente con l'occhio barrato — e *Blocca il movimento*; stato
+      (solo master)* — sulla griglia è semitrasparente con l'occhio barrato —, *Blocca il movimento*, *Blocca la
+      vista* e **luce** emessa (Accendi/Spegni nel pannello; d'esempio *Braciere* e *Lanterna appesa*); stato
       chiuso/aperto (una **porta chiusa blocca**, aperta no); serratura (CD per scassinare, CD Forza per
       sfondare, chiave richiesta); trappola (CD per individuarla e disinnescarla, danno diretto o tiro
       salvezza, una volta o più); contenuto (oggetti del catalogo e monete). Sono **modelli**: ogni copia
@@ -393,8 +396,8 @@ Una mappa di nodi collegati (albero di abilità a grafo) con al centro il **Nucl
   competenza (×1) o maestria (×2) valgono nelle prove degli eventi dell'esplorazione e nella Percezione passiva. Le
   magie **«N al giorno»** si lanciano senza slot (anche da chi non ha una classe da incantatore: con la migliore
   tra INT, SAG e CAR); gli usi spesi restano sulla scheda e tornano con il riposo lungo (le opzioni del master
-  hanno *Riposo breve* e *Riposo lungo*). I **sensi** compaiono nella scheda e nel combattimento: l'app non ha regole
-  di luce e vista a cui applicarli. Le competenze in strumenti, armi e armature sono testo (non c'è un calcolo
+  hanno *Riposo breve* e *Riposo lungo*). I **sensi** compaiono nella scheda e nel combattimento e valgono per la
+  [luce e la visione](#luce-visione-e-nebbia-di-guerra). Le competenze in strumenti, armi e armature sono testo (non c'è un calcolo
   che le usi).
 - **Modalità Sblocca** (gioco): i nodi raggiungibili e acquistabili pulsano, quelli bloccati sono spenti, quelli
   acquisiti sono illuminati con le linee attive. Clic su un nodo = dettagli e «Sblocca» con conferma e una luce
@@ -503,17 +506,20 @@ chiusura e schede sugli schermi stretti, preferenze proprie):
 - **Mappa**: la pedina del gruppo si trascina (percorso di costo minimo che evita le celle impraticabili) o si
   muove con le **frecce** (Home/Fine/PagSu/PagGiù in diagonale). Ogni passo calcola costo e ore dal bioma, dalla
   modalità di viaggio e dal ritmo; il tempo avanza, scorte e meteo si aggiornano, si controllano pericoli
-  ambientali, incontri casuali e inneschi. **Nebbia di scoperta** facoltativa: celle mai viste oscurate (in
-  trasparenza per il master), rivelate nel raggio di scoperta del bioma più la visibilità del meteo; il master
-  rivela o nasconde a mano. Annulla/Ripeti (Ctrl+Z / Ctrl+Y) riportano indietro anche tempo e scorte.
+  ambientali, incontri casuali e inneschi. **Nebbia di scoperta** facoltativa: è la [nebbia di
+  guerra](#luce-visione-e-nebbia-di-guerra), unica per tutte le mappe. Celle mai viste oscurate (in trasparenza per
+  il master), rivelate nel raggio di scoperta del bioma più la visibilità del meteo, corretto dalla luce (luce
+  *Automatica* dall'ora e dal bioma: −1 in penombra, −3 al buio, un gradino in meno con la scurovisione di un membro o
+  una torcia accesa del gruppo); il master rivela o nasconde a mano (barra «Nebbia» sopra la mappa). La torcia del
+  gruppo si accende dal menu della pedina e si consuma con il tempo. Annulla/Ripeti (Ctrl+Z / Ctrl+Y) riportano indietro anche tempo e scorte.
 - **Tempo e registro**: giorno, ora, meteo, bioma corrente con costo e ore per cella, ritmo, modalità,
   **Avanza tempo**, variabili della sessione e registro con ora e luogo.
 - Quando scatta un evento si apre la **finestra evento** (testo, note del master, avvisi) con **Esegui**,
   **Salta**, **Rimanda** e **Cambia esito a mano**. Gli incontri con creature propongono *Prepara combattimento*.
   I combattimenti e le mappe di battaglia raggiunte con «Entra in una mappa» si giocano nel Combattimento, con
   il banner **↩ Torna all'esplorazione**; i PF dei personaggi passano dall'uno all'altro.
-- Non c'è ancora una vista per i giocatori: il disegno è già pronto a nascondere celle non scoperte, eventi
-  nascosti e note quando ci sarà.
+- Non c'è ancora una vista per i giocatori: «👁 Vedi come» mostra in anteprima ciò che vedrebbero, e
+  `DnD.visione.visioneGiocatore()` prepara lo stato filtrato (celle non scoperte, eventi nascosti e note esclusi).
 
 ## Mondo
 
@@ -705,7 +711,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 17)
+### Modello dati (versione 18)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -732,6 +738,13 @@ griglia (esplorazione): { …, kind: 'battaglia' | 'esplorazione', scale: { valu
            biomeMap: { palette: [idBioma], cells: 'stringa w×h', defaultId, overlay: { visible, opacity } } | null,
            events: [{ id, templateId, event: …copia del modello…, cells: [{ x, y }], state: { fired, lastHours, discovered, outcomes } }],
            fog: { enabled, seen: 'stringa w×h di 0/1' } }
+griglia (luce e visione, tutte): { …, vision: { ambient: giorno|crepuscolo|notte|buio|auto, stepped, sight: 'stringa w×h di 0-3',
+           lights: [{ id, name, kind, x, y, on, bright, dim (ft), color, flicker, dark, minutes | null, link: { casterId, spellId } | null }],
+           rooms: [{ id, name, cells: [{ x, y }], revealed }] },
+           fog: { enabled, mode: manuale|auto|mista, seen (esplorate), manual: 'stringa w×h di 0/1/2', opacity, ghosts, lastKnown: { idCombattente: { x, y } } } }
+struttura (modello e piazzata) e oggetto di mappa: { …, blocksSight, light: { on, bright, dim, color, flicker } | null }
+combattente: { …, senses: { darkvision, blindsight, truesight, tremorsense, range } (ft), light: { kind, on, minutes } | null }
+pedina del gruppo (esplorazione): { …, light: { kind, on, minutes } | null }
 biomes: [{ id, name, parentId, color, icon, tiles, description, cost, modeCost, hoursPerCell, discovery, light,
            hazards, food, water, encounterChance, encounterPer, encounters, weather }]   (null = ereditato)
 events: [{ id, name, icon, description, readText, notes, trigger, area, visibility, repeat, conditions, actions }]
@@ -791,6 +804,12 @@ backgrounds: [{ id, name, description, skills, tools, languages, equipment: [{ n
            suggestions: { traits, ideals, bonds, flaws }, sessionId, shared }]
 feats: [{ id, name, requirements, description, effects: { abilities, skills, saves, ac, hp, hpPerLevel, speed, initiative }, sessionId, shared }]
 ```
+
+**Migrazione dalla versione 17**: solo normalizzazione. Le griglie ricevono la luce ambientale *Giorno*, nessuna
+sorgente, celle della vista predefinite, nessuna stanza e la nebbia spenta (quelle di esplorazione con la nebbia di
+scoperta tengono le celle viste come esplorate, modalità *Mista*); le strutture esistenti bloccano la vista, gli oggetti no
+(le porte da chiuse); i combattenti salvati non hanno sensi né sorgenti (i nuovi li prendono da razza e creatura). Gli
+archivi (non i file di sessione) ricevono *Finestra*, *Grata*, *Braciere* e *Lanterna appesa*.
 
 **Migrazione dalla versione 16**: solo normalizzazione. I giocatori ricevono la scheda con i campi vuoti (nulla di ciò
 che avevano cambia: classe, razza, PF, CA, salvezze, armi, incantesimi, inventario, note), le righe dell'inventario
@@ -863,7 +882,8 @@ dall'**IA** giocano da soli; spento, tutto funziona come prima.
   50% dei PF); INT attacca il bersaglio più pericoloso; SAG dà la priorità a Mago, Chierico e Stregone
   (lista modificabile), altrimenti il più debole; CAR cura chi è sotto il 50%, poi incantesimi di supporto,
   poi Aiutare, resta lontano dai nemici e attacca solo a distanza o si ritira. I bersagli considerati sono
-  solo quelli visibili (linea di vista tra le celle) e non a terra. Punteggi di debolezza (PF e CA bassi,
+  solo quelli che vede ([luce e visione](#luce-visione-e-nebbia-di-guerra): linea di vista, luce e sensi; se non ne vede
+  nessuno si avvicina al più vicino) e non a terra. Punteggi di debolezza (PF e CA bassi,
   incantatore, isolato, vulnerabile all'arma) e di minaccia (danno medio per round, livello o GS, PF): pesi in
   `js/ia-dati.js`.
 - **Turno** (`js/ia.js`, funzioni pure): `pianificaTurno` restituisce un piano senza modificare nulla. Il
@@ -1174,6 +1194,97 @@ scena è un contenitore: collega mappe, creature, NPC, eventi, quest, note e tes
 - Riferimenti mancanti (mappa, creatura, NPC, evento, città, quest, fazione, oggetto, scena collegata, pagina):
   avviso sulla scena o sull'incontro, voce disattivata o saltata, nessun errore.
 
+## Luce, visione e nebbia di guerra
+
+Logica pura e testata in `js/visione.js`, dati in `js/visione-dati.js` (livelli, luce ambientale, sorgenti, incantesimi,
+sensi, modalità della nebbia), disegno e strumenti in `js/ui-visione.js`. Vale per tutte le griglie (Editor griglie,
+Combattimento, Esplorazione); le griglie esistenti restano come prima: nebbia spenta, giorno (luce intensa ovunque),
+nessuna sorgente.
+
+### Luce
+
+- **Livelli** di ogni cella: **luce intensa**, **penombra** (zona leggermente oscurata: svantaggio alle prove di Percezione
+  basate sulla vista) e **buio** (zona pesantemente oscurata: chi non ha una visione adatta è di fatto accecato verso
+  quella zona).
+- **Luce ambientale** della mappa: Giorno, Crepuscolo, Notte, Buio totale (interno) e, nelle mappe di esplorazione,
+  **Automatica**: dall'ora (giorno dalle 7 alle 18, crepuscolo alle 5-6 e 19-20, poi notte) limitata dalla luce del bioma
+  (foresta e palude in penombra, caverna al buio). Le mappe di esplorazione nuove partono su Automatica.
+- **Sorgenti**: raggio di luce intensa + raggio di penombra in piedi, convertiti in celle con i piedi per cella (nelle mappe
+  di esplorazione con la scala), colore, intermittenza, accesa/spenta e durata facoltativa in minuti di gioco. La luce non
+  passa i muri (linea di vista dalla sorgente).
+  - Piazzate con lo strumento **💡 Luce** (elenco: torcia 6 + 6 m, lanterna a schermo, lanterna schermata, lanterna a
+    occhio di bue, candela, Luce, Luci danzanti, Fiamma perenne, Luce diurna, fuoco da campo) o **🌑 Oscurità** (buio
+    magico: la scurovisione non vede, la vista pura sì).
+  - Di **strutture** e **oggetti di mappa** (campo «Luce» nel form, Accendi/Spegni dal pannello di interazione).
+  - Portate da una **pedina** (menu della pedina: *🔥 Accendi una torcia*, *🌑 Spegni*, *🔦 Sorgente di luce…*) o dal gruppo
+    dell'esplorazione. La torcia dura un'ora di gioco: nel combattimento ogni round vale 6 secondi, nell'esplorazione
+    passa con il tempo; a zero si spegne con una riga nel log.
+- **Incantesimi** riconosciuti dal nome (Luce, Luci danzanti, Fiamma perenne, Luce diurna, Oscurità): lanciati nel
+  combattimento creano la sorgente sul primo bersaglio (o su chi lancia); se sono a concentrazione la sorgente sparisce quando
+  la concentrazione finisce.
+
+### Visione
+
+- **Sensi** dei combattenti (in piedi): **scurovisione** (entro il raggio il buio conta come penombra e la penombra come luce
+  intensa), **vista cieca** (vede senza luce), **vista pura** (ignora buio, anche magico, e invisibilità), **percezione
+  tellurica** (sente chi tocca il suolo, senza linea di vista; non chi vola) e **raggio di vista massimo** (0 = illimitato).
+  Vengono dalla razza (scurovisione), dalla scheda della creatura e dai nodi del Percorso leggendario.
+- Una cella è **visibile** se c'è **linea di vista** (a celle, simmetrica, da una qualsiasi cella dell'ingombro della pedina:
+  le pedine 2×2 vedono dai loro bordi) e la luce o i sensi lo consentono.
+- **Blocco della vista**: strutture con *Blocca la vista* (indipendente dal movimento: una finestra o una grata bloccano il
+  passaggio ma non la vista), porte chiuse (aperte no), oggetti con *Blocca la vista*, tile *Bloccanti* e celle forzate della
+  TileMap. Lo strumento **🧱 Blocco vista** cambia la singola cella: predefinita → blocca → non blocca → leggermente
+  oscurata (nebbia, fumo, vegetazione fitta: al massimo penombra).
+- **Condizioni**: *accecato* non vede (solo la propria cella, o con la vista cieca), *invisibile* non si vede salvo vista
+  pura o vista cieca nel raggio.
+
+### Nebbia di guerra
+
+- Interruttore **Nebbia di guerra** per griglia (spento di base). Il **master** vede sempre tutto, con un velo semitrasparente
+  (opacità regolabile) sulle zone non rivelate e uno più tenue su quelle esplorate. Il **giocatore** vede solo le celle
+  rivelate.
+- **Modalità**: **Manuale** (il master rivela e nasconde con il pennello a **cerchio**, **rettangolo** o **riempimento
+  d'area** chiusa dai muri, con Annulla/Ripeti), **Automatica dalla visione** (le celle viste dalle pedine dei giocatori si
+  rivelano da sole) e **Mista** (automatica con i ritocchi del master: nascondere a mano vince sulla visione).
+- **Memoria**: le celle viste restano *esplorate* (strutture e tile sì, pedine nemiche no). **Ultime posizioni note**
+  facoltative: un fantasma tratteggiato dove i giocatori hanno visto un nemico l'ultima volta. **Rivela tutto** e
+  **Nascondi tutto** (che dimentica anche le celle esplorate).
+- **Stanze** (strumento **🚪 Stanza**, elenco con rinomina e «da rivelare»): un'area che si rivela tutta insieme quando un
+  giocatore ci entra o quando si apre una porta che la tocca.
+- Le **pedine** nemiche fuori dalla vista dei giocatori non sono mostrate ai giocatori; eventi e oggetti nascosti restano
+  nascosti anche nelle celle rivelate.
+- Nell'**Esplorazione** la nebbia di scoperta è la stessa nebbia (nessun doppione): il gruppo rivela il raggio di scoperta.
+
+### Strumenti e interfaccia
+
+- **Editor griglie**: pannello **🔦 Luce e visione** sotto la griglia (luce ambientale, *Luce a gradini*, sorgenti con
+  modifica di nome, raggi, colore, durata e intermittenza, stanze, nebbia con modalità, pennello e opacità, legenda) e
+  strumenti **💡 Luce**, **🧱 Blocco vista**, **🚪 Stanza**, **☀ Rivela area**, **🌫 Nascondi area**.
+- **👁 Vedi come**: *Master*, *Come i giocatori*, *Come* una pedina scelta o, nell'Editor, *Da un punto scelto* con sensi da
+  provare (vista normale, scurovisione 18 o 36 m, vista cieca, vista pura): mostra il campo visivo e nasconde le pedine e gli
+  oggetti che non si vedrebbero.
+- **Combattimento** ed **Esplorazione**: barra rapida sopra la griglia (Nebbia sì/no, Rivela area, Nascondi area, pennello,
+  Vedi come, *Luce e visione…* con il pannello completo), sorgenti nel menu della pedina e **indicatore della luce** della
+  pedina di turno nella barra del turno («☀ luce intensa (🔥 torcia)»).
+- **Disegno**: luce, buio e velo sono due canvas a parte (una cella = un pixel, ingranditi con la sfumatura o, con *Luce a
+  gradini*, a celle nette), ricalcolati solo quando cambia la firma dello stato (pedine, sorgenti, porte, nebbia, tema,
+  anteprima): zoom e pan non ricalcolano nulla. Mappe 100×100 con quattro giocatori: pochi millisecondi (il pannello mostra
+  il tempo dell'ultimo ricalcolo). Colori dalle variabili CSS `--vision-*` (leggibili nei temi chiaro e scuro); con *Riduci
+  animazioni* le torce non tremolano.
+
+### Collegamenti
+
+- **Combattimento**: chi attacca un bersaglio che non vede (buio, fuori dalla linea di vista) ha **svantaggio**, chi
+  attacca senza essere visto ha **vantaggio**, con la causa nel log («svantaggio: buio (bersaglio non visto)»); la penombra
+  non cambia gli attacchi (solo la Percezione). Accecato e invisibile restano nelle condizioni, senza doppioni.
+- **IA**: considera solo i bersagli che vede (o sente con i sensi speciali); se non ne vede nessuno si avvicina al più vicino.
+- **Online (futuro)**: `DnD.visione.visioneGiocatore({ grid, combatants })` dà lo stato per i giocatori: stati delle celle,
+  strutture, oggetti ed etichette solo nelle celle conosciute, TileMap svuotata nelle celle nascoste, solo le pedine viste,
+  eventi visibili, fantasmi; mai oggetti nascosti, contenuti, trappole, serrature o stato degli NPC.
+- **Dati** salvati con la griglia (luce ambientale, sorgenti, celle della vista, stanze, celle esplorate e ritocchi, ultime
+  posizioni note): Esporta/Importa, duplicazione, ridimensionamento (tutto segue le celle), copia nel combattimento (che
+  lavora su una copia) e *Salva come nuova griglia*.
+
 ## Dadi animati
 
 Il risultato si decide **prima**, con lo stesso generatore senza bias (`crypto.getRandomValues`): un
@@ -1291,7 +1402,7 @@ la griglia resta segnata come *non salvata*. Tutto resta sul tuo computer, ma va
 i dati di navigazione del sito: fai backup regolari dal pannello **Impostazioni**:
 
 - **Esporta archivio** scarica tutto (sessioni con combattimenti, esplorazioni e Mondo, personaggi e creature,
-  griglie con TileMap, sfondi, biomi, eventi e nebbia, librerie compresi biomi ed eventi, attrezzatura, oggetti
+  griglie con TileMap, sfondi, biomi, eventi, luce, sorgenti, stanze e nebbia, librerie compresi biomi ed eventi, attrezzatura, oggetti
   di mappa, TileSet, dadi, impostazioni e file dei suoni e le immagini usate, incorporate in
   Base64: il file è autosufficiente).
   Importandolo, i dati attuali vengono sostituiti dopo una conferma.
@@ -1405,6 +1516,17 @@ Per **scene e incontri**:
 - «Genera incontro»; riferimenti mancanti; migrazione v15 → v16, ripresa dopo la chiusura, archivio, file di
   sessione e duplicazione con i riferimenti rimappati; aggiornamento in tempo reale nell'editor dell'incontro.
 
+Per **luce, visione e nebbia di guerra**:
+- linea di vista con muri, porte chiuse e aperte, finestre (bloccano il movimento ma non la vista), pedine 2×2;
+- scurovisione nel buio e nella penombra e oltre il suo raggio; vista cieca, vista pura (anche nel buio magico), percezione
+  tellurica (non chi vola); accecato e invisibile;
+- sorgenti con piedi per cella diversi, muri che fermano la luce, oggetti che fanno luce, torcia che si spegne con il tempo,
+  luce ambientale per ora e bioma, scoperta dell'esplorazione con scurovisione e torcia, Oscurità legata alla concentrazione;
+- svantaggio al buio e vantaggio contro chi non vede (causa nel testo), penombra solo sulla Percezione;
+- nebbia manuale, automatica e mista, memoria, pennelli (cerchio, rettangolo, riempimento), stanze, Rivela/Nascondi tutto;
+- pedine nascoste ai giocatori, fantasmi e `visioneGiocatore()`; nebbia dopo il cambio di tema e di zoom (nessun ricalcolo);
+- prestazioni su una griglia 100×100; salvataggio, migrazione v17 → v18, copia nel combattimento, ridimensionamento, annulla.
+
 Per la **scheda del giocatore**:
 - acquisto punti (27 punti, 8-15, rifiuto oltre il budget), modificatori e competenza;
 - abilità con competenza, maestria e metà competenza, bonus a mano, passive, prove degli eventi;
@@ -1461,6 +1583,8 @@ js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
 js/difficolta-dati.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
 js/scene-dati.js      scene (dati): tipi, stati, esiti, condizioni di inizio e fine, incontri d'esempio
+js/visione-dati.js    luce e visione (dati): livelli, luce ambientale per ora e bioma, sorgenti, incantesimi, sensi, nebbia
+js/visione.js         luce, visione e nebbia di guerra (logica pura): linea di vista, luce, sensi, chi vede chi, nebbia, visioneGiocatore()
 js/scheda-dati.js     scheda del giocatore (dati): allineamenti, acquisto punti, soglie di PE, classi, background e talenti d'esempio
 js/scheda.js          scheda del giocatore (logica pura): abilità, passive, sovrascritture, carico, background, talenti, livelli
 js/scene.js           scene e incontri (logica pura): scaletta, linea, lancio, fine, ricompense, Genera incontro
@@ -1491,7 +1615,8 @@ js/biomi.js           logica pura dei biomi: regole di viaggio, eredità, meteo,
 js/eventi.js          logica pura degli eventi: modelli, istanze, inneschi, visibilità, condizioni, azioni ed esiti
 js/esplorazione.js    logica pura dell'esplorazione: scala, gruppo, movimento, tempo, nebbia, pila delle mappe
 js/ui-biomi.js, js/ui-eventi.js  Asset › Biomi ed Eventi (editor a blocchi, Prova evento, esporta/importa)
-js/ui-mappa-esplorazione.js  disegno di biomi, eventi e nebbia; strumenti Bioma, Evento e Nebbia sulla griglia
+js/ui-mappa-esplorazione.js  disegno di biomi ed eventi; strumenti Bioma ed Evento sulla griglia
+js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cache), strumenti, pannello «Luce e visione», «Vedi come»
 js/ui-esplorazione.js schermata Esplorazione: gruppo, mappa, tempo e registro, finestra evento, combattimenti
 js/layout-combattimento.js  layout del combattimento: larghezze, colonne aperte/chiuse, schede su schermi stretti
 js/creature-dati.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi

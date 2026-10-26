@@ -63,6 +63,12 @@
   --grid-label-bg: rgba(255, 255, 255, 0.92);
   --grid-missing: #9aa0a8;
   --grid-missing-text: #1b1e25;
+  /* Luce, visione e nebbia di guerra (r, g, b): buio, velo del master, nebbia dei giocatori, stanze, segni. */
+  --vision-dark: 12, 16, 34;
+  --vision-fog: 74, 82, 99;
+  --vision-fog-player: 46, 50, 60;
+  --vision-room: 70, 120, 230;
+  --vision-mark: #c98a00;
   --zone-players: 47, 111, 184;
   --zone-enemies: 176, 40, 28;
   /* Sovrapposizioni dei TileSet e delle TileMap (taglio, selezione, esclusi, bloccanti, collisioni). */
@@ -139,6 +145,11 @@
   --grid-label-bg: rgba(20, 22, 28, 0.85);
   --grid-missing: #5c5f66;
   --grid-missing-text: #dddddd;
+  --vision-dark: 2, 3, 10;
+  --vision-fog: 10, 11, 16;
+  --vision-fog-player: 6, 7, 10;
+  --vision-room: 110, 160, 255;
+  --vision-mark: #f2b632;
   --zone-players: 79, 143, 214;
   --zone-enemies: 212, 69, 58;
   --ts-cut: rgba(232, 193, 112, 0.8);
@@ -1370,3 +1381,14 @@ input.short { max-width: 8rem; }
   .print-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; }
   @page { size: A4; margin: 12mm; }
 }
+
+/* ---------- Luce, visione e nebbia di guerra (ui-visione.js) ---------- */
+.vision-panel .vision-light-form { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+.vision-quick { flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.vision-quick select { max-width: 13rem; }
+.vision-legend .biome-swatch { border: 1px solid var(--border); }
+.vision-swatch-2 { background: rgba(255, 236, 170, 0.9); }
+.vision-swatch-1 { background: rgba(var(--vision-dark), 0.35); }
+.vision-swatch-0 { background: rgba(var(--vision-dark), 0.75); }
+.vision-swatch-fog { background: rgb(var(--vision-fog)); }
+.vision-swatch-explored { background: rgba(var(--vision-fog), 0.35); }

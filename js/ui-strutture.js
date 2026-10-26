@@ -288,8 +288,13 @@
             el('button', { type: 'button', class: 'btn small', text: 'Orientamento originale', onclick: () => { ops = []; updateImage(); } })))),
       el('small', { class: 'hint', text: 'Ogni tile incluso occupa una cella della griglia di battaglia: tile più piccoli = struttura più grande. Bloccano i tile inclusi marcati «Bloccante» (se nessuno lo è, tutti gli inclusi).' }),
       el('div', { class: 'error', 'data-error': 'tiles' }));
+    // Luce e visione: blocca la vista (una finestra o una grata no) e luce emessa.
+    const blocksSight = el('input', { type: 'checkbox', checked: s.blocksSight !== false });
+    const light = DnD.uiVisione.emitterEditor(s.light);
     const form = el('form', { class: 'panel form', novalidate: true },
       el('div', { class: 'grid-3' }, field('Nome', inp.name, 'name'), field('Colore', inp.color, 'color')),
+      el('label', { class: 'check', title: 'Toglila per finestre, grate e cancelli: bloccano il passaggio ma non la vista' }, blocksSight, ' Blocca la vista'),
+      light.node,
       el('fieldset', {},
         el('legend', { text: 'Forma' }),
         el('div', { class: 'radio-row' }, modeRadio('preset', 'Forma predefinita'), modeRadio('custom', 'Forma personalizzata a celle'), modeRadio('tiles', 'Da immagine')),
@@ -308,6 +313,7 @@
       const data = {
         id: s.id, name: inp.name.value.trim(), color: inp.color.value.toLowerCase(), mode, shapeMode, preset: inp.preset.value,
         w: readNumber(inp.w), h: readNumber(inp.h), cells: shape ? shape.cells : '', tiles,
+        blocksSight: blocksSight.checked, light: light.read(),
       };
       // In modalità immagine la forma (nascosta) non si controlla: basta l'immagine.
       const errors = mode === 'tiles'

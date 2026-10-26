@@ -372,6 +372,8 @@
       weapons: stats.weapons.map((w) => Object.assign({}, w, { magical: magicOf(w) })),
       // Difese ai danni: le resistenze della razza (testo libero, es. "Veleno").
       defenses: { vuln: [], res: race ? DnD.creature.parseDefenses(race.resistances) : [], imm: [] },
+      // Sensi (visione.js): la scurovisione della razza, in piedi.
+      senses: DnD.visione.sensesFromRace(race),
       creature: null,
       pendingSave: null,
       // Combattimento simulato: controllo, fazione, comportamento e dati per l'IA.

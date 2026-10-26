@@ -19,6 +19,8 @@
   let widget = null;
   let tilePanel = null;
   let explorePanel = null;
+  let vision = null;
+  let visionPanel = null;
   let docKey = 'bozza-0';
   let docSeq = 0;
   const status = el('span', { class: 'draft-status' });
@@ -57,12 +59,26 @@
     return explorePanel;
   }
 
+  // Luce, visione e nebbia di guerra (ui-visione.js): livello sulla griglia, strumenti e pannello.
+  function getVision() {
+    if (!vision) {
+      vision = DnD.uiVisione.create({
+        getDoc: () => (draft() ? { grid: draft().grid, combatants: [] } : null), widget: () => widget, mode: 'editor',
+        otherPainter: () => ({ deactivate: () => { getTilePanel().painter.deactivate(); getExplorePanel().painter.deactivate(); } }),
+        onChange: () => updateStatus(),
+      });
+    }
+    return vision;
+  }
+
   function getWidget() {
     if (!widget) {
       const panel = getTilePanel();
       const xp = getExplorePanel();
-      // Un clic sugli strumenti delle tile spegne quelli dell'esplorazione.
-      panel.node.addEventListener('click', (e) => { if (e.target.closest('button')) xp.painter.deactivate(); }, true);
+      const vi = getVision();
+      // Un clic sugli strumenti delle tile spegne quelli dell'esplorazione e della visione (e viceversa).
+      panel.node.addEventListener('click', (e) => { if (e.target.closest('button')) { xp.painter.deactivate(); vi.painter.deactivate(); } }, true);
+      xp.node.addEventListener('click', (e) => { if (e.target.closest('button')) vi.painter.deactivate(); }, true);
       widget = UG.create({
         getDoc: () => (draft() ? { id: session().id + ':' + docKey, grid: draft().grid, combatants: [], currentId: null } : null),
         update: (fn) => {
@@ -74,7 +90,8 @@
         },
         tools: ALL_TOOLS,
         showCombatants: false,
-        painter: DnD.uiMappaEsplorazione.combinePainters(panel.painter, xp.painter),
+        painter: DnD.uiMappaEsplorazione.combinePainters(DnD.uiMappaEsplorazione.combinePainters(panel.painter, xp.painter), vi.painter),
+        vision: vi,
         onObject: (id) => DnD.uiOggettiMappa.openPanel({
           getItem: () => draft() && draft().grid.items.find((x) => x.id === id),
           update: (fn) => { DnD.store.update((st) => fn(session(st).gridDraft.grid.items.find((x) => x.id === id), st)); markDirty(); widget.refresh(); },
@@ -106,6 +123,7 @@
     editing = true;
     if (tilePanel) tilePanel.reset();
     if (explorePanel) explorePanel.reset();
+    if (vision) vision.reset();
     render();
   }
 
@@ -272,7 +290,8 @@
       const explore = v.kind === 'esplorazione';
       startDraft(null, v.name, { structures: [], items: [], labels: [], zones: [], tileMap: null, w: v.w, h: v.h, feetPerCell: v.feetPerCell, background: v.background,
         kind: v.kind, scale: DnD.esplorazione.normalizeScale(v.scale), biomeMap: explore ? DnD.biomi.emptyMap(v.w, v.h, 'bioma-pianura') : null,
-        events: [], fog: { enabled: false, seen: '0'.repeat(v.w * v.h) } });
+        // Luce e visione: le mappe di esplorazione nuove hanno la luce automatica (ora e bioma).
+        events: [], fog: DnD.visione.emptyFog(v.w, v.h), vision: DnD.visione.normalizeVision({ ambient: explore ? 'auto' : 'giorno' }, v.w, v.h) });
       return null;
     });
   }
@@ -438,9 +457,11 @@
     const w = getWidget();
     const t = getTilePanel();
     const xp = getExplorePanel();
-    panel.append(el('div', { class: 'editor-layout' }, w.node, xp.node, t.node));
+    if (!visionPanel) visionPanel = getVision().panel();
+    panel.append(el('div', { class: 'editor-layout' }, w.node, xp.node, visionPanel.node, t.node));
     w.refresh();
     xp.refresh();
+    visionPanel.refresh();
     t.refresh();
   }
 
