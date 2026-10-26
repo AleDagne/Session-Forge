@@ -60,8 +60,34 @@
     render();
   }
 
+  // Esporta gli incantesimi mostrati (con i filtri) come file JSON.
+  function exportList() {
+    const list = filtered();
+    if (!list.length) { toast('Nessun incantesimo da esportare.', 'error'); return; }
+    const IM = DnD.uiImpostazioni;
+    IM.download(JSON.stringify(M.exportFile(list, DnD.config.APP_NAME), null, 2), IM.slug(DnD.config.APP_NAME) + '-incantesimi.json');
+    toast(list.length + (list.length === 1 ? ' incantesimo esportato.' : ' incantesimi esportati.'), 'success');
+  }
+  // Importa incantesimi da file: si aggiungono alla libreria, saltando quelli con un nome già presente.
+  async function importList(file) {
+    try {
+      const r = M.importFile(JSON.parse(await file.text()), DnD.store.state.spells, DnD.dati.normalizeSpell);
+      if (r.added.length) DnD.store.update((st) => { st.spells.push(...r.added); });
+      toast(r.added.length + (r.added.length === 1 ? ' incantesimo importato' : ' incantesimi importati') +
+        (r.skipped.length ? '; già presenti, saltati: ' + r.skipped.join(', ') : '') + '.', r.added.length ? 'success' : 'error');
+      render();
+    } catch (e) {
+      toast('Importazione non riuscita: ' + (e instanceof SyntaxError ? 'il file non è un JSON valido.' : e.message), 'error');
+    }
+  }
+
   function renderList() {
     const results = el('div');
+    const importInput = el('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: () => {
+      const f = importInput.files[0];
+      importInput.value = '';
+      if (f) importList(f);
+    } });
     const draw = () => {
       const list = filtered();
       clear(results).append(list.length
@@ -87,7 +113,10 @@
     root.append(
       el('div', { class: 'section-head' },
         el('h1', { text: 'Magie' }),
-        el('button', { class: 'btn primary', text: '+ Nuovo incantesimo', onclick: () => { editing = 'new'; render(); } })),
+        el('div', { class: 'head-actions' },
+          el('button', { class: 'btn', text: '⬆ Importa JSON', title: 'Aggiungi incantesimi da un file (quelli con lo stesso nome vengono saltati)', onclick: () => importInput.click() }), importInput,
+          el('button', { class: 'btn', text: '⬇ Esporta JSON', title: 'Esporta gli incantesimi mostrati', onclick: exportList }),
+          el('button', { class: 'btn primary', text: '+ Nuovo incantesimo', onclick: () => { editing = 'new'; render(); } }))),
       el('div', { class: 'filters' },
         el('input', { type: 'search', placeholder: 'Cerca per nome o descrizione…', 'aria-label': 'Cerca incantesimi', value: filters.text, oninput: (e) => { filters.text = e.target.value; draw(); } }),
         select('level', 'Livello', [['', 'Tutti i livelli']].concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((l) => [String(l), M.levelName(l)]))),

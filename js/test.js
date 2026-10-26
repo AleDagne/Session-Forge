@@ -5744,6 +5744,21 @@
     eq(full.vision.lights.length, 1, 'annulla una sorgente tolta');
   });
 
+  test('Magie: esporta e importa un file di incantesimi, saltando i nomi già presenti', () => {
+    const lib = [DnD.dati.normalizeSpell({ id: 'a', name: 'Dardo di fuoco', level: 0 })];
+    const file = DnD.magie.exportFile([DnD.dati.normalizeSpell({ id: 'b', name: 'Guida', level: 0, concentration: true }),
+      DnD.dati.normalizeSpell({ id: 'c', name: 'Cura ferite', level: 1, effect: { type: 'cura', dice: '1d8', upcastDice: '1d8', addMod: true } })], 'Prova');
+    eq(file.kind, 'incantesimi');
+    const r = DnD.magie.importFile(JSON.parse(JSON.stringify(file)).spells.concat({ name: ' dardo di FUOCO ' }, { name: 'Guida' }), lib, DnD.dati.normalizeSpell);
+    eq([r.added.map((s) => s.name), r.skipped], [['Guida', 'Cura ferite'], ['dardo di FUOCO', 'Guida']], 'duplicati saltati, anche nel file');
+    ok(r.added.every((s) => s.id !== 'b' && s.id !== 'c'), 'id nuovi');
+    eq([r.added[0].concentration, r.added[1].effect.type, r.added[1].effect.dice], [true, 'cura', '1d8'], 'normalizzati');
+    eq(DnD.magie.importFile(file, [], DnD.dati.normalizeSpell).added.length, 2, 'file esportato');
+    let err = '';
+    try { DnD.magie.importFile({ kind: 'creatura' }, [], DnD.dati.normalizeSpell); } catch (e) { err = e.message; }
+    ok(err.includes('incantesimi'), 'file sbagliato: errore in italiano');
+  });
+
   async function runTests() {
     const results = [];
     for (const { name, fn } of tests) {

@@ -101,9 +101,33 @@
     return out;
   }
 
+  // ---------- File di incantesimi (esporta / importa) ----------
+  const FILE_KIND = 'incantesimi';
+  function exportFile(spells, appName) {
+    return { app: appName || 'Session Forge', kind: FILE_KIND, exportedAt: new Date().toISOString(), spells: JSON.parse(JSON.stringify(spells)) };
+  }
+  // Incantesimi da aggiungere alla libreria: accetta il file esportato o un elenco. Ognuno riceve un id nuovo; quelli con
+  // lo stesso nome (maiuscole comprese) di uno già presente, o ripetuti nel file, vengono saltati.
+  // normalize: DnD.dati.normalizeSpell. Restituisce { added, skipped: [nomi] } oppure lancia un errore in italiano.
+  function importFile(raw, existing, normalize) {
+    const list = Array.isArray(raw) ? raw : raw && raw.kind === FILE_KIND && Array.isArray(raw.spells) ? raw.spells : null;
+    if (!list) throw new Error('il file non contiene incantesimi di questa app.');
+    const names = new Set((existing || []).map((s) => s.name.trim().toLowerCase()));
+    const added = [];
+    const skipped = [];
+    for (const item of list.slice(0, 1000)) {
+      const sp = normalize(Object.assign({}, item, { id: undefined }));
+      const key = sp.name.trim().toLowerCase();
+      if (names.has(key)) { skipped.push(sp.name.trim()); continue; }
+      names.add(key);
+      added.push(sp);
+    }
+    return { added, skipped };
+  }
+
   DnD.magie = {
     SCHOOLS, SCHOOL_NAMES, EFFECTS, EFFECT_NAMES, levelName,
     spellAttackBonus, spellSaveDc, effectiveSlots, slotsLeft, castableLevels, consumeSlot, longRest, shortRest,
-    scaledDice, resolveSpell,
+    scaledDice, resolveSpell, FILE_KIND, exportFile, importFile,
   };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -190,7 +190,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
   (50 monete = 0,5 kg). Tre schede: **Standard**, **✦ Leggendari** (livelli 20-40, vedi
   [Personaggi leggendari](#personaggi-leggendari)) e **⚑ Party** (vedi [Party](#party)). Ogni scheda mostra PF attuali,
   dadi vita e sfinimento, e ha **🛏 Risorse…** (vedi [Riposi e risorse](#riposi-e-risorse)).
-- **Magie** – libreria degli incantesimi (come prima).
+- **Magie** – libreria degli incantesimi. **⬇ Esporta JSON** salva gli incantesimi mostrati (con i filtri) e **⬆ Importa JSON**
+  li aggiunge alla libreria (id nuovi; quelli con un nome già presente vengono saltati e segnalati).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
     **Da immagine** (vedi [Tile](#tile)), colore libero, **Blocca la vista** (di base sì; *Finestra* e *Grata*
