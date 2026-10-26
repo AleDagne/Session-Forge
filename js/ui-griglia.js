@@ -89,6 +89,8 @@
   //     label }, normal: Set, dash: Set (chiavi delle celle raggiungibili) }, apply(doc, combatantId, route) }
   //     limiti di velocità nel combattimento (movimento.js): anteprima, costo e fermata all'ultima cella raggiungibile
   //   turnInfo(combattente): testo della barra del turno (velocità e movimento residuo)
+  //   readOnly: sola vista (giocatore online): zoom, spostamento della vista, selezione e misuratore, nessuna modifica
+  //   tilesets() -> indice dei TileSet da usare al posto della libreria (le definizioni ricevute dal master)
   // }
   function create(opts) {
     const onSelect = opts.onSelect || (() => {});
@@ -108,9 +110,11 @@
 
     const doc = () => opts.getDoc();
     // Collisioni: strutture, oggetti e TileMap della griglia (tile bloccanti e poligoni di collisione).
+    const tsIndex = () => (opts.tilesets ? opts.tilesets() : DnD.tilemap.tilesetIndex(DnD.store.state.tilesets));
+    const ro = Boolean(opts.readOnly);
     const board = () => {
       const d = doc();
-      return G.boardOf(d.grid, d.combatants, DnD.tilemap.tilesetIndex(DnD.store.state.tilesets));
+      return G.boardOf(d.grid, d.combatants, tsIndex());
     };
     const feet = () => (doc() ? doc().grid.feetPerCell || 5 : 5);
     // Misuratore con la regola delle diagonali (le mappe di esplorazione restano con la loro scala).
@@ -143,15 +147,17 @@
     const paletteBtn = btn('◧', 'Pannello laterale (Ctrl+Alt+B)', () => getPaletteToggle().toggle());
     paletteBtn.setAttribute('aria-controls', palette.id);
     const toolbar = el('div', { class: 'grid-toolbar' },
-      paletteBtn,
+      ro ? null : paletteBtn,
       btn('⟲ Reimposta vista', 'Reimposta vista', () => { view = defaultView(); requestDraw(); }),
       toolBar,
-      el('label', { class: 'check small' }, ignoreBox, ' Ignora collisioni'),
-      undoBtn, redoBtn,
+      ro ? null : el('label', { class: 'check small' }, ignoreBox, ' Ignora collisioni'),
+      ro ? null : undoBtn, ro ? null : redoBtn,
       opts.toolbar || []);
-    const body = el('div', { class: 'grid-body' }, palette, wrap);
-    paletteBodies.add(body);
-    body.classList.toggle('palette-collapsed', getPaletteToggle().collapsed());
+    const body = el('div', { class: 'grid-body' + (ro ? ' palette-collapsed' : '') }, ro ? null : palette, wrap);
+    if (!ro) {
+      paletteBodies.add(body);
+      body.classList.toggle('palette-collapsed', getPaletteToggle().collapsed());
+    }
     const node = el('section', { class: 'grid-pane', 'aria-label': 'Griglia' },
       toolbar, el('div', { class: 'grid-status' }, info, selBar), body);
 
@@ -470,7 +476,7 @@
         x1: Math.ceil((W - view.panX) / s) - e.x, y1: Math.ceil((H - view.panY) / s) - e.y,
       };
       const res = DnD.uiTileset.drawTiles(ctx, e.tiles, view.panX + e.x * s, view.panY + e.y * s, s, {
-        above, clip, onReady: requestDraw, layerAlpha: (l) => (faded && l.fade ? 0.4 : 1),
+        above, clip, onReady: requestDraw, byId: tsIndex(), layerAlpha: (l) => (faded && l.fade ? 0.4 : 1),
       });
       if (res.missing && !above) questionMark(ctx, view.panX + (e.x + e.w / 2) * s, view.panY + (e.y + e.h / 2) * s, s);
     }
@@ -487,7 +493,7 @@
         return false;
       };
       DnD.uiTileset.drawTiles(ctx, map, view.panX, view.panY, s, {
-        above, clip, onReady: requestDraw,
+        above, clip, onReady: requestDraw, byId: tsIndex(),
         cellAlpha: above ? (l, x, y, span) => (l.fade && covered(x, y, span) ? 0.4 : 1) : null,
       });
     }
@@ -1055,6 +1061,11 @@
         drag = { type: 'rect', a: cell, b: cell };
       } else if (tool === 'struttura' || tool === 'oggetto' || tool === 'etichetta') {
         drag = { type: 'click-tool', p0: p, view0: view, cell, moved: false };
+      } else if (ro) {
+        // Sola vista: un clic seleziona la pedina, il trascinamento sposta solo la vista.
+        const hit = hitTest(cell);
+        if (hit && hit.kind === 'token') select(hit);
+        drag = { type: 'pan', p0: p, view0: view, moved: false, keep: Boolean(hit) };
       } else {
         const hit = hitTest(cell);
         if (hit) {
@@ -1166,7 +1177,7 @@
             lastClick = { key, time: now };
           }
         }
-      } else if (d.type === 'pan' && !d.moved) {
+      } else if (d.type === 'pan' && !d.moved && !d.keep) {
         select(null);
       } else if (d.type === 'click-tool' && !d.moved) {
         if (tool === 'etichetta') labelAt(d.cell);
@@ -1192,6 +1203,7 @@
 
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (ro) return;
       const cell = cellOf(local(e));
       const hit = inGrid(cell) ? hitTest(cell) : null;
       if (!hit) return;
@@ -1211,6 +1223,7 @@
       const t = e.target;
       if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
       const k = e.key.toLowerCase();
+      if (ro) { if (e.key === 'Escape' && selection) select(null); return; }
       if ((e.ctrlKey || e.metaKey) && e.altKey && k === 'b') { e.preventDefault(); getPaletteToggle().toggle(); }
       else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
@@ -1285,7 +1298,7 @@
 
     function refreshPalette() {
       const d = doc();
-      if (!d) return;
+      if (!d || ro) return;
       const st = DnD.store.state;
       const group = (title, entries, empty, open) => el('details', { class: 'palette-group', open: open !== false },
         el('summary', { text: title }),
@@ -1347,10 +1360,10 @@
       redoBtn.disabled = opts.canRedo ? !opts.canRedo() : !history.canRedo();
       ignoreBox.checked = d.grid.ignoreCollisions;
       const known = missingSources();
-      const imageMissing = (e) => e.tiles && DnD.uiTileset.missingTilesets(e.tiles, () => updateUi());
+      const imageMissing = (e) => e.tiles && DnD.uiTileset.missingTilesets(e.tiles, () => updateUi(), tsIndex());
       const missing = d.grid.structures.filter((s) => isMissing(known.structures, s)).length + d.grid.items.filter((i) => isMissing(known.items, i)).length;
       const missingImages = d.grid.structures.filter(imageMissing).length + d.grid.items.filter(imageMissing).length +
-        (d.grid.tileMap && DnD.uiTileset.missingTilesets(d.grid.tileMap, () => updateUi()) ? 1 : 0);
+        (d.grid.tileMap && DnD.uiTileset.missingTilesets(d.grid.tileMap, () => updateUi(), tsIndex()) ? 1 : 0);
       const cur = d.combatants.find((x) => x.id === d.currentId);
       let text;
       if (measure) {
@@ -1374,7 +1387,8 @@
         (missingImages ? ' · ⚠ ' + missingImages + (missingImages === 1 ? ' elemento (o la TileMap) con tile mancanti' : ' elementi con tile mancanti') + ' (segnaposto grigio)' : '');
       const ent = entity(selection);
       clear(selBar);
-      if (ent) {
+      if (ent && ro) selBar.append(el('span', { class: 'muted small', text: entityName(selection) }));
+      else if (ent) {
         selBar.append(el('span', { class: 'muted small', text: entityName(selection) + ':' }),
           ...actionsFor(selection).map((a) => el('button', {
             type: 'button', class: 'btn small' + (a.danger ? ' danger' : ''), text: a.text, disabled: a.disabled, onclick: a.onclick,

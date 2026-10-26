@@ -1279,12 +1279,109 @@ nessuna sorgente.
   attacca senza essere visto ha **vantaggio**, con la causa nel log («svantaggio: buio (bersaglio non visto)»); la penombra
   non cambia gli attacchi (solo la Percezione). Accecato e invisibile restano nelle condizioni, senza doppioni.
 - **IA**: considera solo i bersagli che vede (o sente con i sensi speciali); se non ne vede nessuno si avvicina al più vicino.
-- **Online (futuro)**: `DnD.visione.visioneGiocatore({ grid, combatants })` dà lo stato per i giocatori: stati delle celle,
+- **Online**: `DnD.visione.visioneGiocatore({ grid, combatants })` dà lo stato per i giocatori (usato dal [gioco online](#gioco-online)): stati delle celle,
   strutture, oggetti ed etichette solo nelle celle conosciute, TileMap svuotata nelle celle nascoste, solo le pedine viste,
   eventi visibili, fantasmi; mai oggetti nascosti, contenuti, trappole, serrature o stato degli NPC.
 - **Dati** salvati con la griglia (luce ambientale, sorgenti, celle della vista, stanze, celle esplorate e ritocchi, ultime
   posizioni note): Esporta/Importa, duplicazione, ridimensionamento (tutto segue le celle), copia nel combattimento (che
   lavora su una copia) e *Salva come nuova griglia*.
+
+## Gioco online
+
+Prima tappa del gioco online peer-to-peer: **collegamento minimo e vista condivisa**. Il master ospita, fino a 4
+giocatori seguono il combattimento **in sola vista** dal proprio browser, con chat e dadi condivisi. Nessuna
+libreria, nessun server, nessun account: il collegamento è diretto tra i browser (WebRTC DataChannel) e l'unica
+chiamata di rete in più sono i server STUN pubblici di Google, che servono solo a scoprire l'indirizzo pubblico
+(modificabili in *Test connessione › Server STUN*). L'app offline funziona come prima: la rete parte solo quando si
+ospita o ci si unisce a una sessione.
+
+**Dove**: pulsante **🌐 Online** nella schermata Combattimento (anche prima di iniziarlo) e nelle *Impostazioni ›
+Online* (con *🩺 Test connessione*). Nessuna voce nuova nel menù. Nome visualizzato e colore si scelgono nella
+finestra *Gioco online* (restano come preferenza del browser).
+
+### Come collegarsi (scambio dei codici)
+
+1. Il **master** preme *🌐 Online › Ospita*: dopo qualche secondo compare un **codice di invito** (testo che inizia
+   con `SF1`). Lo copia con *📋 Copia* (o lo seleziona e usa Ctrl+C) e lo manda al giocatore, per esempio nella chat
+   che usate già.
+2. Il **giocatore** preme *🌐 Online › Unisciti*, incolla l'invito e preme *Crea la risposta*: ottiene un **codice di
+   risposta** e lo manda al master.
+3. Il master lo incolla e preme *Collega*. Arriva la richiesta «*X vuole entrare*»: **Accetta** (scegliendo il
+   personaggio, di cui il giocatore vedrà la scheda in sola lettura, o nessuno per uno spettatore) o **Rifiuta**.
+
+I codici sono compressi (CompressionStream; per i browser che non sanno decomprimere spunta *Codici senza
+compressione*: più lunghi, funzionano lo stesso), valgono **5 minuti** e **una volta sola**. Per un altro giocatore
+il master preme *➕ Invita un giocatore* nel pannello Online (in basso a sinistra).
+
+**Provare con due browser**: servi la cartella (`python -m http.server 8080`), apri `http://localhost:8080` in due
+finestre (o due browser diversi, per esempio Chrome ed Edge) e fai lo scambio dei codici tra le due: in una ospiti,
+nell'altra ti unisci. Sulla stessa macchina o nella stessa rete funziona anche senza STUN.
+
+### Cosa vede il giocatore
+
+La stessa schermata del Combattimento, senza strumenti di modifica né accesso alle altre sezioni: griglia (zoom,
+spostamento della vista, misuratore), pedine **non nascoste** con nome, icona, dimensione, condizioni e salute
+*illeso / ferito / grave / a terra* (i PF numerici solo per il party, o anche per i nemici con l'opzione del master
+*Mostra i PF dei nemici*), ordine di iniziativa, round e turno, boss **rivelati**, log filtrato, la propria scheda in
+sola lettura (CA, PF, iniziativa, velocità, caratteristiche e tiri salvezza, percezione passiva, dadi vita,
+condizioni), la nebbia di guerra dei giocatori (celle sconosciute coperte, esplorate velate).
+
+**Il filtro è sul master** (`js/rete/filtro.js`): ciò che non deve vedersi **non viene mai inviato**. Mai inviati:
+note del master e degli oggetti, combattenti nascosti o non visti, oggetti ed eventi nascosti, trappole, serrature e
+contenuti dei forzieri, boss non rivelati (né titolo né fasi), righe del log dell'IA (piano e «Perché?») e delle
+modifiche a mano, «Nota del master» delle fasi, righe che nominano combattenti nascosti, PF esatti dei nemici (anche
+nel log: «Goblin: 7 → 4 PF» diventa «Goblin: ferito»). La griglia passa da `visione.visioneGiocatore()`.
+
+Dopo l'**istantanea** iniziale arrivano **eventi incrementali** numerati (pedine, turno, log, boss, nebbia, griglia,
+scheda), calcolati come differenza tra due viste già filtrate; se un evento si perde (numero fuori sequenza) il
+giocatore chiede di nuovo l'istantanea. Gli aggiornamenti partono da soli a ogni modifica dello stato del master.
+
+**Immagini** (sfondo, tile, icone): inviate una sola volta, a pezzi di 16 KB con controllo del flusso, identificate
+dall'impronta del contenuto e conservate nell'archivio delle immagini del giocatore (IndexedDB), con la barra
+«Scarico la mappa…». Limiti: 8 MB per immagine, 16 KB per i messaggi dei giocatori, 4 MB per quelli del master;
+oltre, rifiuto con avviso. Il giocatore può chiedere solo le immagini della propria vista.
+
+### Chat e dadi
+
+- **Chat** a tutti o privata (giocatore → master, master → un giocatore), con presenza (chi è collegato) e testo
+  ripulito (niente caratteri di controllo o invisibili, al massimo 500 caratteri, sempre mostrato come testo).
+- **Dadi condivisi**: il giocatore tira dal menù Dadi (🎲); il risultato è deciso dal suo browser e mandato al
+  master, che lo mostra nel log del combattimento («🎲 Ale (online): 1d20 = 17 [17]») e agli altri giocatori, con la
+  stessa animazione (`mostraTiro`). In questa tappa si accetta la fiducia: la convalida arriva più avanti.
+
+### Robustezza
+
+- **Battito** ogni 3 secondi con la latenza e lo stato della linea (🟢 buona, 🟡 lenta o silenziosa da più di 7 s,
+  🔴 nessuna risposta da più di 15 s); *📡 Eco* misura l'andata e ritorno.
+- Se il master si disconnette o termina, il giocatore vede «La sessione è terminata» e può **esportare il log**
+  (combattimento, chat e dadi in un file di testo).
+- **Rientro**: chi cade rientra con un nuovo scambio di codici; il master vede «Rientro» e gli riassegna lo stesso
+  nome, colore e personaggio. Il master può **espellere** un giocatore.
+- Ogni messaggio ricevuto è validato (versione, tipo e direzione, schema, lunghezza dei testi, dimensione), c'è un
+  **limite di frequenza** (e uno più stretto per la chat) e nessun codice ricevuto viene eseguito. Versione del
+  protocollo diversa: rifiuto con un messaggio chiaro.
+
+### Test connessione
+
+*Impostazioni › Online › 🩺 Test connessione* (anche dal pannello Online e dalla schermata del giocatore) mostra:
+contesto sicuro, WebRTC, compressione, appunti e IndexedDB (con cosa non funziona e il rimedio); i **candidati di
+rete** trovati (locali, tramite STUN, tramite relay) e se il collegamento diretto è probabile; la **prova di eco**
+tra master e giocatore; i **problemi tipici** con il ripiego consigliato:
+
+- *Collegamento non riuscito* dopo lo scambio: la rete (ufficio, scuola, alcuni operatori mobili) blocca il
+  collegamento diretto. Provate un'altra rete (per esempio l'hotspot del telefono); ripiego: **condivisione dello
+  schermo** con il programma di videochiamata che usate già.
+- *Codice scaduto* o *già usato*: il master crea un nuovo invito. *Codice non valido* o *danneggiato*: copiatelo per
+  intero. *Versione incompatibile*: aggiornate entrambi la pagina (Ctrl+F5).
+- **Aperta da file** (`file://`): appunti e cache offline possono non funzionare. Soluzione gratuita (non
+  obbligatoria): servire la cartella in locale (`python -m http.server`) o pubblicarla su un sito statico gratuito
+  (per esempio GitHub Pages) e aprirla da lì.
+
+### Dati e compatibilità
+
+Nessun cambio al modello dati (resta la versione 18). Il giocatore non salva nulla della sessione del master
+tranne la cache delle immagini e non può esportarla (non è mai nel suo archivio). Restano nel browser solo le
+preferenze `dnd-battaglie:online-profilo` (nome, colore, compressione) e `dnd-battaglie:online-stun`.
 
 ## Dadi animati
 
@@ -1323,7 +1420,7 @@ Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, 
   *Movimento* (passo, spento di base; movimento rifiutato); *Boss* (evocazione, ingresso in combattimento, cambio di
   fase, sconfitta); *Leggendario* (ascensione, sblocco di un nodo, trasformazione, ritorno alla forma normale);
   *Esplorazione* (evento o incontro, scoperta di un evento nascosto, ingresso in una mappa, tempo che passa o meteo
-  che cambia); *Mondo* (reputazione che sale o scende, quest accettata o completata, NPC che diventa ostile); *Scene* (scena avviata, scena conclusa); *Online* (predisposti per la futura fase Online: ingresso, richiesta, chat, disconnessione, ping);
+  che cambia); *Mondo* (reputazione che sale o scende, quest accettata o completata, NPC che diventa ostile); *Scene* (scena avviata, scena conclusa); *Online* (giocatore che entra, richiesta di ingresso, messaggio in chat, disconnessione; ping predisposto);
   *Interfaccia* (conferma, errore, salvataggio della griglia, spenti di base).
 - **Da dove partono**: il combattimento traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme
   dei leggendari) in un solo punto (`mutate`), l'esplorazione dalle nuove righe del registro; dadi, boss,
@@ -1569,6 +1666,15 @@ impostazioni salvate e migrazione dei suoni dei dadi; esportazione e importazion
 dati*; dadi sincronizzati con l'animazione anche saltata; eventi dal combattimento e dall'esplorazione; *Silenzia
 tutto* con il pulsante e Alt+M; indipendenza da *Riduci animazioni*.
 
+Per il **gioco online** (con il trasporto in memoria, senza rete): filtro dello stato controllando il contenuto dei
+messaggi inviati (nessuna nota, combattente o oggetto nascosto, boss non rivelato, contenuto, riga dell'IA, PF dei
+nemici), opzione dei PF dei nemici; eventi incrementali, evento perso e nuova istantanea, fine del combattimento;
+messaggi malformati, troppo grandi, troppo frequenti e di un'altra versione; codici con e senza compressione,
+danneggiati, scaduti, del tipo sbagliato e già usati, candidati di rete; chat sanificata e privata; dado condiviso
+con lo stesso risultato sui due lati; immagini a pezzi in qualsiasi ordine, impronta, limite, cache e richieste non
+permesse; rientro con lo stesso nome, espulsione, rifiuto e fine sessione; battito, latenza e master in silenzio;
+due giocatori che seguono un turno completo.
+
 ## Struttura
 
 ```
@@ -1660,6 +1766,14 @@ js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia,
 js/note.js            note del master (logica pura): sanificazione, testo, pagine, salvataggio automatico
 js/note-editor.js     editor di testo ricco delle note (contenteditable, tabelle, elenchi, colori)
 js/ui-note.js         pulsante e pannello laterale delle note del master
+js/rete/protocollo.js gioco online: messaggi con versione, validazione e schemi, limiti, limite di frequenza, stato della linea
+js/rete/trasporto.js  trasporto astratto (invia, ricevi, stato, coda) con frammentazione; WebRTC DataChannel e coppia in memoria
+js/rete/codici.js     codici di invito e risposta: compressione con ripiego, base64url, scadenza e uso singolo
+js/rete/segnalazione.js  segnalazione manuale e WebRTC (STUN modificabili), candidati di rete e requisiti del Test connessione
+js/rete/filtro.js     filtro sul master: vista del giocatore (istantanea), differenze (eventi incrementali) e applicazione
+js/rete/immagini.js   immagini a pezzi da 16 KB con impronta e limiti
+js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, espulsione, eventi, chat, dadi, immagini, battito) e giocatore
+js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master, schermata del giocatore, Test connessione
 js/ui-*.js            interfaccia delle altre sezioni
 js/app.js             avvio, menù e navigazione
 js/test.js            test della logica

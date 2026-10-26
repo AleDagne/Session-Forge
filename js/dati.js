@@ -1265,9 +1265,12 @@
       blobs: { get: (k) => backend.get(k), set: (k, v) => backend.set(k, v) },
       loadError: error || loaded.error,
       onSaveError: null,
+      // Dopo ogni modifica (update, replace): la sessione online manda gli aggiornamenti ai giocatori.
+      onChange: null,
       lastError: null,
       save() {
         queued = JSON.stringify(store.state);
+        if (store.onChange) store.onChange();
         const result = new Promise((resolve) => waiters.push(resolve));
         if (!writing) writing = flush();
         return result;

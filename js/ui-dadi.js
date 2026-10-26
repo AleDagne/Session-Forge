@@ -222,6 +222,8 @@
     // rec: registratore usato per il tiro; label: espressione per la cronologia.
     function show(rec, label, extraTotal) {
       const tiro = rec.tiro(label, 'menu', extraTotal === undefined ? {} : { totale: extraTotal });
+      // Gioco online: il giocatore condivide il tiro con il master (ui-online.js).
+      if (DnD.uiDadi.suTiro) DnD.uiDadi.suTiro(tiro);
       const total = tiro.totale !== null ? tiro.totale : tiro.gruppi.reduce((s, g) => s + g.total, 0);
       // Cronologia e risultato: sempre, anche con l'animazione saltata o spenta.
       const values = tiro.gruppi.flatMap((g) => g.values);
@@ -319,5 +321,5 @@
 
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.dadi = { title: 'Dadi', render };
-  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue };
+  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue, suTiro: null };
 })(globalThis.DnD = globalThis.DnD || {});

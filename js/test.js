@@ -5759,6 +5759,311 @@
     ok(err.includes('incantesimi'), 'file sbagliato: errore in italiano');
   });
 
+  // ---------- Gioco online (trasporto in memoria) ----------
+  const NET = () => DnD.rete;
+  const pausa = (ms) => new Promise((r) => setTimeout(r, ms || 0));
+  // Archivio con un combattimento: Mira (giocatrice), un goblin visibile, un assassino nascosto, un boss non rivelato,
+  // un forziere con contenuto, una trappola nascosta e note del master.
+  function onlineState() {
+    const st = DnD.dati.emptyState();
+    const se = S().current(st);
+    se.notes = 'NOTA-SEGRETA del master';
+    st.players.push(Object.assign(DnD.dati.normalizeCreature({ id: 'pg1', name: 'Mira', classId: 'guerriero', maxHp: 25 }, true), { sessionId: se.id }));
+    const c = (o) => Object.assign({ kind: 'npc', faction: 'nemici', hp: 7, maxHp: 7, initiative: 10, w: 1, h: 1 }, o);
+    se.combat = DnD.dati.normalizeCombat({
+      id: 'cmb', phase: 'attivo', round: 2, currentId: 'p1',
+      combatants: [
+        c({ id: 'p1', sourceId: 'pg1', name: 'Mira', kind: 'player', faction: 'giocatori', hp: 20, maxHp: 25, initiative: 15, pos: { x: 1, y: 1 } }),
+        c({ id: 'g1', name: 'Goblin', hp: 4, initiative: 12, pos: { x: 3, y: 1 } }),
+        c({ id: 'h1', name: 'Assassino', hp: 33, maxHp: 33, hidden: true, pos: { x: 8, y: 8 } }),
+        c({ id: 'b1', name: 'Drago', hp: 90, maxHp: 120, initiative: 5, pos: { x: 6, y: 1 } }),
+      ],
+      grid: { w: 12, h: 12, items: [
+        Object.assign(DnD.oggettiMappa.instantiate(st.mapObjects.find((o) => o.otype === 'forziere') || st.mapObjects[0], 'fz'), { x: 2, y: 3, contents: [{ equipmentId: 'eq-spada-lunga', qty: 1 }], notes: 'TESORO-SEGRETO' }),
+        { id: 'tr', name: 'Trappola', otype: 'trappola', x: 4, y: 4, hidden: true },
+      ] },
+      log: [
+        { round: 1, type: 'colpito', text: 'Mira colpisce Goblin: 7 → 4 PF.' },
+        { round: 1, type: 'ia', text: 'Piano: il Drago punta Mira.' },
+        { round: 1, type: 'sistema', text: 'Assassino si avvicina nell\'ombra.' },
+        { round: 2, type: 'sistema', text: '👑 Drago entra nella FASE 2 — Furia. Nota del master: soffio al prossimo turno.' },
+      ],
+    });
+    se.combat.combatants.find((x) => x.id === 'b1').boss = { title: 'Signore della cenere', theme: 'fuoco', phase: 0, revealed: false, defeated: false };
+    return st;
+  }
+  // Master e giocatore collegati in memoria; il master accetta subito come Mira.
+  async function onlinePair(st, opts) {
+    const o = opts || {};
+    const [a, b] = NET().trasporto.coppiaMemoria(o.trasporto);
+    const inviati = [];
+    const inv = b.invia;
+    b.invia = (t) => { inviati.push(t); return inv(t); };
+    const ricevuti = { chat: [], dadi: [], fine: [], errori: [] };
+    const m = NET().sessione.master(Object.assign({ nome: 'Dario', stato: () => st, suRichiesta: (r) => (o.richiesta ? o.richiesta(r) : r.accetta({ personaggioId: 'pg1' })),
+      suChat: (x) => ricevuti.chat.push(x), suDado: (x) => ricevuti.dadi.push(x) }, o.master));
+    m.collega(b);
+    const g = NET().sessione.giocatore(Object.assign({ nome: o.nome || 'Ale', colore: '#aa3355', trasporto: a, suChat: (x) => ricevuti.chat.push(x), suDado: (x) => ricevuti.dadi.push(x),
+      suFine: (x) => ricevuti.fine.push(x), suErrore: (x) => ricevuti.errori.push(x) }, o.giocatore));
+    await pausa();
+    return { m, g, a, b, inviati, ricevuti };
+  }
+
+  test('Online: il filtro non invia mai dati nascosti (contenuto dei messaggi)', async () => {
+    const st = onlineState();
+    const { g, inviati } = await onlinePair(st);
+    eq(g.stato().stato, 'attivo', 'giocatore accettato');
+    const testo = inviati.join('\n');
+    for (const segreto of ['NOTA-SEGRETA', 'TESORO-SEGRETO', 'Assassino', 'Trappola', 'Signore della cenere', 'Piano:', 'soffio al prossimo turno', 'eq-spada-lunga', '"hp"', '"why"']) {
+      ok(!testo.includes(segreto), 'non deve partire: ' + segreto);
+    }
+    const v = g.stato().vista.combattimento;
+    eq(v.pedine.map((p) => p.id), ['p1', 'g1', 'b1'], 'pedine non nascoste, in ordine di iniziativa');
+    const gob = v.pedine.find((p) => p.id === 'g1');
+    eq([gob.salute, 'pf' in gob, v.pedine[0].pf, v.pedine[0].mia], ['ferito', false, 20, true], 'nemico: solo la salute a parole; la propria pedina con i PF');
+    eq(v.log.map((r) => r.testo), ['Mira colpisce Goblin: ferito.', '👑 Drago entra nella FASE 2 — Furia.'], 'log filtrato');
+    eq([v.boss, g.stato().vista.scheda.nome, v.griglia.items.map((i) => i.id)], [[], 'Mira', ['fz']], 'boss non rivelato, scheda propria, oggetti visibili');
+    // Rivelato il boss, con l'opzione dei PF dei nemici: arriva come evento incrementale.
+    const b1 = S().current(st).combat.combatants.find((x) => x.id === 'b1');
+    b1.boss.revealed = true;
+    const { m: m2, g: g2 } = await onlinePair(st, { master: { pfNemici: true } });
+    eq([g2.stato().vista.combattimento.boss[0].titolo, g2.stato().vista.combattimento.pedine.find((p) => p.id === 'g1').pf], ['Signore della cenere', 4]);
+    ok(m2.giocatori().length === 1);
+  });
+
+  test('Online: eventi incrementali, evento perso e nuova istantanea', async () => {
+    const st = onlineState();
+    let perdi = false;
+    const { m, g } = await onlinePair(st, { trasporto: { perdi: (t) => perdi && t.includes('"tipo":"evento"') } });
+    const c = S().current(st).combat;
+    c.combatants[1].pos = { x: 4, y: 2 };
+    c.combatants[1].hp = 1;
+    DnD.dati.pushLog(c, 'colpito', 'Mira colpisce Goblin: 4 → 1 PF.');
+    m.aggiorna();
+    await pausa();
+    const v = g.stato().vista.combattimento;
+    eq([v.pedine[1].pos, v.pedine[1].salute, v.log[v.log.length - 1].testo, g.stato().n], [{ x: 4, y: 2 }, 'grave', 'Mira colpisce Goblin: grave.', 2], 'movimento, PF e log');
+    // Un evento si perde: al successivo il giocatore chiede di nuovo l'istantanea.
+    perdi = true;
+    c.currentId = 'g1';
+    m.aggiorna();
+    await pausa();
+    perdi = false;
+    c.round = 3;
+    m.aggiorna();
+    await pausa();
+    eq(g.stato().vista, m.vistaInviata(g.stato().id), 'ricomposta dall\'istantanea');
+    eq([g.stato().vista.combattimento.turno, g.stato().vista.combattimento.round], ['g1', 3]);
+    // Fine del combattimento: struttura diversa, nuova istantanea.
+    S().current(st).combat = null;
+    m.aggiorna();
+    await pausa();
+    eq(g.stato().vista.combattimento, null);
+  });
+
+  test('Online: messaggi malformati, troppo grandi, troppo frequenti e versione incompatibile', async () => {
+    const P = NET().protocollo;
+    eq(P.decodifica('{non json', 'g').ok, false);
+    eq(P.decodifica(JSON.stringify({ versione: 1, tipo: 'istantanea', id: 'x', seq: 1, dati: { n: 1, vista: {} } }), 'g').ok, false, 'un giocatore non manda istantanee');
+    eq(P.decodifica(JSON.stringify({ versione: 1, tipo: 'chat', id: 'x', seq: 1, dati: { testo: 5 } }), 'g').ok, false, 'schema');
+    ok(P.decodifica('x'.repeat(P.LIMITI.daGiocatore + 1), 'g').grande, 'troppo grande');
+    const inc = P.decodifica(JSON.stringify({ versione: 99, tipo: 'chat', id: 'x', seq: 1, dati: {} }), 'm');
+    eq([inc.ok, inc.incompatibile, inc.versione], [false, true, 99]);
+    const lim = P.limitatore(3, 1);
+    eq([lim.consenti(0), lim.consenti(0), lim.consenti(0), lim.consenti(0), lim.consenti(1000)], [true, true, true, false, true]);
+    // Sulla sessione: il master risponde con un errore e ignora i messaggi in eccesso.
+    const st = onlineState();
+    const { a, ricevuti, m } = await onlinePair(st);
+    a.invia('{rotto');
+    for (let i = 0; i < 80; i++) a.invia(P.codifica(P.crea('chat', { testo: 'spam ' + i }, 100 + i)));
+    await pausa();
+    ok(ricevuti.errori.some((e) => e.includes('rifiutato')), 'errore per il messaggio rotto');
+    ok(ricevuti.errori.some((e) => e.includes('Troppi messaggi') || e.includes('troppo in fretta')), 'limite di frequenza');
+    ok(ricevuti.chat.length <= 6, 'la chat in eccesso non arriva al master');
+    eq(m.giocatori()[0].stato, 'attivo', 'il giocatore resta collegato');
+    // Versione incompatibile: il giocatore chiude con un messaggio chiaro.
+    const [x, y] = NET().trasporto.coppiaMemoria();
+    const fine = [];
+    NET().sessione.giocatore({ nome: 'Vecchio', colore: '#112233', trasporto: x, suFine: (t) => fine.push(t) });
+    y.invia(JSON.stringify({ versione: 99, tipo: 'benvenuto', id: 'z', seq: 1, dati: {} }));
+    await pausa();
+    ok(fine[0] && fine[0].includes('Versione incompatibile'), 'versione incompatibile');
+  });
+
+  test('Online: codici con e senza compressione, scadenza e uso singolo', async () => {
+    const K = NET().codici;
+    const sdp = 'v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\n' + 'a=candidate:1 1 udp 2122260223 192.168.1.5 54321 typ host\r\n'.repeat(4);
+    const inv = K.invito(sdp, 'Dario', 1000);
+    const semplice = await K.codifica(inv, { comprimi: false });
+    ok(semplice.startsWith('SF1p.'), 'senza compressione');
+    eq(await K.decodifica(semplice), inv);
+    if (K.comprimibile()) {
+      const z = await K.codifica(inv);
+      ok(z.startsWith('SF1z.') && z.length < semplice.length, 'compresso e più corto');
+      eq(await K.decodifica(' ' + z + '\n'), inv, 'spazi ignorati');
+    }
+    let err = '';
+    try { await K.decodifica('SF1p.@@@'); } catch (e) { err = e.message; }
+    ok(err.includes('Codice non valido'), err);
+    try { await K.decodifica(semplice.slice(0, -10)); err = ''; } catch (e) { err = e.message; }
+    ok(err.includes('danneggiato'), 'codice tagliato: ' + err);
+    K.verifica(inv, 'invito', 1000 + K.DURATA - 1);
+    try { K.verifica(inv, 'invito', 1000 + K.DURATA + 1); err = ''; } catch (e) { err = e.message; }
+    ok(err.includes('scaduto'), err);
+    try { K.verifica(inv, 'risposta', 1000); err = ''; } catch (e) { err = e.message; }
+    ok(err.includes('codice di invito'), err);
+    const reg = K.registro();
+    reg.usa(inv.id);
+    try { reg.usa(inv.id); err = ''; } catch (e) { err = e.message; }
+    ok(err.includes('già usato'), err);
+    eq(NET().segnalazione.candidati(sdp + 'a=candidate:2 1 udp 1 203.0.113.9 6000 typ srflx raddr 0.0.0.0 rport 0\r\n'), { locali: 4, stun: 1, relay: 0, mdns: 0, totale: 5 });
+    eq(NET().segnalazione.giudizio({ locali: 2, stun: 0, relay: 0, mdns: 0, totale: 2 }).livello, 'giallo');
+  });
+
+  test('Online: chat sanificata e messaggi privati', async () => {
+    const P = NET().protocollo;
+    eq(P.pulisciTesto('  ciao‮\u0007 <b>a</b>\n\n\n\nfine ', 500), 'ciao <b>a</b>\n\nfine', 'controlli e direzionali tolti, HTML lasciato come testo');
+    eq(P.pulisciTesto('x'.repeat(900), 500).length, 500);
+    const st = onlineState();
+    const p1 = await onlinePair(st);
+    p1.g.chat('Ciao​ a tutti');
+    p1.g.chat('Solo per te', true);
+    p1.g.chat('   ');
+    await pausa();
+    eq(p1.ricevuti.chat.map((c) => [c.da, c.testo, c.privato]), [['Ale', 'Ciao a tutti', false], ['Ale', 'Solo per te', true]]);
+    p1.m.chat('Benvenuti');
+    await pausa();
+    eq(p1.ricevuti.chat[2].testo, 'Benvenuti');
+  });
+
+  test('Online: dado condiviso con lo stesso risultato sui due lati', async () => {
+    const st = onlineState();
+    const { g, ricevuti } = await onlinePair(st);
+    const rec = D().registratore(seq(17, 3));
+    R().rollSave({ bonus: 2, mode: 'vantaggio', dc: null }, rec.rng);
+    const tiro = rec.tiro('d20 con vantaggio', 'menu', { totale: 19 });
+    g.dado(tiro);
+    await pausa();
+    eq(ricevuti.dadi.length, 1);
+    eq([ricevuti.dadi[0].da, ricevuti.dadi[0].tiro], ['Ale', D().normalizeTiro(tiro)], 'stessi dadi e stesso totale');
+  });
+
+  test('Online: immagini a pezzi con impronta e cache', async () => {
+    const IM = NET().immagini;
+    const big = 'data:image/png;base64,' + 'A'.repeat(40000);
+    const id = IMG().imageId(big);
+    const pz = IM.pezzi(id, big);
+    eq(pz.length, 3, 'pezzi da 16 KB');
+    const r = IM.ricevitore();
+    eq([r.aggiungi(pz[2]), r.aggiungi(pz[0])], [null, null]);
+    eq(r.aggiungi(pz[1]), { id, data: big }, 'ricomposta in qualsiasi ordine');
+    const r2 = IM.ricevitore();
+    let err = '';
+    try { IM.pezzi('img-x', big).forEach((p) => r2.aggiungi(p)); } catch (e) { err = e.message; }
+    ok(err.includes('impronta'), 'impronta verificata');
+    try { IM.pezzi(id, 'data:image/png;base64,' + 'A'.repeat(NET().protocollo.LIMITI.immagine)); err = ''; } catch (e) { err = e.message; }
+    ok(err.includes('troppo grande'), 'limite di dimensione');
+    // Sessione: l'icona della giocatrice viaggia a parte e finisce nella cache; la seconda volta non si scarica.
+    const st = onlineState();
+    S().current(st).combat.combatants[0].icon = { kind: 'image', image: PNG, color: '#3366aa' };
+    const cache = new Map();
+    const archivio = { ha: async (x) => cache.has(x), metti: async (x, d) => { cache.set(x, d); } };
+    const p = await onlinePair(st, { giocatore: { archivio } });
+    await pausa(10);
+    eq([...cache.keys()], [IMG().imageId(PNG)], 'icona ricevuta e conservata');
+    ok(p.inviati.filter((t) => t.includes('"tipo":"istantanea"')).every((t) => !t.includes('base64')), 'il data URL non è nell\'istantanea');
+    ok(!JSON.stringify(p.g.stato().vista).includes('base64'), 'la vista contiene solo l\'impronta');
+    const p2 = await onlinePair(st, { giocatore: { archivio } });
+    await pausa(10);
+    ok(!p2.inviati.some((t) => t.includes('"tipo":"immagine"')), 'già in cache: nessun pezzo');
+    // Immagini non della vista: rifiutate.
+    p2.a.invia(NET().protocollo.codifica(NET().protocollo.crea('chiediImmagini', { ids: ['img-0000000000000000'] }, 50)));
+    await pausa(10);
+    ok(p2.ricevuti.errori.some((e) => e.includes('non disponibile')), 'solo le immagini della propria vista');
+  });
+
+  test('Online: espulsione, rifiuto, rientro con lo stesso nome e fine sessione', async () => {
+    const st = onlineState();
+    const p = await onlinePair(st);
+    const id = p.g.stato().id;
+    // Il giocatore cade: il master lo vede disconnesso, poi rientra con un nuovo collegamento e lo stesso nome.
+    p.a.chiudi();
+    await pausa();
+    eq(p.m.giocatori()[0].stato, 'disconnesso');
+    const [a2, b2] = NET().trasporto.coppiaMemoria();
+    const m = p.m;
+    m.collega(b2);
+    const g2 = NET().sessione.giocatore({ nome: 'ale ', colore: '#000000', trasporto: a2 });
+    await pausa();
+    eq([g2.stato().stato, g2.stato().id, g2.stato().colore], ['attivo', id, '#aa3355'], 'stesso id e colore di prima');
+    eq(m.giocatori().filter((x) => x.stato === 'attivo').length, 1, 'un solo giocatore attivo');
+    // Espulsione.
+    const fine = [];
+    const st2 = onlineState();
+    const q = await onlinePair(st2, { giocatore: { suFine: (t) => fine.push(t) } });
+    q.m.espelli(q.g.stato().id, 'Basta così.');
+    await pausa();
+    eq([q.g.stato().stato, fine[0], q.m.giocatori().length], ['espulso', 'Basta così.', 0]);
+    // Rifiuto.
+    const r = await onlinePair(onlineState(), { richiesta: (x) => x.rifiuta() });
+    eq(r.g.stato().stato, 'rifiutato');
+    // Fine sessione.
+    const z = await onlinePair(onlineState());
+    z.m.termina();
+    await pausa();
+    eq([z.g.stato().stato, z.ricevuti.fine[0].includes('La sessione è terminata')], ['finito', true]);
+  });
+
+  test('Online: battito, latenza e silenzio del master', async () => {
+    let ora = 1000;
+    const st = onlineState();
+    const p = await onlinePair(st, { master: { ora: () => ora }, giocatore: { ora: () => ora } });
+    ora += 50;
+    p.m.battito();
+    await pausa();
+    eq(p.g.linea(), 'verde');
+    ora += 120;
+    p.g.battito();
+    await pausa();
+    eq([p.g.stato().latenza, p.m.giocatori()[0].linea], [0, 'verde'], 'latenza misurata');
+    ora += 10000;
+    eq(p.g.linea(), 'giallo', 'silenzio: giallo');
+    ora += 15000;
+    p.g.battito();
+    eq([p.g.stato().stato, p.ricevuti.fine[0].includes('non risponde')], ['finito', true], 'master in silenzio: sessione terminata');
+  });
+
+  test('Online: due giocatori seguono un turno completo', async () => {
+    const st = onlineState();
+    const [a1, b1] = NET().trasporto.coppiaMemoria();
+    const [a2, b2] = NET().trasporto.coppiaMemoria();
+    const m = NET().sessione.master({ nome: 'Dario', stato: () => st, suRichiesta: (r) => r.accetta({ personaggioId: r.nome === 'Ale' ? 'pg1' : null }) });
+    m.collega(b1);
+    m.collega(b2);
+    const chat = [];
+    const g1 = NET().sessione.giocatore({ nome: 'Ale', colore: '#aa3355', trasporto: a1 });
+    const g2 = NET().sessione.giocatore({ nome: 'Bea', colore: '#33aa55', trasporto: a2, suChat: (x) => chat.push(x) });
+    await pausa();
+    eq([g1.stato().stato, g2.stato().stato, g2.stato().presenza.length], ['attivo', 'attivo', 3], 'master e due giocatori');
+    eq([g1.stato().vista.scheda.nome, g2.stato().vista.scheda], ['Mira', null], 'scheda solo a chi ha il personaggio');
+    // Turno di Mira: si muove, colpisce, passa il turno al goblin.
+    const c = S().current(st).combat;
+    c.combatants[0].pos = { x: 2, y: 1 };
+    m.aggiorna();
+    c.combatants[1].hp = 0;
+    DnD.dati.pushLog(c, 'a-terra', 'Goblin è a terra!');
+    m.aggiorna();
+    c.currentId = 'b1';
+    m.aggiorna();
+    g1.chat('Fatto!');
+    await pausa();
+    for (const g of [g1, g2]) {
+      const v = g.stato().vista.combattimento;
+      eq([v.pedine[0].pos, v.pedine[1].salute, v.turno, v.log[v.log.length - 1].testo, g.stato().n], [{ x: 2, y: 1 }, 'a terra', 'b1', 'Goblin è a terra!', 4]);
+    }
+    eq(chat.map((x) => x.da + ': ' + x.testo), ['Ale: Fatto!'], 'la chat arriva all\'altro giocatore');
+  });
+
   async function runTests() {
     const results = [];
     for (const { name, fn } of tests) {

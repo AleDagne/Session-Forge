@@ -1028,7 +1028,8 @@
       el('p', { class: 'muted small', text: 'Dalla griglia salvata vengono ripresi strutture, oggetti e posizioni dei combattenti con lo stesso nome; gli altri restano da trascinare.' }));
 
     root.append(
-      el('div', { class: 'section-head' }, el('h1', { text: 'Nuovo combattimento' })),
+      el('div', { class: 'section-head' }, el('h1', { text: 'Nuovo combattimento' }),
+        el('div', { class: 'head-actions' }, el('button', { class: 'btn', text: '🌐 Online', title: 'Gioco online: ospita i giocatori o unisciti a una sessione', onclick: () => DnD.uiOnline.apri() }))),
       el('section', { class: 'panel diff-panel' }, difficulty.node, partyNote),
       el('div', { class: 'grid-2' },
         el('section', { class: 'panel' },
@@ -2089,6 +2090,7 @@
           el('h1', { text: 'Combattimento' }),
           el('div', { class: 'head-actions' },
             el('button', { class: 'btn', text: 'Reimposta layout', title: 'Larghezze predefinite e colonne aperte', onclick: cols.reset }),
+            el('button', { class: 'btn', text: '🌐 Online', title: 'Gioco online: ospita i giocatori o unisciti a una sessione', onclick: () => DnD.uiOnline.apri() }),
             el('button', { class: 'btn danger', text: 'Termina combattimento', onclick: endCombat }))),
         // Combattimento nato dall'esplorazione: banner per tornarci.
         DnD.uiEsplorazione ? DnD.uiEsplorazione.combatBanner() : null,

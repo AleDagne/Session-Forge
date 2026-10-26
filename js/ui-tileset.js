@@ -223,8 +223,8 @@
   }
 
   // La tilemap usa un TileSet, una sorgente o un'immagine che non c'è più?
-  function missingTilesets(tiles, onReady) {
-    const byId = tilesetsById();
+  function missingTilesets(tiles, onReady, index) {
+    const byId = index || tilesetsById();
     return tiles.layers.some((l) => l.data.some((c) => {
       if (!c) return false;
       const ts = byId[tiles.tilesets[c[0]]];

@@ -1,5 +1,27 @@
 # Ripresa del lavoro
 
+## Fase «FASE ONLINE 1/3: Collegamento minimo e vista condivisa» (26 ottobre 2026)
+
+- Stato: **completata**, non ancora committata. Dati invariati alla versione **18**, cache `session-forge-v34`.
+- `test.html`: **284/284** in una finestra visibile (10 test nuovi «Online: …» con il trasporto in memoria).
+- Provato davvero nel browser integrato con due schede (master e giocatore): scambio dei codici con WebRTC e STUN,
+  approvazione, vista filtrata (pedina nascosta assente, PF del nemico come «grave», riga del log sul nascosto tolta),
+  eventi incrementali, dado e chat condivisi, Test connessione con eco, fine sessione lato giocatore.
+- File nuovi: `js/rete/protocollo.js`, `trasporto.js`, `codici.js`, `segnalazione.js`, `filtro.js`, `immagini.js`,
+  `sessione.js`, `js/ui-online.js`.
+- Toccati: `dati.js` (`store.onChange`), `app.js` (navigazione bloccata per il giocatore), `ui-griglia.js` (`readOnly`,
+  `tilesets`), `ui-tileset.js` (`missingTilesets` con indice), `ui-dadi.js` (`suTiro`), `ui-combattimento.js` e
+  `ui-impostazioni.js` (pulsanti Online), CSS, `index.html`, `test.html`, `sw.js`, README (sezione «Gioco online»),
+  CLAUDE.md.
+- Scelte:
+  - Boss non rivelato: la pedina si vede (se visibile), ma senza barra, titolo né fasi.
+  - Log: niente righe «ia» e «modifica», niente righe che nominano combattenti non mostrati, niente «Nota del master»;
+    i PF dei nemici diventano la salute a parole.
+  - Il giocatore aspetta il master finché vale il codice (5 minuti): il primo tentativo reale si era interrotto dopo
+    25 s, troppo poco per incollare a mano la risposta.
+  - Rientro riconosciuto dal nome (stesso nome di un giocatore disconnesso), sempre con l'approvazione del master.
+- Da fare nelle prossime tappe: comandi del giocatore, convalida dei dadi, portale e profili, segnalazione automatica.
+
 ## Fase «FASE 5/5: Nebbia di guerra, luce e visione» (26 ottobre 2026)
 
 - Stato: **completata**, non ancora committata. Dati alla versione **18**, cache `session-forge-v32`.

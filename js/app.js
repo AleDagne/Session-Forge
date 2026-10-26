@@ -47,6 +47,8 @@
 
   // Apre una sezione. action: azione rapida opzionale (es. 'nuovo' dalle schermate vuote).
   function show(name, action) {
+    // Giocatore online: solo la schermata della sessione (nessun'altra sezione).
+    if (DnD.uiOnline && DnD.uiOnline.vistaGiocatore()) return false;
     if (!C.SECTIONS.includes(name)) name = C.SECTIONS[0];
     if (current && current !== name && !canLeaveSection()) return false;
     const section = DnD.sezioni[name];
@@ -68,6 +70,7 @@
 
   // Dopo un cambio di sessione, un'importazione o una cancellazione: tutto si ridisegna.
   function refreshAll() {
+    if (DnD.uiOnline && DnD.uiOnline.vistaGiocatore()) return;
     for (const id of C.SECTIONS) if (DnD.sezioni[id].reset) DnD.sezioni[id].reset();
     DnD.uiSessioni.refresh();
     if (notes) notes.refresh();
