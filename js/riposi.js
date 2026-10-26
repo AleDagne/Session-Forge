@@ -280,6 +280,11 @@
       if (s.exhaustion) C().apply(x, { type: 'sfinimento', level: s.exhaustion, source: { name: 'scheda' } });
       x.lastLongRest = s.lastLongRest;
     }
+    // Scheda del giocatore: condizioni segnate fuori dal combattimento e tiri contro la morte a 0 PF.
+    if (x.kind === 'player' && source.sheet) {
+      for (const type of arr(source.sheet.conditions)) C().apply(x, { type, source: { name: 'scheda' } });
+      if (x.hp <= 0) x.deathSaves = Object.assign(C().normalizeDeathSaves(x.deathSaves), { active: true, successes: source.sheet.deathSaves.successes, failures: source.sheet.deathSaves.failures });
+    }
     return x;
   }
   // Fine del combattimento: lo stato del giocatore torna sulla scheda. Modifica la scheda.
@@ -294,6 +299,12 @@
       exhaustion: C().exhaustion(x), resources: arr(x.resources).map(normalizeResource),
     });
     if (x.lastLongRest !== undefined) p.status.lastLongRest = x.lastLongRest;
+    // Condizioni (tranne sfinimento e sorpresa, che hanno il loro posto) e tiri contro la morte tornano sulla scheda.
+    if (p.sheet) {
+      p.sheet.conditions = [...new Set(arr(x.conditions).map((e) => e.type).filter((t) => C().TYPE_IDS.includes(t) && t !== 'sfinimento' && t !== 'sorpreso'))];
+      const ds = C().normalizeDeathSaves(x.deathSaves);
+      p.sheet.deathSaves = hp > 0 ? { successes: 0, failures: 0 } : { successes: ds.successes, failures: ds.failures };
+    }
     return p;
   }
   // PF temporanei: assorbono il danno per primi. Restituisce il danno che resta. Modifica il combattente.

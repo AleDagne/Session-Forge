@@ -1,8 +1,30 @@
 # Ripresa del lavoro
 
-## Fase in corso: «FASE 4/5: Scene e incontri» (25 ottobre 2026)
+## Fase extra (fuori dalla numerazione): «Scheda del giocatore in stile D&D 5e» (26 ottobre 2026)
 
-- Stato: **completata** e committata. Dati alla versione **16**, cache `session-forge-v30`.
+- Stato: **completata** e committata. Dati alla versione **17**, cache `session-forge-v31`. La prossima è la
+  fase 5/5 (prompt dell'utente).
+- `test.html`: **262/263** (12 test nuovi, tutti passati; aggiornato il test dei punti caratteristica al 19° livello).
+  L'unico fallito è il noto «Boss UI: la vignettatura…», che vuole una finestra visibile.
+- File nuovi: `js/scheda-dati.js`, `js/scheda.js`, `js/ui-scheda.js`.
+- Toccati: `dati.js` (v17: `sheet` dei giocatori, librerie `backgrounds` e `feats`, esempi alla migrazione),
+  `regole.js` (talenti, iniziativa e velocità della scheda in `derivedStats`/`toCombatant`, casella «Incantatore»,
+  punti caratteristica al 19°), `leggendario.js` (`checkBonus` con le abilità della scheda), `riposi.js` (condizioni e
+  tiri contro la morte tra scheda e combattimento), `attrezzatura.js` (`attuned`), `sessioni.js` (librerie per
+  sessione, riferimenti della scheda rimappati), `ui-creature.js` (i giocatori usano `DnD.uiScheda.editor`, schede
+  Background e Talenti, importa/esporta personaggio), CSS, `index.html`, `test.html`, `sw.js`, README, CLAUDE.md.
+- Scelte: la scheda lavora su una bozza in memoria (passare tra guidata, scheda e vista di gioco non perde nulla);
+  i vecchi editor dei giocatori restano solo per i nemici standard. La classe Personalizzata si definisce ancora dal
+  form dei nemici (la scheda la usa). «Attacca» e «Lancia» aprono il combattimento in corso sul personaggio.
+- Provato nel browser (store in memoria): creazione guidata completa (razza, classe, acquisto punti, background con
+  anteprima, kit, dettagli), scheda e pagine, vista di gioco, stampa in tre pagine, «Sali di livello» con annulla,
+  librerie, leggendario e form dei nemici invariato.
+- Da provare a mano: stampa vera (anteprima del browser), importazione di un personaggio da file, oro iniziale e
+  acquisti, incantesimi di un mago nella pagina 3, tema chiaro (carta).
+
+## Fase precedente: «FASE 4/5: Scene e incontri» (commit `ffa5ede`)
+
+- Stato: completata. Dati alla versione 16, cache `session-forge-v30`.
 - `test.html`: **251/251** passati (12 test nuovi della fase; aggiornati l'ordine del menù e le categorie dei suoni).
   Se il pannello resta su «Esecuzione…» è la finestra nascosta: aspettare o usare una finestra visibile.
 - File nuovi: `js/scene-dati.js`, `js/scene.js`, `js/ui-scene.js`.

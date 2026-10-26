@@ -6,7 +6,7 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 16;
+  const VERSION = 17;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
@@ -147,6 +147,8 @@
       difficultyRules: DnD.difficolta.defaultRules(),
       // Scene (scaletta per sessione) e libreria degli incontri (con tre esempi condivisi).
       scenes: [], encounters: DnD.scene.examples(session.id),
+      // Scheda del giocatore: background e talenti (librerie per sessione, esempi condivisi).
+      backgrounds: DnD.scheda.exampleBackgrounds(session.id), feats: DnD.scheda.exampleFeats(session.id),
       // Mondo (per sessione, condivisibili): fazioni (le tre predefinite sono condivise), party, città, NPC e quest.
       factions: DnD.fazioni.builtinFactions(session.id).concat(world.factions), parties: [DnD.party.defaultParty(session.id, [])],
       cities: world.cities, worldNpcs: world.worldNpcs, quests: world.quests,
@@ -358,6 +360,8 @@
       out.coins = DnD.attrezzatura.normalizeCoins(c.coins);
       // PE accumulati (ricompense delle scene).
       out.xp = int(c.xp, 0, 0, 100000000);
+      // Scheda del giocatore (scheda.js): background, allineamento, abilità, privilegi, aspetto, storia…
+      out.sheet = DnD.scheda.normalizeSheet(c.sheet);
       // Personaggio leggendario (leggendario.js): tetto delle caratteristiche, Percorso e Trasformazioni.
       // Un giocatore declassato conserva i dati del percorso (legendArchive) per una nuova promozione.
       if (c.type === 'leggendario') {
@@ -1001,6 +1005,12 @@
     if (raw.kind !== 'sessione') raw.addSceneExamples = true;
     return raw;
   }
+  // Versione 17: scheda del giocatore. I giocatori ricevono i campi vuoti; gli archivi i background e i talenti d'esempio.
+  function migrateV17(raw) {
+    if (!raw || typeof raw !== 'object' || raw.version >= 17) return raw;
+    if (raw.kind !== 'sessione') raw.addSheetExamples = true;
+    return raw;
+  }
 
   // Esempi originali del Mondo (mondo-dati.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
   function defaultWorld(sessionId) {
@@ -1029,7 +1039,7 @@
     // Versioni 6, 7 e 8: immagini "stirate" -> tilemap su tileset, TileSet con sorgenti e livelli generici,
     // poi Attrezzatura, oggetti di mappa e creature (sui dati grezzi, prima di tutto); 9: boss d'esempio;
     // 10: biomi ed eventi.
-    raw = migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))))));
+    raw = migrateV17(migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw)))))))))));
     const { sessions, currentSessionId } = normalizeSessions(raw);
     // Chi non appartiene a una sessione esistente (es. dati precedenti) va nella prima.
     const ids = new Set(sessions.map((x) => x.id));
@@ -1068,6 +1078,8 @@
       // Scene (per sessione, ordinate) e incontri della libreria (modelli, condivisibili).
       scenes: unique(arr(raw.scenes).map((x) => owned(DnD.scene.normalizeScene(x)))),
       encounters: unique(arr(raw.encounters).map((x) => owned(DnD.scene.normalizeEncounter(x)))),
+      backgrounds: unique(arr(raw.backgrounds).map((x) => owned(DnD.scheda.normalizeBackground(x)))),
+      feats: unique(arr(raw.feats).map((x) => owned(DnD.scheda.normalizeFeat(x)))),
       sessions,
       currentSessionId,
       diceHistory: arr(raw.diceHistory).slice(0, DICE_HISTORY_MAX).map((h) => {
@@ -1076,6 +1088,10 @@
       }),
     };
     if (raw.addDefaultParties) addDefaultParties(out);
+    if (raw.addSheetExamples) {
+      for (const b of DnD.scheda.exampleBackgrounds(sessions[0].id)) if (!out.backgrounds.some((x) => x.id === b.id)) out.backgrounds.push(b);
+      for (const f of DnD.scheda.exampleFeats(sessions[0].id)) if (!out.feats.some((x) => x.id === f.id)) out.feats.push(f);
+    }
     if (raw.addSceneExamples) for (const e of DnD.scene.examples(sessions[0].id)) if (!out.encounters.some((x) => x.id === e.id)) out.encounters.push(e);
     if (raw.addWorldExamples) {
       const ex = defaultWorld(sessions[0].id);

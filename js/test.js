@@ -506,7 +506,7 @@
   const M = () => DnD.magie;
 
   test('punti caratteristica disponibili per livello', () => {
-    eq([1, 3, 4, 7, 8, 12, 16, 19, 20].map(R().asiPointsAvailable), [0, 0, 2, 2, 4, 6, 8, 8, 10]);
+    eq([1, 3, 4, 7, 8, 12, 16, 19, 20].map(R().asiPointsAvailable), [0, 0, 2, 2, 4, 6, 8, 10, 10]);
     eq(R().asiPointsAssigned({ FOR: 2, DES: 1, COS: 0, INT: 0, SAG: 0, CAR: 1 }), 4);
   });
 
@@ -5227,6 +5227,221 @@
       qty.dispatchEvent(new Event('input'));
       eq(badge(), 'Mortale', 'due cinghiali');
       DnD.sezioni.scene.reset();
+    } finally {
+      box.remove();
+      DnD.store = prevStore;
+    }
+  });
+
+  // --- Scheda del giocatore (scheda.js) ---
+  const SH = () => DnD.scheda;
+  // Archivio minimo in DnD.store per i calcoli che leggono talenti e catalogo dallo stato.
+  function withState(state, fn) {
+    const prev = DnD.store;
+    DnD.store = { state };
+    try { return fn(); } finally { DnD.store = prev; }
+  }
+  const hero = (extra) => DnD.dati.normalizeCreature(Object.assign({ id: 'pc', name: 'Ida', level: 5, classId: 'ladro', maxHp: 30,
+    abilities: { FOR: 10, DES: 16, COS: 12, INT: 14, SAG: 12, CAR: 8 } }, extra), true);
+
+  test('Scheda: acquisto punti (27 punti, 8-15) e rifiuto oltre il budget', () => {
+    const base = { FOR: 8, DES: 8, COS: 8, INT: 8, SAG: 8, CAR: 8 };
+    eq([SH().pointBuy(base).cost, SH().pointBuy(base).left, SH().pointBuy(base).valid], [0, 27, true], 'tutto a 8');
+    const top = { FOR: 15, DES: 15, COS: 15, INT: 8, SAG: 8, CAR: 8 };
+    eq([SH().pointBuy(top).cost, SH().pointBuy(top).valid], [27, true], 'tre 15: 27 punti');
+    eq(SH().pointBuy(Object.assign({}, top, { INT: 9 })).valid, false, '28 punti: oltre il budget');
+    eq([SH().canBuy(top, 'INT', 9), SH().canBuy(base, 'FOR', 16), SH().canBuy(base, 'FOR', 7), SH().canBuy(base, 'FOR', 14)], [false, false, false, true]);
+    eq(SH().pointBuy({ FOR: 13, DES: 14, COS: 12, INT: 10, SAG: 11, CAR: 9 }).cost, 5 + 7 + 4 + 2 + 3 + 1, 'costo per valore');
+    eq(SH().pointBuy(Object.assign({}, base, { FOR: 17 })).out, ['FOR'], 'fuori dall\'intervallo');
+    eq([R().modifier(15), R().proficiencyBonus(5), R().proficiencyBonus(9), R().proficiencyBonus(17)], [2, 3, 4, 6], 'modificatori e competenza');
+  });
+
+  test('Scheda: abilità con competenza, maestria e metà competenza; passive', () => {
+    const p = hero({ sheet: { skills: { 'Furtività': 2, 'Indagare': 1 }, half: true, skillBonus: { 'Percezione': 2 } } });
+    const d = R().derivedStats(p, null, []);
+    const fx = SH().featEffects(p, []);
+    const b = (k) => SH().skillBonus(p, k, d, fx, null);
+    eq([b('Furtività').total, b('Indagare').total, b('Atletica').total, b('Percezione').total], [9, 5, 1, 4], 'maestria 3+6, competenza 2+3, metà 0+1, bonus 1+1+2');
+    ok(b('Furtività').detail.includes('maestria') && b('Atletica').half, 'dettaglio del calcolo');
+    eq([SH().passive(p, 'Percezione', d, fx, null), SH().passive(p, 'Indagare', d, fx, null)], [14, 15], 'passive');
+    eq(SH().skills(p, d, fx, null).length, 18, 'diciotto abilità');
+    eq(DnD.leggendario.checkBonus(p, 'Furtività', false, { races: [], equipment: [], feats: [] }), 9, 'le prove degli eventi usano la scheda');
+  });
+
+  test('Scheda: valori automatici sovrascritti e ritorno ad auto', () => {
+    const p = hero({ sheet: { initiativeBonus: 2, speedBonus: 3 } });
+    const d = () => R().derivedStats(p, null, []);
+    eq([SH().initiative(p, d(), null).total, SH().speed(p, null, null, []).total], [5, 12], 'auto: DES + bonus, razza + bonus');
+    p.sheet.overrides.initiative = 7;
+    p.sheet.overrides.speed = 6;
+    eq([SH().initiative(p, d(), null).total, SH().initiative(p, d(), null).manual, SH().speed(p, null, null, []).total], [7, true, 6], 'a mano');
+    const x = R().createCombatants([p], [], [], seq(10), [], [])[0];
+    eq([x.initiative, x.speeds.cammina], [17, 20], 'nel combattimento: iniziativa 10 + 7, velocità 6 m = 20 piedi');
+    p.sheet.overrides.initiative = null;
+    p.sheet.overrides.speed = null;
+    eq([SH().initiative(p, d(), null).total, SH().initiative(p, d(), null).manual, SH().speed(p, null, null, []).total], [5, false, 12], 'di nuovo auto');
+    eq(SH().normalizeSheet({ overrides: { initiative: '', speed: 'x', carry: 50 } }).overrides, { initiative: null, speed: null, carry: 50 }, 'normalizzazione');
+  });
+
+  test('Scheda: capacità di carico e sintonia', () => {
+    const cat = DnD.attrezzatura.defaults().concat([1, 2, 3, 4].map((i) => DnD.dati.normalizeEquipment({ id: 'anello-' + i, name: 'Anello ' + i, category: 'magici', attunement: true })));
+    const p = hero({ inventory: [{ equipmentId: 'eq-cotta-di-maglia', qty: 1 }], coins: { mo: 100 } });
+    const d = R().derivedStats(p, null, cat);
+    const c = SH().carry(p, d, cat);
+    eq([c.weight, c.capacity, c.over], [28.5, 75, false], 'FOR 10 × 7,5 kg');
+    p.sheet.overrides.carry = 20;
+    eq(SH().carry(p, d, cat).over, true, 'capacità a mano: sovraccarico');
+    p.inventory = [1, 2, 3].map((i) => ({ id: 'r' + i, equipmentId: 'anello-' + i, qty: 1, attuned: true }));
+    eq([SH().attunement(p, cat).count, SH().canAttune(p, cat)], [3, false], 'tre in sintonia: niente di più');
+    p.inventory.push({ id: 'r4', equipmentId: 'anello-4', qty: 1, attuned: true }, { id: 'r5', equipmentId: 'eq-cotta-di-maglia', qty: 1, attuned: true });
+    eq([SH().attunement(p, cat).count, SH().attunement(p, cat).over], [4, true], 'oltre il massimo (e la cotta non richiede sintonia)');
+    eq(DnD.attrezzatura.normalizeInventory([{ equipmentId: 'x', attuned: 1 }])[0].attuned, true, 'campo dell\'inventario');
+  });
+
+  test('Scheda: background applicato con anteprima e senza duplicati', () => {
+    const cat = DnD.attrezzatura.defaults();
+    const bg = SH().exampleBackgrounds('s').find((b) => b.id === 'bg-gladiatore');
+    const p = hero({ inventory: [{ equipmentId: 'eq-tridente', qty: 1 }], sheet: { skills: { 'Atletica': 1 }, proficiencies: [{ kind: 'strumenti', text: 'un tipo di arma insolita' }] } });
+    const r = SH().applyBackground(p, bg, cat);
+    eq(r.changes, ['Background: Ex gladiatore', 'Competenza in Intrattenere', 'Privilegio: Nome dell\'arena'], 'anteprima delle aggiunte');
+    eq(r.skipped.length, 3, 'già presenti: Atletica, strumento, tridente');
+    eq([p.sheet.background, p.sheet.skills.Intrattenere], ['', undefined], 'la scheda non cambia senza conferma');
+    const again = SH().applyBackground(r.player, bg, cat);
+    eq([again.changes, again.player.sheet.features.length, again.player.inventory.length], [[], 1, 1], 'riapplicato: nessun doppione');
+    const fresh = SH().applyBackground(hero(), SH().exampleBackgrounds('s').find((b) => b.id === 'bg-novizio-cenere'), cat);
+    ok(fresh.changes.includes('Equipaggiamento: 1× Bastone ferrato') && fresh.player.sheet.proficiencies.some((x) => x.kind === 'linguaggi'), 'equipaggiamento per nome e linguaggi');
+  });
+
+  test('Scheda: talenti, effetti nei calcoli e punti caratteristica', () => {
+    const feats = SH().exampleFeats('s');
+    const st = Object.assign(DnD.dati.emptyState(), { feats });
+    const p = hero({ level: 4, acMode: 'auto', sheet: { features: [{ name: 'Pelle di quercia', source: 'talento', featId: 'tal-pelle-quercia', asi: true }, { name: 'Guardia', source: 'talento', featId: 'tal-guardia-alta' }, { name: 'Occhio', source: 'talento', featId: 'tal-occhio-aquila' }] } });
+    eq([SH().asiAvailable(p), SH().asiAvailable(Object.assign({}, p, { level: 8 }))], [0, 2], 'un talento al posto di 2 punti');
+    const fx = SH().featEffects(p, feats);
+    eq([fx.abilities, fx.ac, fx.saves, fx.skills], [{ COS: 1, SAG: 1 }, 2, ['DES'], ['Percezione']], 'effetti sommati');
+    withState(st, () => {
+      const d = R().derivedStats(p, null, []);
+      eq([d.abilities.COS, d.abilities.SAG, d.ac.total, d.saves.includes('DES')], [13, 13, 15, true], 'caratteristiche, CA e salvezze');
+      ok(d.ac.detail.includes('talenti 2'), 'dettaglio della CA');
+      eq(SH().skillBonus(p, 'Percezione', d, d.fx, st).level, 1, 'competenza dal talento');
+    });
+    const tough = hero({ level: 5, sheet: { features: [{ name: 'Tempra', featId: 'tal-tempra' }] } });
+    eq(SH().autoHp(tough, 1, SH().featEffects(tough, feats), 'media').total, 8 + 4 * 5 + 5 * 1 + 10, 'PF: media + talento per livello');
+    const lost = hero({ sheet: { features: [{ name: 'Perduto', featId: 'sparito' }] } });
+    eq(SH().featEffects(lost, feats).missing, ['Perduto'], 'talento eliminato');
+    eq([R().asiPointsAvailable(19), R().asiPointsAvailable(24)], [10, 12], 'livelli 4, 8, 12, 16, 19; oltre il 20 ogni 4');
+  });
+
+  test('Scheda: avanzamento di livello (PF, slot, privilegi, PE) e preparazione', () => {
+    const p = hero({ level: 3, maxHp: 20, hpMode: 'manuale', abilities: { FOR: 10, DES: 16, COS: 12, INT: 14, SAG: 12, CAR: 8 } });
+    const r = SH().levelUp(p, { hpMethod: 'media', asi: { DES: 2 } }, { feats: [] });
+    eq([r.player.level, r.player.maxHp, r.summary.hpGain, r.summary.asiLevel, r.player.asi.DES, r.player.sheet.features.map((f) => f.name)], [4, 26, 6, true, 2, ['Privilegio di livello 4']], 'media + COS, punti al 4°');
+    eq([p.level, p.maxHp], [3, 20], 'l\'originale non cambia (annullabile)');
+    eq(SH().levelUp(p, { hpMethod: 'tira', roll: 1 }, { feats: [] }).summary.hpGain, 2, 'tiro 1 + COS');
+    eq(SH().levelUp(p, { hpMethod: 'manuale', manual: 7 }, { feats: [] }).summary.hpGain, 7, 'a mano');
+    const mage = hero({ classId: 'mago', level: 2, abilities: { FOR: 8, DES: 14, COS: 12, INT: 16, SAG: 10, CAR: 10 } });
+    const rm = SH().levelUp(mage, { hpMethod: 'media', spells: ['palla'] }, { feats: [] });
+    eq([rm.summary.slotsBefore.slice(0, 2), rm.summary.slotsAfter.slice(0, 2), rm.player.spellcasting.known], [[3, 0], [4, 2], ['palla']], 'nuovi slot e incantesimi');
+    eq(SH().levelUp(hero({ level: 20 }), {}, { feats: [] }).summary, null, 'livello massimo');
+    eq([SH().xpInfo(hero({ level: 3, xp: 2700 })).canLevelUp, SH().xpInfo(hero({ level: 3, xp: 2699 })).canLevelUp, SH().levelForXp(6500), SH().xpInfo(hero({ level: 3 })).next], [true, false, 5, 2700], 'soglie dei PE');
+    const cleric = hero({ classId: 'chierico', abilities: { FOR: 10, DES: 10, COS: 12, INT: 10, SAG: 16, CAR: 10 }, sheet: { spellFlags: { a: { prepared: true }, b: { prepared: true }, c: { prepared: false } } } });
+    eq(SH().preparable(cleric, R().derivedStats(cleric, null, [])), { max: 8, prepared: 2 }, 'chierico: livello + SAG');
+    const pal = hero({ classId: 'paladino', abilities: { FOR: 14, DES: 10, COS: 12, INT: 10, SAG: 10, CAR: 14 } });
+    eq(SH().preparable(pal, R().derivedStats(pal, null, [])).max, 4, 'paladino: metà livello + CAR');
+    eq(SH().preparable(hero(), R().derivedStats(hero(), null, [])), null, 'il ladro non prepara');
+    const fighter = hero({ classId: 'guerriero', sheet: { spellcaster: true, casterType: 'mezzo' } });
+    ok(SH().isCaster(fighter) && R().derivedStats(fighter, null, []).spell.slotsTotal[0] === 4, 'casella «Incantatore»: come la classe personalizzata');
+  });
+
+  test('Scheda: condizioni e tiri contro la morte tra scheda e combattimento', () => {
+    const p = hero({ status: { hp: 0 }, sheet: { conditions: ['prono'], deathSaves: { successes: 1, failures: 2 } } });
+    const x = R().createCombatants([p], [], [], seq(10), [], [])[0];
+    eq([DnD.condizioni.has(x, 'prono'), x.deathSaves.active, x.deathSaves.successes, x.deathSaves.failures], [true, true, 1, 2], 'dalla scheda');
+    DnD.condizioni.remove(x, 'prono');
+    DnD.condizioni.apply(x, { type: 'avvelenato' });
+    x.hp = 5;
+    DnD.riposi.syncBack(x, p);
+    eq([p.sheet.conditions, p.sheet.deathSaves], [['avvelenato'], { successes: 0, failures: 0 }], 'di ritorno sulla scheda');
+  });
+
+  test('Scheda: migrazione di un giocatore esistente, librerie ed esempi', () => {
+    const mig = DnD.dati.normalizeState({ version: 16, races: [], npcs: [], players: [{ id: 'old', name: 'Vecchio', level: 3, notes: 'appunti', maxHp: 22,
+      weapons: [{ name: 'Ascia', toHit: 4, damageDice: '1d6' }], inventory: [{ equipmentId: 'eq-ascia', qty: 1 }], coins: { mo: 7 } }] });
+    const p = mig.players[0];
+    eq([mig.version, p.notes, p.maxHp, p.weapons[0].name, p.inventory[0].attuned, p.coins.mo, p.sheet.alignment, p.sheet.features, p.sheet.skills, p.sheet.wizard.done], [DnD.dati.VERSION, 'appunti', 22, 'Ascia', false, 7, '', [], {}, true], 'nessun dato perso, campi nuovi vuoti');
+    eq([mig.backgrounds.length, mig.feats.length], [6, 8], 'esempi originali');
+    eq([DnD.dati.normalizeState({ version: 17 }).backgrounds.length, DnD.dati.normalizeState({ version: 17 }).feats.length], [0, 0], 'archivio già v17: niente esempi aggiunti');
+    eq(SH().normalizeSheet({ story: '<p onclick="x()">Nata<script>bad()</script> al faro</p>' }).story.includes('script'), false, 'storia sanificata come le note');
+    eq(DnD.dati.normalizeCreature({ name: 'Nemico' }, false).sheet, undefined, 'i nemici non cambiano');
+  });
+
+  test('Scheda: esportazione e importazione di un singolo personaggio', () => {
+    const st = DnD.dati.emptyState();
+    const p = hero({ sheet: { background: 'bg-gladiatore', features: [{ name: 'Tempra', featId: 'tal-tempra' }], alignment: 'Neutrale' } });
+    const file = JSON.parse(JSON.stringify(SH().exportCharacter(p, st)));
+    eq([file.kind, file.backgrounds.map((b) => b.id), file.feats.map((f) => f.id)], ['personaggio', ['bg-gladiatore'], ['tal-tempra']], 'con background e talenti usati');
+    const dst = Object.assign(DnD.dati.emptyState(), { backgrounds: [], feats: [] });
+    const r = SH().importCharacter(file, dst, 'sx');
+    eq([r.player.id !== 'pc', r.player.name, r.player.sessionId, r.player.sheet.alignment, r.backgrounds.length, r.feats.length, r.warnings], [true, 'Ida', 'sx', 'Neutrale', 1, 1, []], 'importato con le librerie mancanti');
+    eq(SH().importCharacter(file, st, 'sx').backgrounds.length, 0, 'librerie già presenti: non si duplicano');
+    let msg = '';
+    try { SH().importCharacter({ kind: 'creatura' }, st, 'sx'); } catch (e) { msg = e.message; }
+    ok(msg.includes('personaggio'), 'file sbagliato');
+    const sid = S().current(st).id;
+    st.players.push(Object.assign(hero({ id: 'p1', sessionId: sid }), { sheet: SH().normalizeSheet({ background: 'bg-mio', features: [{ name: 'T', featId: 'tal-mio' }] }) }));
+    st.backgrounds.push(SH().normalizeBackground({ id: 'bg-mio', name: 'Mio', sessionId: sid }));
+    st.feats.push(SH().normalizeFeat({ id: 'tal-mio', name: 'Mio', sessionId: sid }));
+    S().duplicateSession(st, sid, 'Copia', DnD.dadi.uid);
+    const nsid = S().current(st).id;
+    const copy = st.players.find((x) => x.sessionId === nsid);
+    eq([copy.sheet.background === st.backgrounds.find((b) => b.sessionId === nsid && b.name === 'Mio').id, copy.sheet.features[0].featId === st.feats.find((f) => f.sessionId === nsid).id], [true, true], 'duplicazione della sessione: riferimenti rimappati');
+  });
+
+  test('Scheda: creazione guidata completa e interrotta, riferimenti mancanti', () => {
+    const st = DnD.dati.emptyState();
+    const blank = DnD.dati.normalizeCreature({ name: '', sheet: { wizard: { done: false } } }, true);
+    const texts = SH().missing(blank, st).map((x) => x.text);
+    for (const t of ['manca la razza', 'manca la classe', 'caratteristiche ancora tutte a 10', 'manca il background', 'nessun equipaggiamento', 'manca il nome', 'manca l\'allineamento']) ok(texts.includes(t), t);
+    eq(blank.sheet.wizard.done, false, 'creazione interrotta: si completa dopo');
+    const done = DnD.dati.normalizeCreature({ name: 'Brenna', raceId: st.races[0].id, classId: 'guerriero', abilities: { FOR: 15, DES: 12, COS: 14, INT: 8, SAG: 10, CAR: 13 },
+      inventory: [{ equipmentId: 'eq-spada-lunga', qty: 1 }], sheet: { background: 'bg-gladiatore', alignment: 'Neutrale', skills: { 'Atletica': 1, 'Intrattenere': 1, 'Percezione': 1, 'Sopravvivenza': 1 } } }, true);
+    eq(SH().missing(done, st), [], 'creazione completa');
+    eq(SH().classSkillChoice(done, st.backgrounds.find((b) => b.id === 'bg-gladiatore')), { count: 2, options: DnD.schedaDati.CLASS_SKILLS.guerriero.options, chosen: ['Percezione', 'Sopravvivenza'], missing: 0 }, 'abilità della classe (senza quelle del background)');
+    const broken = hero({ inventory: [{ equipmentId: 'sparito', qty: 1 }], spellcasting: { known: ['sparito'] }, sheet: { background: 'sparito', features: [{ name: 'x', featId: 'sparito' }], allies: [{ kind: 'fazione', refId: 'sparita' }] } });
+    eq(SH().missingRefs(broken, st), ['oggetto dell\'inventario eliminato', 'incantesimo eliminato', 'background eliminato', 'talento eliminato', 'alleato eliminato'], 'avvisi senza errori');
+  });
+
+  test('Scheda UI: stampa in tre pagine, creazione guidata interrotta, vista di gioco', async () => {
+    const mem = new Map();
+    const backend = { name: 'memoria', get: async (k) => (mem.has(k) ? mem.get(k) : null), set: async (k, v) => { mem.set(k, v); }, clear: async () => mem.clear() };
+    const prevStore = DnD.store;
+    DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;top:0;width:1300px;height:900px;overflow:hidden;z-index:-1';
+    document.body.append(box);
+    try {
+      const sid = S().current(DnD.store.state).id;
+      const p = hero({ sessionId: sid, sheet: { story: '<p>Nata al faro.</p>' } });
+      const pages = DnD.uiScheda.printNode(p).querySelectorAll('.sheet-page');
+      eq([pages.length, pages[0].querySelector('h1').textContent, pages[1].textContent.includes('Nata al faro'), pages[2].textContent.includes('non lancia incantesimi')], [3, 'Ida', true, true], 'stampa: tre pagine');
+      let saved = null;
+      const blank = DnD.dati.normalizeCreature({ name: '', sessionId: sid }, true);
+      DnD.uiScheda.editor({ player: blank, isNew: true, host: box, persist: (x) => { saved = x; }, done: () => {} });
+      ok(box.querySelector('.char-wizard'), 'creazione guidata');
+      [...box.querySelectorAll('button')].find((b) => b.textContent === 'Esci e completa dopo').click();
+      ok(box.querySelector('.char-sheet') && !box.querySelector('.char-wizard'), 'passa alla Scheda senza perdere dati');
+      const name = box.querySelector('.char-name input');
+      name.value = 'Lia';
+      name.dispatchEvent(new Event('input'));
+      [...box.querySelectorAll('button')].find((b) => b.textContent === 'Salva').click();
+      eq([saved.name, saved.sheet.wizard.done], ['Lia', false], 'salvata a metà: campi mancanti segnalati, non bloccati');
+      box.textContent = '';
+      DnD.store.update((s) => { s.players.push(p); });
+      box.append(DnD.uiScheda.gameSheet(DnD.uiScheda.draftOf(p), true));
+      [...box.querySelectorAll('.char-cond')].find((b) => b.textContent.includes('Prono')).click();
+      [...box.querySelectorAll('button')].find((b) => b.textContent === '−1').click();
+      const q = DnD.store.state.players.find((x) => x.id === 'pc');
+      eq([q.sheet.conditions, q.status.hp], [['prono'], 29], 'vista di gioco: condizioni e PF con un clic');
     } finally {
       box.remove();
       DnD.store = prevStore;

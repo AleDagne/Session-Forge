@@ -310,6 +310,54 @@ multiattacco se ci sono più armi); l'originale resta invariato.
 - **Esempio**: *Skarnoth, La Fornace che Cammina* (originale, GS 12, tema Infernale): 3 fasi con cambio di
   temperamento e un'azione sbloccata nell'ultima, azioni leggendarie, Resistenza leggendaria e tana.
 
+## Scheda del giocatore
+
+Logica pura e testata in `js/scheda.js`, dati modificabili in `js/scheda-dati.js`, interfaccia in `js/ui-scheda.js`. La
+creazione e la modifica di un giocatore (anche leggendario) avvengono sulla **scheda a pagine**, organizzata come la
+scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`regole.derivedStats`, classi, razze,
+Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima.
+
+- **Tre modalità** sulla stessa bozza, senza perdere dati: **🧭 Creazione guidata**, **📜 Scheda**, **🎲 Vista di gioco**.
+- **Valori automatici** con l'indicatore «auto», sovrascrivibili a mano e con **↺** per tornare ad auto; il
+  dettaglio del calcolo è nel tooltip (CA, iniziativa, velocità, bonus di competenza, PF, CD e attacco degli
+  incantesimi, slot, capacità di carico).
+- **Pagina 1 — Personaggio**: nome, classe e livello, background (applicato con anteprima e conferma), giocatore,
+  razza, allineamento, PE con la soglia del livello successivo («⬆ puoi salire di livello»). Caratteristiche in
+  riquadri (valore grande, modificatore, dettaglio base + razza + punti + talenti) con **Randomizza**, **Acquisto
+  punti** (27 punti, 8-15, costi 8:0 … 15:9, nessuna combinazione oltre il budget) e **Array standard**; punti
+  caratteristica ai livelli 4, 8, 12, 16 e 19. Ispirazione, bonus di competenza, tiri salvezza (auto dalla classe,
+  modificabili), le 18 abilità con competenza, **maestria**, «metà competenza» e bonus a mano, Percezione,
+  Intuizione e Indagare passive; altre competenze e linguaggi come tag, con suggerimenti da classe, razza e background.
+  Al centro CA (armatura e scudo del catalogo, difesa senza armatura, bonus), iniziativa, velocità, PF massimi
+  (manuali o auto con media/tiri), attuali e temporanei, dadi vita, tiri contro la morte; **attacchi** dalle armi del
+  catalogo (bonus e danni calcolati) più righe libere, con «⚔ Attacca» (apre il combattimento in corso);
+  **equipaggiamento** (quantità, equipaggiato, peso, sintonia massimo 3), monete, peso e capacità (FOR × 7,5 kg,
+  regola in `scheda-dati.js` e a mano) con l'avviso di sovraccarico. A destra tratti, ideali, legami e difetti (con i
+  suggerimenti del background) e **privilegi e tratti** (fonte, usi a volontà o per riposo; suggeriti dalla classe;
+  **talenti** dalla libreria, anche al posto di 2 punti caratteristica, con il contatore dei punti che si aggiorna).
+- **Pagina 2 — Storia**: aspetto, ritratto (separato dalla pedina), storia del personaggio (editor delle note,
+  sanificato), alleati e organizzazioni collegati a fazioni (con la reputazione) e NPC, tratti aggiuntivi, tesoro,
+  note; pedina e dimensione sulla griglia; fazione, città e party; «✦ Eleva a leggendario» al 20° livello.
+- **Pagina 3 — Incantesimi** (classi incantatrici, o con la casella «Incantatore» e il tipo, come la classe
+  Personalizzata): caratteristica, CD e attacco (auto, sovrascrivibili), slot per livello (totali auto o a mano,
+  usati), incantesimi della libreria Magie filtrati per classe con **Preparato**, **Concentrazione**, **Rituale** e
+  «✨ Lancia»; avviso «preparabili = livello (o metà) + modificatore».
+- **Vista di gioco**: compatta; PF (−1/+1), ispirazione, condizioni e slot si cambiano con un clic e si salvano subito.
+  Le condizioni segnate sulla scheda e i tiri contro la morte passano al combattimento e tornano alla fine.
+- **🖨 Stampa**: tre pagine A4 in bianco e nero (`@media print`, `body.printing-sheet`), senza interfaccia.
+- **Creazione guidata** (passi saltabili, con l'anteprima della scheda a destra): razza, classe e livello, caratteristiche,
+  background e abilità della classe, equipaggiamento (kit della classe, equipaggiamento del background, oro iniziale
+  e acquisti con le monete), incantesimi, dettagli, riepilogo con gli avvisi («manca 1 abilità da scegliere»). Si può
+  uscire quando si vuole: i campi mancanti sono segnalati ma non bloccano il salvataggio.
+- **⬆ Sali di livello**: PF (media, tiro o a mano, più i talenti), 2 punti caratteristica o un talento ai livelli
+  giusti, nuovi incantesimi e privilegi da compilare, riepilogo (PF, competenza, slot) prima di confermare e
+  «↶ Annulla la salita» dopo. Soglie di PE in `scheda-dati.js`.
+- **Librerie** (Giocatori › Background e › Talenti, per sessione con «Condividi»): sei background e otto talenti
+  originali d'esempio; i talenti hanno effetti numerici facoltativi applicati ai calcoli (caratteristiche, competenze
+  in abilità e salvezze, CA, PF, velocità, iniziativa).
+- **⬇ Esporta / ⬆ Importa personaggio** (JSON, con il background e i talenti che usa). Riferimenti mancanti
+  (oggetto, incantesimo, background, talento, alleato): avviso e voce disattivata.
+
 ## Personaggi leggendari
 
 Giocatori oltre il ventesimo livello, nella scheda **Giocatori › ✦ Leggendari**. Un leggendario è un giocatore
@@ -657,7 +705,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 16)
+### Modello dati (versione 17)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -732,7 +780,22 @@ scenes: [{ id, title, kind, status, order, readAloud (HTML), revealed, pageId, m
 encounters: [{ id, name, creatures: [{ id, ref: { kind: npc|mondo, id }, qty, start: { kind: zona|celle, cells }, faction, ai }],
            rewards, notes, tactics, start: { surprised, hidden, light, weather, hour }, end: [{ kind, rounds, text }], sessionId, shared }]
 sessione: { …, currentSceneId }   combattimento: { …, scene: { sceneId, encounterId } | null }   giocatore: { …, xp }
+giocatore: { …, sheet: { background, alignment, inspiration, skills: { abilità: 1 | 2 }, skillBonus, half, initiativeBonus,
+           speedBonus, overrides: { initiative, speed, carry } (null = auto), proficiencies: [{ kind, text }],
+           personality: { traits, ideals, bonds, flaws }, features: [{ name, desc, source, uses: { kind, max }, featId, asi, level }],
+           appearance: { age, height, weight, eyes, skin, hair }, portrait, story (HTML), allies: [{ kind, refId, text }],
+           extraFeatures, treasure, spellcaster, casterType, spellFlags: { idIncantesimo: { prepared, ritual, concentration } },
+           conditions: [tipo], deathSaves: { successes, failures }, wizard: { done, step } } }
+riga dell'inventario: { …, attuned }
+backgrounds: [{ id, name, description, skills, tools, languages, equipment: [{ name, qty, equipmentId }], feature: { name, desc },
+           suggestions: { traits, ideals, bonds, flaws }, sessionId, shared }]
+feats: [{ id, name, requirements, description, effects: { abilities, skills, saves, ac, hp, hpPerLevel, speed, initiative }, sessionId, shared }]
 ```
+
+**Migrazione dalla versione 16**: solo normalizzazione. I giocatori ricevono la scheda con i campi vuoti (nulla di ciò
+che avevano cambia: classe, razza, PF, CA, salvezze, armi, incantesimi, inventario, note), le righe dell'inventario
+`attuned: false`, gli archivi (non i file di sessione) i sei background e gli otto talenti d'esempio. I nemici non
+cambiano. Punti caratteristica: ora 2 anche al 19° livello (prima al 20°; dal 20° in su il totale è lo stesso).
 
 **Migrazione dalla versione 15**: solo normalizzazione. Le sessioni restano senza scene (nessun dato cambia), i
 giocatori ricevono 0 PE e gli archivi (non i file di sessione) i tre incontri d'esempio, condivisi.
@@ -1342,6 +1405,16 @@ Per **scene e incontri**:
 - «Genera incontro»; riferimenti mancanti; migrazione v15 → v16, ripresa dopo la chiusura, archivio, file di
   sessione e duplicazione con i riferimenti rimappati; aggiornamento in tempo reale nell'editor dell'incontro.
 
+Per la **scheda del giocatore**:
+- acquisto punti (27 punti, 8-15, rifiuto oltre il budget), modificatori e competenza;
+- abilità con competenza, maestria e metà competenza, bonus a mano, passive, prove degli eventi;
+- sovrascrittura di iniziativa e velocità (anche nel combattimento) e ritorno ad auto; carico e sintonia;
+- background con anteprima e senza duplicati; talenti nei calcoli e nel conteggio dei punti, talento eliminato;
+- avanzamento di livello (PF media/tiro/a mano, punti, privilegi, slot, incantesimi), soglie di PE, preparabili,
+  casella «Incantatore»; condizioni e tiri contro la morte tra scheda e combattimento;
+- migrazione v16 → v17 senza perdite, esempi; esportazione e importazione di un personaggio, duplicazione della
+  sessione; creazione guidata completa e interrotta; riferimenti mancanti; stampa in tre pagine e vista di gioco.
+
 Per **condizioni e concentrazione**:
 - tabella ed effetti di tutte le condizioni;
 - attacchi con vantaggio e svantaggio da più fonti (anche insieme), prono vicino e a distanza, critico automatico solo
@@ -1388,6 +1461,8 @@ js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
 js/difficolta-dati.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
 js/scene-dati.js      scene (dati): tipi, stati, esiti, condizioni di inizio e fine, incontri d'esempio
+js/scheda-dati.js     scheda del giocatore (dati): allineamenti, acquisto punti, soglie di PE, classi, background e talenti d'esempio
+js/scheda.js          scheda del giocatore (logica pura): abilità, passive, sovrascritture, carico, background, talenti, livelli
 js/scene.js           scene e incontri (logica pura): scaletta, linea, lancio, fine, ricompense, Genera incontro
 js/difficolta.js      difficoltà degli incontri (logica pura): soglie, PE, moltiplicatore, fasce, chi conta, Bilancia, Budget
 js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
@@ -1451,6 +1526,7 @@ js/ui-mondo.js        sezione Mondo: Fazioni, Città, componenti comuni (fazione
 js/ui-party.js        Giocatori › Party: elenco, form, dettaglio con reputazione e diario
 js/ui-npc.js          Mondo › NPC: editor, pannello sulla griglia, dialogo giocabile, finestra di scambio
 js/ui-quest.js        Mondo › Quest: editor, offerta, consegna, diario
+js/ui-scheda.js       scheda del giocatore: pagine, creazione guidata, vista di gioco, stampa, livelli, librerie
 js/ui-scene.js        Scene: scaletta, linea, editor di scene e incontri, libreria, lancio, scena in corso, ricompense
 js/ia-dati.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno

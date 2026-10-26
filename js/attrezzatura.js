@@ -85,7 +85,8 @@
   function normalizeInventory(list) {
     return arr(list).slice(0, 500).map((x) => {
       x = obj(x);
-      return { id: idOf(x.id), equipmentId: str(x.equipmentId, 64), qty: int(x.qty, 1, 0, 100000), equipped: Boolean(x.equipped) };
+      // attuned: in sintonia (solo per gli oggetti che la richiedono, scheda.js).
+      return { id: idOf(x.id), equipmentId: str(x.equipmentId, 64), qty: int(x.qty, 1, 0, 100000), equipped: Boolean(x.equipped), attuned: Boolean(x.attuned) };
     }).filter((x) => x.equipmentId);
   }
 

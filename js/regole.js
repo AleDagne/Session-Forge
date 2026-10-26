@@ -23,9 +23,10 @@
     return b && b.apply ? Number(b.value) || 0 : 0;
   }
 
-  // Punti caratteristica: 2 ogni 4 livelli (livelli 4, 8, 12, 16, 20...).
+  // Punti caratteristica: 2 ai livelli 4, 8, 12, 16 e 19; oltre il 20 (leggendari) 2 ogni 4 livelli.
   function asiPointsAvailable(level) {
-    return 2 * Math.floor(level / 4);
+    if (level <= 20) return 2 * [4, 8, 12, 16, 19].filter((l) => level >= l).length;
+    return 10 + 2 * Math.floor((level - 20) / 4);
   }
 
   function asiPointsAssigned(asi) {
@@ -317,14 +318,23 @@
   // catalog facoltativo: catalogo dell'Attrezzatura per armi e armatura scelte dal catalogo.
   function derivedStats(c, race, catalog) {
     const legendary = c.type === 'leggendario';
-    const abilities = finalAbilities(c.abilities, race, c.asi, c.ignoreCap, legendary ? c.abilityCap || 30 : 20);
-    const info = DnD.classi.classInfo(c.classId, c.customClass);
+    // Scheda del giocatore (scheda.js): effetti dei talenti su caratteristiche, salvezze, CA, iniziativa e velocità.
+    const fx = c.sheet && DnD.scheda ? DnD.scheda.featEffects(c) : null;
+    const abilities = finalAbilities(c.abilities, race, fx ? DnD.scheda.addAbilities(c.asi, fx.abilities) : c.asi, c.ignoreCap, legendary ? c.abilityCap || 30 : 20);
+    const base = DnD.classi.classInfo(c.classId, c.customClass);
+    // Casella «Incantatore» della scheda per una classe che non lo è: incantesimi come la classe Personalizzata.
+    const info = base && !base.caster && c.sheet && c.sheet.spellcaster ? Object.assign({}, base, { caster: c.sheet.casterType || 'completo', spellAbility: 'INT' }) : base;
     const profBonus = c.profBonusOverride === null || c.profBonusOverride === undefined ? proficiencyBonus(c.level, legendary) : c.profBonusOverride;
-    const saves = c.saveMode === 'classe' ? (info ? info.saves.slice() : []) : c.saves;
-    const ac = c.acMode === 'auto' ? autoAc(c, abilities, info && info.unarmored, catalog) : { total: c.ac, detail: 'Manuale: ' + c.ac };
+    const saves = [...new Set((c.saveMode === 'classe' ? (info ? info.saves.slice() : []) : c.saves).concat(fx ? fx.saves : []))];
+    let ac = c.acMode === 'auto' ? autoAc(c, abilities, info && info.unarmored, catalog) : { total: c.ac, detail: 'Manuale: ' + c.ac };
+    if (fx && fx.ac && c.acMode === 'auto') ac = { total: ac.total + fx.ac, detail: ac.detail.replace(/ = \d+$/, '') + ' + talenti ' + fx.ac + ' = ' + (ac.total + fx.ac) };
     const list = catalogOf(catalog);
+    const init = c.sheet && DnD.scheda ? DnD.scheda.initiative(c, { abilities }, fx) : null;
+    const spd = c.sheet && DnD.scheda ? DnD.scheda.speed(c, race, fx, list) : null;
     return {
-      abilities, info, profBonus, saves, saveTotals: savingThrows(abilities, saves, profBonus), ac,
+      abilities, info, profBonus, saves, saveTotals: savingThrows(abilities, saves, profBonus), ac, fx,
+      // Iniziativa: bonus oltre la DES; velocità a piedi della scheda (m), null se non è una scheda.
+      initiativeBonus: init ? init.bonus : 0, sheetSpeed: spd ? spd.total : null,
       spell: c.spellcasting ? spellStats(c, info, abilities, profBonus) : null,
       weapons: (c.weapons || []).map((w) => DnD.attrezzatura.resolveWeapon(w, list, abilities, profBonus)),
     };
@@ -354,7 +364,9 @@
       w: dims.w,
       h: dims.h,
       // Velocità in piedi per modalità (movimento.js): razza più gli oggetti equipaggiati.
-      speeds: DnD.movimento.addFeet(DnD.movimento.speedsFromRace(race), DnD.movimento.feetFromMeters(DnD.attrezzatura.speedBonus(source.inventory, list))),
+      speeds: stats.sheetSpeed !== null
+        ? Object.assign(DnD.movimento.speedsFromRace(race), { cammina: DnD.movimento.feetFromMeters(stats.sheetSpeed) })
+        : DnD.movimento.addFeet(DnD.movimento.speedsFromRace(race), DnD.movimento.feetFromMeters(DnD.attrezzatura.speedBonus(source.inventory, list))),
       icon: Object.assign({}, source.icon),
       pos: null,
       weapons: stats.weapons.map((w) => Object.assign({}, w, { magical: magicOf(w) })),
@@ -375,7 +387,7 @@
         slotsTotal: sp.slotsTotal, slotsUsed: sp.slotsUsed,
         spells: (spells || []).filter((s) => source.spellcasting.known.includes(s.id)).map((s) => JSON.parse(JSON.stringify(s))),
       } : null,
-    }, rollInitiative(dexMod, rng));
+    }, rollInitiative(dexMod + stats.initiativeBonus, rng));
   }
 
   // players: [personaggio]; npcEntries: [{ npc, quantity }] con nemici Standard o Creature. Le copie multiple

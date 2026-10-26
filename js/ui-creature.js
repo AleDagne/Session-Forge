@@ -575,7 +575,9 @@
     // cfg: { key: 'npcs'|'players', title, singular, isPlayer }
     let editing = null;
     let root = null;
-    let tab = 'standard'; // Nemici: 'standard' | 'creature' | 'boss'; Giocatori: 'standard' | 'leggendari'
+    let tab = 'standard'; // Nemici: 'standard' | 'creature' | 'boss'; Giocatori: 'standard' | 'leggendari' | 'party' | 'background' | 'talenti'
+    // Librerie della scheda del giocatore (ui-scheda.js): elemento in modifica.
+    const libState = { editing: null, refresh: () => render() };
     let query = '';
     // Solo i personaggi della sessione corrente e quelli condivisi con tutte le sessioni (per i Nemici,
     // solo quelli standard: le creature hanno la loro scheda).
@@ -589,6 +591,7 @@
       if (!cfg.isPlayer && tab === 'boss') { renderTabs(); DnD.uiBoss.render(root.appendChild(el('div', { role: 'tabpanel' }))); return; }
       if (cfg.isPlayer && tab === 'leggendari') { renderTabs(); DnD.uiLeggendario.render(root.appendChild(el('div', { role: 'tabpanel' })), api); return; }
       if (cfg.isPlayer && tab === 'party') { renderTabs(); DnD.uiParty.render(root.appendChild(el('div', { role: 'tabpanel' }))); return; }
+      if (cfg.isPlayer && (tab === 'background' || tab === 'talenti')) { renderTabs(); DnD.uiScheda.libraryView(root.appendChild(el('div', { role: 'tabpanel' })), tab === 'background' ? 'backgrounds' : 'feats', libState); return; }
       if (editing) renderForm();
       else renderList();
     }
@@ -597,9 +600,11 @@
     function renderTabs() {
       if (cfg.isPlayer) {
         root.append(el('div', { class: 'section-head' }, el('h1', { text: cfg.title })),
-          DnD.uiAsset.tabBar([{ id: 'standard', label: 'Standard' }, { id: 'leggendari', label: '✦ Leggendari' }, { id: 'party', label: '⚑ Party' }], tab, 'Tipo di giocatore', 'scheda-giocatori-', (id) => {
+          DnD.uiAsset.tabBar([{ id: 'standard', label: 'Standard' }, { id: 'leggendari', label: '✦ Leggendari' }, { id: 'party', label: '⚑ Party' },
+            { id: 'background', label: 'Background' }, { id: 'talenti', label: 'Talenti' }], tab, 'Tipo di giocatore', 'scheda-giocatori-', (id) => {
             tab = id;
             editing = null;
+            libState.editing = null;
             DnD.uiLeggendario.reset();
             DnD.uiParty.reset();
             render();
@@ -654,7 +659,8 @@
       const importInput = el('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: () => {
         const f = importInput.files[0];
         importInput.value = '';
-        if (f) importOne(f, (c) => { tab = c.type === 'boss' ? 'boss' : c.type === 'creatura' ? 'creature' : 'standard'; render(); });
+        if (f && cfg.isPlayer) DnD.uiScheda.importCharacter(f, () => render());
+        else if (f) importOne(f, (c) => { tab = c.type === 'boss' ? 'boss' : c.type === 'creatura' ? 'creature' : 'standard'; render(); });
       } });
       const shown = list().filter((c) => !query || c.name.toLowerCase().includes(query.toLowerCase()));
       root.append(
@@ -662,7 +668,7 @@
           el('h2', { text: cfg.isPlayer ? 'Giocatori standard' : 'Nemici standard' }),
           el('div', { class: 'head-actions' },
             el('input', { type: 'search', placeholder: 'Cerca…', value: query, 'aria-label': 'Cerca per nome', onchange: (e) => { query = e.target.value.trim(); render(); } }),
-            cfg.isPlayer ? null : el('button', { class: 'btn', text: '⬆ Importa JSON', onclick: () => importInput.click() }), importInput,
+            el('button', { class: 'btn', text: cfg.isPlayer ? '⬆ Importa personaggio' : '⬆ Importa JSON', onclick: () => importInput.click() }), importInput,
             // Solo per i nemici: generatore automatico da razza, livello e classe.
             cfg.isPlayer ? null : el('button', { class: 'btn', text: '🎲 Genera nemico', onclick: () => DnD.uiGeneratore.open({
               allowEdit: true,
@@ -677,7 +683,7 @@
             const fin = stats.abilities;
             return el('article', { class: 'card' },
               el('div', { class: 'card-title' },
-                el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(c.icon, 32), el('h3', { text: c.name }),
+                el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(cfg.isPlayer && c.sheet && c.sheet.portrait ? c.sheet.portrait : c.icon, 32), el('h3', { text: c.name }),
                   cfg.isPlayer ? null : el('span', { class: 'tag', text: 'Standard' }),
                   c.shared ? el('span', { class: 'tag accent', title: 'Visibile in tutte le sessioni', text: 'Condiviso' }) : null),
                 el('span', { class: 'ac-badge', title: 'Classe Armatura: ' + stats.ac.detail, text: 'CA ' + stats.ac.total })),
@@ -700,7 +706,7 @@
                 cfg.isPlayer ? el('button', { class: 'btn', text: '🛏 Risorse…', title: 'Dadi vita, slot, usi, PF temporanei, sfinimento e riposi', onclick: () => DnD.uiRiposi.playerDialog(c.id, render) }) : null,
                 cfg.isPlayer ? el('button', { class: 'btn', text: '✦ Eleva a leggendario', disabled: c.level < 20, title: c.level < 20 ? 'Serve il livello 20' : 'Diventa un personaggio leggendario (livelli 20-40)',
                   onclick: () => { if (DnD.uiLeggendario.promote(c)) { tab = 'leggendari'; render(); } } }) : null,
-                cfg.isPlayer ? null : el('button', { class: 'btn', text: 'Esporta', onclick: () => exportOne(c) }),
+                el('button', { class: 'btn', text: 'Esporta', onclick: () => (cfg.isPlayer ? DnD.uiScheda.exportCharacter(c) : exportOne(c)) }),
                 el('button', { class: 'btn danger', text: 'Elimina', onclick: () => remove(c) })));
           }))
           : query ? el('p', { class: 'empty', text: 'Nessun risultato per «' + query + '».' }) : DnD.ui.emptyState('Nessun ' + cfg.singular.toLowerCase() + ' in questa sessione',
@@ -712,6 +718,8 @@
     //   save(salvato) per salvare altrove (es. la scheda di un NPC) }
     function renderForm(opts) {
       opts = opts || {};
+      // Giocatori (anche leggendari): scheda a pagine in stile D&D 5e (ui-scheda.js), con creazione guidata.
+      if (cfg.isPlayer) return playerSheet(opts);
       const races = DnD.store.state.races;
       const existing = opts.player || list().find((c) => c.id === editing);
       const c = existing || DnD.dati.normalizeCreature({ name: '', level: 1, maxHp: 10, ac: 10, acMode: 'auto', saveMode: 'classe' }, cfg.isPlayer);
@@ -887,6 +895,26 @@
       spells.init();
       refresh();
       inp.name.focus();
+    }
+
+    function playerSheet(opts) {
+      const existing = opts.player || list().find((c) => c.id === editing);
+      const c = existing || DnD.dati.normalizeCreature({ name: '', level: 1, maxHp: 10, ac: 10, acMode: 'auto', saveMode: 'classe', hpMode: 'auto', hpMethod: 'media', sessionId: currentSessionId() }, true);
+      if (!existing) c.name = '';
+      const done = (saved) => { if (opts.onDone) opts.onDone(saved); else { editing = null; render(); } };
+      const persist = (saved) => {
+        if (opts.save) { opts.save(saved); return; }
+        save((st) => {
+          const i = st.players.findIndex((x) => x.id === saved.id);
+          if (i >= 0) { st.players[i] = saved; return; }
+          st.players.push(saved);
+          // Un giocatore nuovo entra nel party attivo della sessione (se c'è).
+          const v = DnD.fazioni.view(st);
+          const party = DnD.party.active(v.parties, v.world);
+          if (party && !DnD.party.partyOf(v.parties, saved.id)) DnD.party.assignPlayer(v.parties, party.id, saved.id);
+        });
+      };
+      DnD.uiScheda.editor({ player: c, isNew: !existing, persist, done, host: opts.host || root, wrap: opts.wrap, heading: opts.heading, submitText: opts.submitText, submitClass: opts.submitClass });
     }
 
     // Per la scheda dei leggendari (ui-leggendario.js): stesso form del giocatore.

@@ -206,8 +206,10 @@
     const d = R().derivedStats(effectivePlayer(c, st), race, st && st.equipment);
     const isAbility = R().ABILITIES.includes(what);
     if (save && isAbility) return d.saveTotals[what];
-    const ab = isAbility ? what : SKILL_ABILITY()[what] || 'SAG';
-    return R().modifier(d.abilities[ab]) + (isAbility ? 0 : skillLevel(c, what, st) * d.profBonus);
+    if (isAbility) return R().modifier(d.abilities[what]);
+    // Abilità: competenza e maestria dalla scheda, dai talenti e dal Percorso, «metà competenza», bonus a mano (scheda.js).
+    if (c.sheet && DnD.scheda) return DnD.scheda.skillBonus(c, what, d, DnD.scheda.featEffects(c, st && st.feats), st).total;
+    return R().modifier(d.abilities[SKILL_ABILITY()[what] || 'SAG']) + skillLevel(c, what, st) * d.profBonus;
   }
 
   // Magie «N al giorno» del Percorso: { spellId: usi al giorno } (più nodi sullo stesso incantesimo si sommano).

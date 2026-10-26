@@ -5,7 +5,7 @@
 (function (DnD) {
   'use strict';
 
-  const OWNED = ['npcs', 'players', 'savedGrids', 'factions', 'parties', 'cities', 'worldNpcs', 'quests', 'scenes', 'encounters'];
+  const OWNED = ['npcs', 'players', 'savedGrids', 'factions', 'parties', 'cities', 'worldNpcs', 'quests', 'scenes', 'encounters', 'backgrounds', 'feats'];
   const LIBRARIES = ['races', 'spells', 'structures', 'equipment', 'mapObjects', 'tilesets', 'biomes', 'events', 'pathTemplates', 'customConditions'];
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -80,6 +80,13 @@
       q.rewards.unlockMerchantIds = q.rewards.unlockMerchantIds.map(map);
     }
     for (const key of ['npcs', 'players']) for (const x of mine(key)) { if (x.factionId) x.factionId = map(x.factionId); if (x.cityId) x.cityId = map(x.cityId); }
+    // Scheda del giocatore: background, talenti e alleati (fazioni e NPC) della stessa sessione.
+    for (const p of mine('players')) {
+      if (!p.sheet) continue;
+      p.sheet.background = map(p.sheet.background);
+      for (const f of p.sheet.features) f.featId = map(f.featId);
+      for (const a of p.sheet.allies) a.refId = map(a.refId);
+    }
   }
 
   // Aggiorna i riferimenti interni di una sessione dopo che nemici/giocatori/griglie hanno cambiato id.
@@ -221,6 +228,8 @@
       quests: world.quests,
       scenes,
       encounters,
+      backgrounds: (state.backgrounds || []).filter((x) => isVisible(x, sessionId)),
+      feats: (state.feats || []).filter((x) => isVisible(x, sessionId)),
       races: used(state.races, new Set(creatures.map((c) => c.raceId))),
       spells: used(state.spells, new Set(creatures.flatMap((c) => (c.spellcasting ? c.spellcasting.known : [])
         .concat(c.innate ? c.innate.spells.map((s) => s.spellId) : [])))),
@@ -269,6 +278,7 @@
       npcs: (x) => D.normalizeCreature(x, false), players: (x) => D.normalizeCreature(x, true), savedGrids: D.normalizeSavedGrid,
       factions: DnD.fazioni.normalizeFaction, parties: DnD.party.normalizeParty, cities: DnD.citta.normalizeCity, worldNpcs: DnD.npc.normalizeNpc, quests: DnD.quest.normalizeQuest,
       scenes: DnD.scene.normalizeScene, encounters: DnD.scene.normalizeEncounter,
+      backgrounds: DnD.scheda.normalizeBackground, feats: DnD.scheda.normalizeFeat,
     };
     for (const key of OWNED) {
       if (!Array.isArray(state[key])) state[key] = [];
