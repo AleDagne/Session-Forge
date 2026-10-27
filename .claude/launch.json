@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "session-forge", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "5617"], "port": 5617, "autoPort": false }
+    { "name": "session-forge", "runtimeExecutable": "python", "runtimeArgs": [".claude/servi.py", "5617"], "port": 5617, "autoPort": false }
   ]
 }

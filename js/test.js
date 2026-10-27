@@ -3166,7 +3166,7 @@
     eq(R1.finalAbilities({ FOR: 20 }, null, { FOR: 14 }, false, 30).FOR, 30, 'tetto 30');
     eq(R1.finalAbilities({ FOR: 20 }, null, { FOR: 14 }, false).FOR, 20, 'tetto 20 per gli standard');
     const c = legendaryOf(33);
-    eq([c.type, c.level, c.abilityCap, LG().rank(c), R1.derivedStats(c, null).profBonus], ['leggendario', 33, 30, 13, 10]);
+    eq([c.type, c.level, c.abilityCap, LG().rank(c), DnD.combattenti.derivedStats(c, null).profBonus], ['leggendario', 33, 30, 13, 10]);
     eq(DnD.dati.normalizeCreature({ type: 'leggendario', level: 50 }, true).level, 40, 'massimo 40');
     eq(DnD.dati.normalizeCreature({ type: 'leggendario', level: 5 }, true).level, 20, 'minimo 20');
     eq(DnD.dati.normalizeCreature({ level: 33 }, true).type, undefined, 'giocatori standard senza tipo');
