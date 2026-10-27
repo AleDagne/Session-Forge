@@ -5,6 +5,8 @@
 // Un tile è identificato da (id del TileSet, colonna, riga): cambiando X o Y i flag restano sulle stesse
 // coordinate. Flag per tile: Bloccante, Vuoto/escluso, Terreno difficile (costo di movimento 2).
 // Usato da Asset > Strutture ("Da immagine") e dal pannello Tile sotto la griglia.
+// Livello regole (gruppo mappa). Espone DnD.tile; usa DnD.tileset e DnD.tilemap (usi di un TileSet). Non deve toccare
+// DOM, disco o rete: il disegno del taglio è in ui-tile.js.
 (function (DnD) {
   'use strict';
 

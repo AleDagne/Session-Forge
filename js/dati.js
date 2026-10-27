@@ -544,7 +544,7 @@
       source: int(t.source, 0, 0, 2047),
       // Strutture "da immagine": rotazioni e specchi applicati dopo la selezione dei tile (per riaprire il form).
       ops: arr(t.ops).filter((op) => ['ruota', 'ruota-sx', 'specchia', 'specchia-v'].includes(op)).slice(0, 16),
-      // Ingombro calcolato al salvataggio (vedi tilemap.footprint): resta valido anche se il TileSet manca.
+      // Ingombro calcolato al salvataggio (vedi collisioni.footprint): resta valido anche se il TileSet manca.
       cells: bits(t.cells, n, '0'),
     };
   }
