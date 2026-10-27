@@ -2,6 +2,8 @@
 // Razze, magie, strutture, attrezzatura, oggetti di mappa, TileSet, biomi ed eventi sono librerie globali. Nemici, giocatori, griglie e il
 // Mondo (fazioni, party, città, NPC e quest) appartengono a una sessione (sessionId) oppure sono condivisi con tutte (shared: true).
 // Ogni sessione ha anche descrizione, note del master, combattimento in corso e bozza dell'editor.
+// Livello stato, sopra dati.js e scene.js (duplicazione, import ed export di una sessione). Espone DnD.sessioni; usa
+// modello, dati (facciata), normalizza, migrazioni-tile, scene (remap) e i moduli del Mondo. Non deve toccare DOM o disco.
 (function (DnD) {
   'use strict';
 
@@ -9,18 +11,12 @@
   const LIBRARIES = ['races', 'spells', 'structures', 'equipment', 'mapObjects', 'tilesets', 'biomes', 'events', 'pathTemplates', 'customConditions'];
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
-  function newSession(name, id) {
-    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}), restClock: 0, currentSceneId: '' };
-  }
+  // Sessione nuova: definita in stato/normalizza.js (serve allo stato vuoto e alla normalizzazione).
+  const newSession = (name, id) => DnD.normalizza.newSession(name, id);
 
   // Definite in modello.js (base dello stato), qui riesportate per chi lavora sulle sessioni.
-  const { current, isVisible } = DnD.modello;
+  const { current, isVisible, visible, isSessionFile } = DnD.modello;
 
-  // Nemici, giocatori o griglie visibili nella sessione indicata (di default quella corrente).
-  function visible(state, key, sessionId) {
-    const sid = sessionId || current(state).id;
-    return state[key].filter((x) => isVisible(x, sid));
-  }
 
   function uniqueName(state, base) {
     const taken = (n) => state.sessions.some((s) => s.name.toLowerCase() === n.toLowerCase());
@@ -240,9 +236,6 @@
     });
   }
 
-  function isSessionFile(raw) {
-    return Boolean(raw && typeof raw === 'object' && raw.kind === 'sessione');
-  }
 
   // Aggiunge la sessione importata allo stato (senza toccare il resto) e la rende corrente.
   // Gli elementi delle librerie già presenti (stesso id) non vengono duplicati; nemici, giocatori e

@@ -20,7 +20,7 @@
   const { pushDiceHistory, pushLog } = DnD.modello;
 
   function emptyState() {
-    const session = DnD.sessioni.newSession(DEFAULT_SESSION_NAME, DnD.dadi.uid());
+    const session = DnD.normalizza.newSession(DEFAULT_SESSION_NAME, DnD.dadi.uid());
     const world = defaultWorld(session.id);
     return {
       version: VERSION, races: defaultRaces(), npcs: defaultCreatures(session.id), players: [], structures: defaultStructures(),
@@ -122,7 +122,7 @@
     } catch (e) {
       throw new Error('Il file non è un JSON valido.');
     }
-    if (DnD.sessioni.isSessionFile(raw)) throw new Error('Il file contiene una singola sessione: importala come sessione.');
+    if (DnD.modello.isSessionFile(raw)) throw new Error('Il file contiene una singola sessione: importala come sessione.');
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw.races) || !Array.isArray(raw.npcs) || !Array.isArray(raw.players)) {
       throw new Error('Il file non contiene un backup di questa app.');
     }

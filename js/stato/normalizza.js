@@ -10,6 +10,11 @@
   const G = () => DnD.griglia;
   const { VERSION, LOG_MAX, DICE_HISTORY_MAX } = DnD.modello;
 
+  // Sessione nuova (vuota, con il Mondo normalizzato).
+  function newSession(name, id) {
+    return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}), restClock: 0, currentSceneId: '' };
+  }
+
   // --- Helper di normalizzazione: accettano qualsiasi valore e restituiscono il tipo atteso. ---
   function str(v, max) {
     return typeof v === 'string' ? v.slice(0, max || 2000) : '';
@@ -796,7 +801,7 @@
     const seen = new Set();
     let sessions = arr(raw.sessions).map(normalizeSession).filter((x) => !seen.has(x.id) && seen.add(x.id));
     if (!sessions.length) {
-      sessions = [Object.assign(DnD.sessioni.newSession(DEFAULT_SESSION_NAME, DnD.dadi.uid()), {
+      sessions = [Object.assign(newSession(DEFAULT_SESSION_NAME, DnD.dadi.uid()), {
         combat: normalizeCombat(raw.combat),
         gridDraft: normalizeGridDraft(raw.gridDraft),
       })];
@@ -806,6 +811,6 @@
   }
 
   DnD.normalizza = {
-    DEFAULT_SESSION_NAME, arr, id, int, makeBonuses, normalizeBackground, normalizeCombat, normalizeCombatant, normalizeCreature, normalizeEquipment, normalizeGridContent, normalizeGridDraft, normalizeGridSize, normalizeLabel, normalizeMapObject, normalizePlacedItem, normalizePlacedStructure, normalizeRace, normalizeSavedGrid, normalizeSession, normalizeSessions, normalizeSource, normalizeSpell, normalizeStructure, normalizeTileProps, normalizeTiles, normalizeTileset, normalizeWeapon, normalizeZone, obj, str,
+    newSession, DEFAULT_SESSION_NAME, arr, id, int, makeBonuses, normalizeBackground, normalizeCombat, normalizeCombatant, normalizeCreature, normalizeEquipment, normalizeGridContent, normalizeGridDraft, normalizeGridSize, normalizeLabel, normalizeMapObject, normalizePlacedItem, normalizePlacedStructure, normalizeRace, normalizeSavedGrid, normalizeSession, normalizeSessions, normalizeSource, normalizeSpell, normalizeStructure, normalizeTileProps, normalizeTiles, normalizeTileset, normalizeWeapon, normalizeZone, obj, str,
   };
 })(globalThis.DnD = globalThis.DnD || {});

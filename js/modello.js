@@ -32,6 +32,21 @@
   }
 
   /** Aggiunge un tiro in cima alla cronologia dei dadi (massimo DICE_HISTORY_MAX). */
+  /**
+   * Nemici, giocatori, griglie… visibili nella sessione indicata (di default quella corrente).
+   * @param {object} state  @param {string} key collezione dello stato  @param {string} [sessionId]
+   * @returns {object[]}
+   */
+  function visible(state, key, sessionId) {
+    const sid = sessionId || current(state).id;
+    return state[key].filter((x) => isVisible(x, sid));
+  }
+
+  /** Il file è l'esportazione di una singola sessione? */
+  function isSessionFile(raw) {
+    return Boolean(raw && typeof raw === 'object' && raw.kind === 'sessione');
+  }
+
   function pushDiceHistory(state, entry) {
     state.diceHistory.unshift(entry);
     state.diceHistory.length = Math.min(state.diceHistory.length, DICE_HISTORY_MAX);
@@ -57,5 +72,5 @@
     return normalizzatore(c, isPlayer);
   }
 
-  DnD.modello = { VERSION, LOG_MAX, DICE_HISTORY_MAX, current, isVisible, pushDiceHistory, pushLog, registraNormalizzaCreatura, normalizzaCreatura };
+  DnD.modello = { VERSION, LOG_MAX, DICE_HISTORY_MAX, current, isVisible, visible, isSessionFile, pushDiceHistory, pushLog, registraNormalizzaCreatura, normalizzaCreatura };
 })(globalThis.DnD = globalThis.DnD || {});

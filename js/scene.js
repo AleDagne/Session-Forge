@@ -137,7 +137,7 @@
   // ---------- Scaletta ----------
   const byOrder = (a, b) => a.order - b.order || a.title.localeCompare(b.title);
   // Scene della sessione in ordine di scaletta (le condivise compaiono in tutte).
-  const sessionScenes = (state, sessionId) => arr(state.scenes).filter((s) => DnD.sessioni.isVisible(s, sessionId)).sort(byOrder);
+  const sessionScenes = (state, sessionId) => arr(state.scenes).filter((s) => DnD.modello.isVisible(s, sessionId)).sort(byOrder);
   const nextOrder = (list) => arr(list).reduce((m, s) => Math.max(m, s.order + 1), 0);
   // Sposta la scena id alla posizione index della scaletta e rinumera l'ordine (0, 1, 2…). Modifica le scene.
   function move(list, id, index) {
@@ -206,7 +206,7 @@
   const partyFactionOf = (st, sessionId) => { const v = DnD.fazioni.view(st, sessionId); const p = DnD.party.active(v.parties, v.world); return p ? p.factionId : 'giocatori'; };
   // Giocatori dell'incontro: il party attivo (visibili nella sessione), altrimenti tutti i giocatori della sessione.
   function partyPlayers(st, sessionId) {
-    const all = DnD.sessioni.visible(st, 'players', sessionId);
+    const all = DnD.modello.visible(st, 'players', sessionId);
     const v = DnD.fazioni.view(st, sessionId);
     const p = DnD.party.active(v.parties, v.world);
     const members = p ? all.filter((x) => p.memberIds.includes(x.id)) : [];
@@ -473,7 +473,7 @@
   // Creature candidate dalla libreria della sessione per tema: '' (tutte), 'tipo:<tipo>' (le standard contano come
   // umanoidi) o 'bioma:<id>' (le creature della tabella degli incontri del bioma).
   function candidates(st, sessionId, theme) {
-    const all = DnD.sessioni.visible(st, 'npcs', sessionId);
+    const all = DnD.modello.visible(st, 'npcs', sessionId);
     const t = str(theme, 80);
     if (t.startsWith('tipo:')) return all.filter((c) => (DnD.boss.isMonster(c) ? c.ctype : 'umanoide') === t.slice(5));
     if (t.startsWith('bioma:')) {

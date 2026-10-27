@@ -4,8 +4,8 @@
 // finestre evento) e regole: movimento cella per cella con costo e ore dal bioma, tempo che avanza con
 // scorte, meteo, pericoli ambientali, incontri casuali e inneschi degli eventi; nebbia; entra/esci da una mappa.
 // Livello regole, gruppo Mondo (sopra la mappa): gioco dell'esplorazione. Espone DnD.esplorazione; usa DnD.misure,
-// griglia, visione, biomi, eventi, riposi, fazioni, party, quest, dadi, icone. Non deve toccare il DOM. Da sistemare
-// con lo stato (audit A6): worldOf() ripiega su sessioni.current se l'esplorazione non è in una sessione.
+// griglia, visione, biomi, eventi, riposi, fazioni, party, quest, dadi, icone. Non deve toccare il DOM. worldOf() ripiega
+// sulla sessione corrente (modello.current) se l'esplorazione non è in una sessione.
 // Si aggancia al ridimensionamento della griglia (griglia.registraRidimensionamento).
 (function (DnD) {
   'use strict';
@@ -227,7 +227,7 @@
   // Mondo della sessione che contiene l'esplorazione (null nei test senza sessioni).
   function worldOf(w) {
     if (!w.st || !Array.isArray(w.st.sessions) || !w.st.factions) return null;
-    const se = w.st.sessions.find((s) => s.exploration === w.ex) || DnD.sessioni.current(w.st);
+    const se = w.st.sessions.find((s) => s.exploration === w.ex) || DnD.modello.current(w.st);
     return se && se.world ? DnD.fazioni.view(w.st, se.id) : null;
   }
   // Operazioni delle azioni «Quest» degli eventi. Restituisce le righe per il registro.
