@@ -37,5 +37,5 @@ Session Forge: Italian-language D&D 5e session planner/player (maps, characters,
 ## Conventions
 
 - Match the existing style: 2-space indent, single quotes, `const`/arrow functions, short Italian comments describing intent.
-- After modifying any cached file, bump `CACHE` in `sw.js` (currently `session-forge-v50`).
+- After modifying any cached file, bump `CACHE` in `sw.js` (currently `session-forge-v51`).
 - New logic should get tests in `js/test.js` and a README update (features, data model, migration notes, "Struttura" file list).

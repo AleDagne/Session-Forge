@@ -901,7 +901,7 @@
       // Esplorazione in corso: gruppo, tempo, meteo, scorte, variabili, pila delle mappe, registro.
       exploration: DnD.esplorazione.normalizeState(se.exploration),
       // Mondo: party attivo, matrice simmetrica, soglie, reputazioni personali e registro, diario delle quest.
-      world: DnD.fazioni.normalizeWorld(se.world),
+      world: DnD.fazioni.normalizeWorld(se.world, { diarioQuest: DnD.quest.normalizeJournal }),
       // Orologio dei riposi fuori dall'esplorazione (ore di gioco), per la regola delle 24 ore.
       restClock: int(se.restClock, 0, 0, 1e9),
       // Scena in corso (scene.js), vuota se nessuna.

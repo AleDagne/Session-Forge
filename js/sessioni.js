@@ -13,13 +13,8 @@
     return { id, name, description: '', notes: '', pages: [], combat: null, gridDraft: null, exploration: null, world: DnD.fazioni.normalizeWorld({}), restClock: 0, currentSceneId: '' };
   }
 
-  function current(state) {
-    return state.sessions.find((s) => s.id === state.currentSessionId) || state.sessions[0];
-  }
-
-  function isVisible(entity, sessionId) {
-    return entity.shared || entity.sessionId === sessionId;
-  }
+  // Definite in modello.js (base dello stato), qui riesportate per chi lavora sulle sessioni.
+  const { current, isVisible } = DnD.modello;
 
   // Nemici, giocatori o griglie visibili nella sessione indicata (di default quella corrente).
   function visible(state, key, sessionId) {

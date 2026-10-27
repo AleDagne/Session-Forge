@@ -85,12 +85,8 @@
     return list.find((p) => world && p.id === world.activePartyId) || list[0] || null;
   }
 
-  // Fazione di un giocatore: la sua (se scelta), altrimenti quella del suo party, altrimenti Giocatori.
-  function playerFaction(player, parties) {
-    if (player && player.factionId) return player.factionId;
-    const p = partyOf(parties, player && player.id);
-    return p ? p.factionId : 'giocatori';
-  }
+  // Fazione di un giocatore: definita in fazioni.js (serve anche alla fazione di partenza dei combattenti).
+  const playerFaction = (player, parties) => DnD.fazioni.playerFaction(player, parties);
 
   DnD.party = { DEFAULT_NAME, normalizeParty, defaultParty, partyOf, assignPlayer, removePlayer, moveInOrder, members, prune, active, playerFaction };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -3,6 +3,8 @@
 // relazione(a, b) è l'unica fonte di verità: la usano IA, bersagli, avvisi degli effetti ad area, fine del
 // combattimento e conversione degli NPC neutrali. La reputazione (-100…+100) del party, e facoltativamente di
 // ogni giocatore, verso ogni fazione ha soglie modificabili ed effetti su prezzi, città, NPC e accessi.
+// Livello regole, base del gruppo Mondo. Espone DnD.fazioni (unica fonte dell'ostilità: relazione, ostili, alleati);
+// usa DnD.modello, dati/mondo, dadi, icone. Non deve toccare DOM, disco o rete né chiamare party, quest o sessioni.
 (function (DnD) {
   'use strict';
 
@@ -99,8 +101,11 @@
 
   // Stato del Mondo della sessione: party attivo, simmetria della matrice, soglie, reputazioni dei singoli
   // giocatori, registro delle variazioni, regole degli NPC neutrali e stato di quest e NPC.
-  function normalizeWorld(w) {
+  // opts.diarioQuest: normalizzazione del diario delle quest (quest.normalizeJournal), passata da chi carica lo stato:
+  // le quest stanno sopra le fazioni. Senza, il diario resta vuoto.
+  function normalizeWorld(w, opts) {
     w = obj(w);
+    const diario = opts && opts.diarioQuest;
     const playerRep = {};
     for (const [pid, m] of Object.entries(obj(w.playerRep))) if (ID.test(pid)) playerRep[pid] = normalizeRepMap(m);
     return {
@@ -112,7 +117,7 @@
       playerRep,
       repLog: arr(w.repLog).slice(-K().REP_LOG_MAX).map(normalizeRepEntry),
       // Diario delle quest della sessione: stato, avanzamento e date (quest.js).
-      quests: DnD.quest ? DnD.quest.normalizeJournal(w.quests) : {},
+      quests: diario ? diario(w.quests) : {},
       // Variabili di sessione fuori dall'esplorazione (dialoghi e quest); con un'esplorazione in corso valgono le sue.
       variables: normalizeVars(w.variables),
       // Undo delle conversioni degli NPC neutrali (npc.js): istantanee da ripristinare.
@@ -296,10 +301,17 @@
     return byIdOf(factions).has(id) ? id : fallback === undefined ? 'neutrali' : fallback;
   }
 
+  // Fazione di un giocatore: la sua (se scelta), altrimenti quella del suo party, altrimenti Giocatori.
+  function playerFaction(player, parties) {
+    if (player && player.factionId) return player.factionId;
+    const p = arr(parties).find((x) => x.memberIds.includes(player && player.id));
+    return p ? p.factionId : 'giocatori';
+  }
+
   // Il Mondo visibile nella sessione (di default quella corrente): fazioni, party, città, NPC, quest e stato.
   function view(state, sessionId) {
-    const se = sessionId ? state.sessions.find((s) => s.id === sessionId) : DnD.sessioni.current(state);
-    const vis = (key) => arr(state[key]).filter((x) => DnD.sessioni.isVisible(x, se.id));
+    const se = sessionId ? state.sessions.find((s) => s.id === sessionId) : DnD.modello.current(state);
+    const vis = (key) => arr(state[key]).filter((x) => DnD.modello.isVisible(x, se.id));
     return { session: se, world: se.world, factions: vis('factions'), parties: vis('parties'), cities: vis('cities'), npcs: vis('worldNpcs'), quests: vis('quests') };
   }
 
@@ -308,7 +320,7 @@
   function defaultFactionFor(source, kind, ctx) {
     const c = ctx || {};
     let id = source && source.factionId;
-    if (!id && kind === 'player') id = DnD.party.playerFaction(source, c.parties);
+    if (!id && kind === 'player') id = playerFaction(source, c.parties);
     if (!id && source && source.cityId) { const city = arr(c.cities).find((x) => x.id === source.cityId); if (city) id = city.factionId; }
     id = id || (kind === 'player' ? 'giocatori' : 'nemici');
     return c.factions ? factionOr(c.factions, id, kind === 'player' ? 'giocatori' : 'nemici') : id;
@@ -316,7 +328,7 @@
 
   DnD.fazioni = {
     view, defaultFactionFor, variables,
-    normalizeFaction, builtinFactions, ensureBuiltins, normalizeThresholds, normalizeRepMap, normalizeWorld, normalizeRepEntry,
+    normalizeFaction, builtinFactions, ensureBuiltins, normalizeThresholds, normalizeRepMap, normalizeWorld, normalizeRepEntry, playerFaction,
     relazione, isHostileLevel, isAllyLevel, setRelation, matrix, asymmetries, table, relazioneCombattenti, ostili, alleati,
     areaWarnings, combatOver, threshold, effectRow, priceFactor, cityAttitude, cityAttitudeText, attitudeDelta, hasAccess,
     reputationOf, changeReputation, revertReputation, factionOr, repValue,
