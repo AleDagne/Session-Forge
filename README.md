@@ -1910,6 +1910,7 @@ js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura,
 js/combattenti.js     valori derivati (razza, classe, scheda, catalogo) e costruzione dei combattenti di uno scontro
 js/modello.js         accesso di base allo stato: sessione corrente, visibilità delle entità nelle sessioni
 js/dati/misure.js     misure: 1 casella = 5 ft = 1,5 m, caselle da metri, scala delle mappe di esplorazione in km
+js/dati/leggendario.js temi dei personaggi leggendari: nomi e palette (anche per i temi «lg:<id>» del Boss)
 js/dati/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/dati/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
 js/generatore.js      logica pura del generatore di nemici

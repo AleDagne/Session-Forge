@@ -2,6 +2,8 @@
 // calcoli) con in più titolo, epiteto, introduzione, tema visivo, fasi a soglie di PF, aura e scala dei PF.
 // Qui: temi, normalizzazione, promozione da creatura o nemico standard, calcolo delle fasi, azioni
 // abilitate per fase, stato nel combattimento e barre visibili.
+// Livello regole, gruppo entità. Espone DnD.boss; usa creature, regole, combattenti (statistiche dei boss Standard),
+// dati/creature, dati/leggendario (palette «lg:<id>»), dadi. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -18,7 +20,7 @@
   };
   const THEME_IDS = Object.keys(THEMES);
   // Tema per id: i temi del Boss o, con la chiave «lg:<id>», quelli dei leggendari (leggendario.js, PALETTES).
-  const legendPalette = (id) => (typeof id === 'string' && id.startsWith('lg:') && DnD.leggendario ? DnD.leggendario.PALETTES[id.slice(3)] || null : null);
+  const legendPalette = (id) => (typeof id === 'string' && id.startsWith('lg:') ? DnD.leggendarioDati.PALETTES[id.slice(3)] || null : null);
   const isTheme = (id) => THEME_IDS.includes(id) || Boolean(legendPalette(id));
   const theme = (id) => legendPalette(id) || THEMES[id] || THEMES.infernale;
   const EFFECTS = ['nessuno', 'lampo', 'tremolio'];
