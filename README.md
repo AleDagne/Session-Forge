@@ -1946,7 +1946,11 @@ js/leggendario.js     logica pura dei leggendari: livelli, punti, effetti nei ca
 js/attrezzatura.js    catalogo dell'Attrezzatura: armi e armature base, bonus, danno, CA, inventario
 js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trappole, contenuto
 js/validazione.js     validazione dei form con messaggi in italiano
-js/dati.js            modello dati, migrazioni (fino alla versione 13), esempi, salvataggio (IndexedDB), import/export
+js/stato/normalizza.js normalizzazione delle entità salvate e importate (creature, griglie, combattimenti, sessioni…)
+js/stato/esempi.js    dati d'esempio dello stato nuovo e party predefiniti
+js/stato/migrazioni.js migrazioni dei dati grezzi dalla versione 8 alla 18
+js/dati.js            facciata dello stato (DnD.dati): stato vuoto, caricamento (migrazioni + normalizzazione), import/export
+js/stato/archivio.js  unico punto che scrive su disco: IndexedDB con ripiego su localStorage, coda di scrittura, dati danneggiati
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
 js/ui-difficolta.js   difficoltà: indicatore a fasce, Bilancia, Budget, tabelle personalizzate
 js/ui-riposi.js       riposi: elenco «Risorse», finestra del riposo, riposo delle schede e del party
