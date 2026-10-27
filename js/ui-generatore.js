@@ -24,7 +24,7 @@
   function creatureSheet(c) {
     const st = DnD.store.state;
     const race = st.races.find((r) => r.id === c.raceId) || null;
-    const stats = DnD.combattenti.derivedStats(c, race);
+    const stats = DnD.statistiche.derivedStats(c, race);
     const spellNames = st.spells.filter((s) => c.spellcasting.known.includes(s.id));
     const rows = R.ABILITIES.map((ab) => {
       const bonus = R.racialBonus(race, ab);
@@ -57,7 +57,7 @@
 
   function summary(c) {
     const race = DnD.store.state.races.find((r) => r.id === c.raceId) || null;
-    const stats = DnD.combattenti.derivedStats(c, race);
+    const stats = DnD.statistiche.derivedStats(c, race);
     const best = c.weapons[0];
     return c.name + ' — PF ' + c.maxHp + ' · CA ' + stats.ac.total + (best ? ' · ' + best.name + ' ' + R.formatModifier(best.toHit) : '') +
       (stats.spell ? ' · CD ' + stats.spell.dc : '');

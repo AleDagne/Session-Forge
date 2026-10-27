@@ -298,7 +298,7 @@
         detail.textContent = 'CA: completa le caratteristiche e la CA base.';
         return;
       }
-      const r = DnD.combattenti.autoAc({ armor }, abilities, ability, catalog());
+      const r = DnD.statistiche.autoAc({ armor }, abilities, ability, catalog());
       total = r.total;
       detail.textContent = 'CA ' + r.detail;
     }
@@ -679,7 +679,7 @@
         cfg.isPlayer && list().length ? el('div', { class: 'head-actions rest-actions' }, DnD.uiRiposi.groupButtons(restIds(), restLabel())) : '',
         shown.length
           ? el('div', { class: 'card-grid' }, shown.map((c) => {
-            const stats = DnD.combattenti.derivedStats(c, races.find((r) => r.id === c.raceId));
+            const stats = DnD.statistiche.derivedStats(c, races.find((r) => r.id === c.raceId));
             const fin = stats.abilities;
             return el('article', { class: 'card' },
               el('div', { class: 'card-title' },

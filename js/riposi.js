@@ -54,7 +54,7 @@
     const legendary = p.type === 'leggendario';
     const eff = legendary && DnD.leggendario ? DnD.leggendario.effectivePlayer(p, S) : p;
     const race = arr(S.races).find((r) => r.id === p.raceId) || null;
-    const stats = DnD.combattenti.derivedStats(eff, race, S.equipment);
+    const stats = DnD.statistiche.derivedStats(eff, race, S.equipment);
     const info = DnD.classi.classInfo(p.classId, p.customClass);
     const maxHp = member ? member.maxHp : eff.maxHp;
     const sp = stats.spell;

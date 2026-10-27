@@ -378,7 +378,7 @@
     let node;
     if (npc.base === 'creatura') node = DnD.uiMostri.statblock(npc.stats);
     else {
-      const stats = DnD.combattenti.derivedStats(npc.stats, st().races.find((r) => r.id === npc.stats.raceId), st().equipment);
+      const stats = DnD.statistiche.derivedStats(npc.stats, st().races.find((r) => r.id === npc.stats.raceId), st().equipment);
       node = el('div', { class: 'small' },
         el('p', { text: [DnD.ui.raceName(npc.stats.raceId), DnD.classi.className(npc.stats.classId), 'liv. ' + npc.stats.level].filter(Boolean).join(' · ') }),
         el('p', { text: 'PF ' + npc.stats.maxHp + ' · CA ' + stats.ac.total }),

@@ -318,7 +318,7 @@ multiattacco se ci sono più armi); l'originale resta invariato.
 
 Logica pura e testata in `js/scheda.js`, dati modificabili in `js/dati/scheda.js`, interfaccia in `js/ui-scheda.js`. La
 creazione e la modifica di un giocatore (anche leggendario) avvengono sulla **scheda a pagine**, organizzata come la
-scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`combattenti.derivedStats`, classi, razze,
+scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`statistiche.derivedStats`, classi, razze,
 Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima.
 
 - **Tre modalità** sulla stessa bozza, senza perdere dati: **🧭 Creazione guidata**, **📜 Scheda**, **🎲 Vista di gioco**.
@@ -1907,7 +1907,8 @@ js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combatte
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo, verifica di un percorso proposto (walk)
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
-js/combattenti.js     valori derivati (razza, classe, scheda, catalogo) e costruzione dei combattenti di uno scontro
+js/statistiche.js     valori derivati (razza, classe, scheda con talenti, iniziativa e velocità, catalogo)
+js/combattenti.js     costruzione dei combattenti di uno scontro (giocatori, leggendari, Standard, Creature, Boss)
 js/modello.js         accesso di base allo stato: sessione corrente, visibilità delle entità nelle sessioni
 js/dati/misure.js     misure: 1 casella = 5 ft = 1,5 m, caselle da metri, scala delle mappe di esplorazione in km
 js/dati/leggendario.js temi dei personaggi leggendari: nomi e palette (anche per i temi «lg:<id>» del Boss)

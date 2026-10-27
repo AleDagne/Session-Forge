@@ -177,7 +177,7 @@
       origin: { raceId: o.raceId, level, classId: o.classId },
     }, false);
     // La CA salvata è quella calcolata (la CA automatica si ricalcola comunque dalle caratteristiche).
-    creature.ac = DnD.combattenti.derivedStats(creature, race).ac.total;
+    creature.ac = DnD.statistiche.derivedStats(creature, race).ac.total;
     creature.sessionId = o.sessionId || '';
     return { creature, warnings };
   }

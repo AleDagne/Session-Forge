@@ -23,7 +23,7 @@
   // Valori della bozza (tutto quello che la scheda mostra di calcolato).
   function calc(p) {
     const race = st().races.find((r) => r.id === p.raceId) || null;
-    const d = DnD.combattenti.derivedStats(p, race, st().equipment);
+    const d = DnD.statistiche.derivedStats(p, race, st().equipment);
     const fx = d.fx || S.featEffects(p);
     return {
       race, d, fx, skills: S.skills(p, d, fx, st()), init: S.initiative(p, d, fx), speed: S.speed(p, race, fx, st().equipment),

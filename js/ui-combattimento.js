@@ -887,7 +887,7 @@
     }
     const playerSummary = (c) => { // i leggendari con gli effetti dei nodi già applicati
       const e = DnD.leggendario.effectivePlayer(c, st);
-      return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + DnD.combattenti.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
+      return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + DnD.statistiche.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
     };
     const summary = (c) => (DnD.boss.isMonster(c)
       ? [c.type === 'boss' ? 'Boss' : 'Creatura', 'GS ' + DF.crOf(c) + (DF.crOf(c) !== c.cr ? ' effettivo' : ''), 'PF ' + M.hpInfo(c).total, 'CA ' + c.ac]

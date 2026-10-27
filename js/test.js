@@ -486,13 +486,13 @@
       id: 'm', name: 'Monaco', raceId: 'r', classId: 'monaco', level: 5, acMode: 'auto', armor: { type: 'nessuna', unarmored: true },
       abilities: { FOR: 10, DES: 16, COS: 12, INT: 10, SAG: 14, CAR: 8 },
     });
-    const st = DnD.combattenti.derivedStats(monk, race);
+    const st = DnD.statistiche.derivedStats(monk, race);
     eq([st.ac.total, st.profBonus, st.saves], [15, 3, ['FOR', 'DES']]);
     eq(st.saveTotals, { FOR: 3, DES: 6, COS: 2, INT: 0, SAG: 2, CAR: -1 });
     const [c] = DnD.combattenti.createCombatants([monk], [], [race], () => 10);
     eq([c.ac, c.saves.DES], [15, 6]);
     monk.profBonusOverride = 9;
-    eq(DnD.combattenti.derivedStats(monk, race).saveTotals.DES, 12, 'bonus competenza sovrascritto');
+    eq(DnD.statistiche.derivedStats(monk, race).saveTotals.DES, 12, 'bonus competenza sovrascritto');
   });
 
   test('nome casuale dalla lista, preferendo quelli non usati', () => {
@@ -523,12 +523,12 @@
     eq([M().spellAttackBonus(2, 3), M().spellSaveDc(2, 3)], [5, 13]);
     eq([M().spellAttackBonus(6, 5), M().spellSaveDc(6, 5)], [11, 19]);
     const mage = DnD.dati.normalizeCreature({ name: 'Mira', classId: 'mago', level: 5, abilities: { INT: 16 }, asi: { INT: 2 } });
-    const s = DnD.combattenti.derivedStats(mage, null).spell;
+    const s = DnD.statistiche.derivedStats(mage, null).spell;
     eq([s.ability, s.mod, s.attack, s.dc], ['INT', 4, 7, 15]);
     mage.spellcasting.dcOverride = 17;
     mage.spellcasting.ability = 'CAR';
-    eq([DnD.combattenti.derivedStats(mage, null).spell.dc, DnD.combattenti.derivedStats(mage, null).spell.attack], [17, 3], 'sovrascritture');
-    eq(DnD.combattenti.derivedStats(DnD.dati.normalizeCreature({ name: 'G', classId: 'guerriero' }), null).spell, null, 'non incantatore');
+    eq([DnD.statistiche.derivedStats(mage, null).spell.dc, DnD.statistiche.derivedStats(mage, null).spell.attack], [17, 3], 'sovrascritture');
+    eq(DnD.statistiche.derivedStats(DnD.dati.normalizeCreature({ name: 'G', classId: 'guerriero' }), null).spell, null, 'non incantatore');
   });
 
   test('slot per classe e livello (completo, mezzo, patto)', () => {
@@ -546,7 +546,7 @@
     eq(T('patto', 11), [0, 0, 0, 0, 3, 0, 0, 0, 0]);
     eq(T('patto', 20), [0, 0, 0, 0, 4, 0, 0, 0, 0]);
     const pal = DnD.dati.normalizeCreature({ name: 'P', classId: 'paladino', level: 1 });
-    eq(DnD.combattenti.derivedStats(pal, null).spell.slotsTotal.reduce((a, b) => a + b), 0);
+    eq(DnD.statistiche.derivedStats(pal, null).spell.slotsTotal.reduce((a, b) => a + b), 0);
   });
 
   test('consumo e ripristino degli slot', () => {
@@ -815,7 +815,7 @@
       for (const level of [1, 5, 11, 20]) {
         const where = classId + ' liv. ' + level;
         const { creature: c } = gen(classId, level);
-        const stats = DnD.combattenti.derivedStats(c, genRace({ FOR: 1, DES: 1, COS: 1, INT: 1, SAG: 1, CAR: 1 }));
+        const stats = DnD.statistiche.derivedStats(c, genRace({ FOR: 1, DES: 1, COS: 1, INT: 1, SAG: 1, CAR: 1 }));
         const ab = stats.abilities;
         ok(Object.values(ab).every((v) => v <= 20), where + ': caratteristica oltre 20 ' + JSON.stringify(ab));
         eq([c.level, c.classId, c.generated, c.origin.classId, c.hpMode, c.acMode, c.saveMode], [level, classId, true, classId, 'auto', 'auto', 'classe'], where);
@@ -841,7 +841,7 @@
     const race = genRace({ DES: 2 });
     const ctx = genCtx(race);
     const g = (classId, level, magicItems) => gen(classId, level, { abilityMethod: 'standard', magicItems }, ctx, fixed).creature;
-    const acOf = (c) => DnD.combattenti.derivedStats(c, race);
+    const acOf = (c) => DnD.statistiche.derivedStats(c, race);
     // Ranger: DES 15+2 = 17 (+3) ma l'armatura media conta al massimo +2 -> 13 + 2.
     eq(acOf(g('ranger', 1)).ac, { total: 15, detail: 'Armatura media 13 + DES(+3, max +2) = 15' });
     eq(acOf(g('bardo', 1)).ac.detail, 'Armatura leggera 11 + DES(+3) = 14');
@@ -889,7 +889,7 @@
     ok(empty.creature.spellcasting.known.length === 0 && empty.warnings[0].includes('non contiene incantesimi'), 'libreria vuota: avviso');
     const full = gen('mago', 5, {}, genCtx(genRace(), lib)).creature;
     eq(full.spellcasting.known.length, 3 + 4, 'trucchetti (3 dal livello 4) e tutti i 4 incantesimi fino al 3° livello');
-    ok(DnD.combattenti.derivedStats(full, genRace()).spell.dc >= 8 + 3, 'CD calcolata');
+    ok(DnD.statistiche.derivedStats(full, genRace()).spell.dc >= 8 + 3, 'CD calcolata');
     eq(gen('guerriero', 5, {}, genCtx(genRace(), lib)).creature.spellcasting.known, [], 'non incantatore');
   });
 
@@ -1611,7 +1611,7 @@
     // Collegamento con le schede: arma "auto" dal catalogo, arma scritta a mano invariata, CA automatica.
     const c = DnD.dati.normalizeCreature({ name: 'Guardia', level: 1, abilities: ab, acMode: 'auto', armor: { equipmentId: get('Cotta di maglia').id, shieldId: get('Scudo').id },
       weapons: [{ name: 'Spada lunga', equipmentId: get('Spada lunga').id }, { name: 'Pugno', toHit: 9, damageDice: '1d4', damageBonus: 1 }] });
-    const st = DnD.combattenti.derivedStats(c, null, cat);
+    const st = DnD.statistiche.derivedStats(c, null, cat);
     eq([st.ac.total, st.weapons[0].toHit, st.weapons[0].damageBonus, st.weapons[1].toHit], [18, 5, 3, 9]);
     const manual = Object.assign({}, c.weapons[0], { auto: false, toHit: 12 });
     eq(ATT().resolveWeapon(manual, cat, ab, 2).toHit, 12, 'sovrascritta a mano');
@@ -3177,7 +3177,7 @@
     eq(R1.finalAbilities({ FOR: 20 }, null, { FOR: 14 }, false, 30).FOR, 30, 'tetto 30');
     eq(R1.finalAbilities({ FOR: 20 }, null, { FOR: 14 }, false).FOR, 20, 'tetto 20 per gli standard');
     const c = legendaryOf(33);
-    eq([c.type, c.level, c.abilityCap, LG().rank(c), DnD.combattenti.derivedStats(c, null).profBonus], ['leggendario', 33, 30, 13, 10]);
+    eq([c.type, c.level, c.abilityCap, LG().rank(c), DnD.statistiche.derivedStats(c, null).profBonus], ['leggendario', 33, 30, 13, 10]);
     eq(DnD.dati.normalizeCreature({ type: 'leggendario', level: 50 }, true).level, 40, 'massimo 40');
     eq(DnD.dati.normalizeCreature({ type: 'leggendario', level: 5 }, true).level, 20, 'minimo 20');
     eq(DnD.dati.normalizeCreature({ level: 33 }, true).type, undefined, 'giocatori standard senza tipo');
@@ -5269,7 +5269,7 @@
 
   test('Scheda: abilità con competenza, maestria e metà competenza; passive', () => {
     const p = hero({ sheet: { skills: { 'Furtività': 2, 'Indagare': 1 }, half: true, skillBonus: { 'Percezione': 2 } } });
-    const d = DnD.combattenti.derivedStats(p, null, []);
+    const d = DnD.statistiche.derivedStats(p, null, []);
     const fx = SH().featEffects(p, []);
     const b = (k) => SH().skillBonus(p, k, d, fx, null);
     eq([b('Furtività').total, b('Indagare').total, b('Atletica').total, b('Percezione').total], [9, 5, 1, 4], 'maestria 3+6, competenza 2+3, metà 0+1, bonus 1+1+2');
@@ -5281,7 +5281,7 @@
 
   test('Scheda: valori automatici sovrascritti e ritorno ad auto', () => {
     const p = hero({ sheet: { initiativeBonus: 2, speedBonus: 3 } });
-    const d = () => DnD.combattenti.derivedStats(p, null, []);
+    const d = () => DnD.statistiche.derivedStats(p, null, []);
     eq([SH().initiative(p, d(), null).total, SH().speed(p, null, null, []).total], [5, 12], 'auto: DES + bonus, razza + bonus');
     p.sheet.overrides.initiative = 7;
     p.sheet.overrides.speed = 6;
@@ -5297,7 +5297,7 @@
   test('Scheda: capacità di carico e sintonia', () => {
     const cat = DnD.attrezzatura.defaults().concat([1, 2, 3, 4].map((i) => DnD.dati.normalizeEquipment({ id: 'anello-' + i, name: 'Anello ' + i, category: 'magici', attunement: true })));
     const p = hero({ inventory: [{ equipmentId: 'eq-cotta-di-maglia', qty: 1 }], coins: { mo: 100 } });
-    const d = DnD.combattenti.derivedStats(p, null, cat);
+    const d = DnD.statistiche.derivedStats(p, null, cat);
     const c = SH().carry(p, d, cat);
     eq([c.weight, c.capacity, c.over], [28.5, 75, false], 'FOR 10 × 7,5 kg');
     p.sheet.overrides.carry = 20;
@@ -5331,7 +5331,7 @@
     const fx = SH().featEffects(p, feats);
     eq([fx.abilities, fx.ac, fx.saves, fx.skills], [{ COS: 1, SAG: 1 }, 2, ['DES'], ['Percezione']], 'effetti sommati');
     withState(st, () => {
-      const d = DnD.combattenti.derivedStats(p, null, []);
+      const d = DnD.statistiche.derivedStats(p, null, []);
       eq([d.abilities.COS, d.abilities.SAG, d.ac.total, d.saves.includes('DES')], [13, 13, 15, true], 'caratteristiche, CA e salvezze');
       ok(d.ac.detail.includes('talenti 2'), 'dettaglio della CA');
       eq(SH().skillBonus(p, 'Percezione', d, d.fx, st).level, 1, 'competenza dal talento');
@@ -5356,12 +5356,12 @@
     eq(SH().levelUp(hero({ level: 20 }), {}, { feats: [] }).summary, null, 'livello massimo');
     eq([SH().xpInfo(hero({ level: 3, xp: 2700 })).canLevelUp, SH().xpInfo(hero({ level: 3, xp: 2699 })).canLevelUp, SH().levelForXp(6500), SH().xpInfo(hero({ level: 3 })).next], [true, false, 5, 2700], 'soglie dei PE');
     const cleric = hero({ classId: 'chierico', abilities: { FOR: 10, DES: 10, COS: 12, INT: 10, SAG: 16, CAR: 10 }, sheet: { spellFlags: { a: { prepared: true }, b: { prepared: true }, c: { prepared: false } } } });
-    eq(SH().preparable(cleric, DnD.combattenti.derivedStats(cleric, null, [])), { max: 8, prepared: 2 }, 'chierico: livello + SAG');
+    eq(SH().preparable(cleric, DnD.statistiche.derivedStats(cleric, null, [])), { max: 8, prepared: 2 }, 'chierico: livello + SAG');
     const pal = hero({ classId: 'paladino', abilities: { FOR: 14, DES: 10, COS: 12, INT: 10, SAG: 10, CAR: 14 } });
-    eq(SH().preparable(pal, DnD.combattenti.derivedStats(pal, null, [])).max, 4, 'paladino: metà livello + CAR');
-    eq(SH().preparable(hero(), DnD.combattenti.derivedStats(hero(), null, [])), null, 'il ladro non prepara');
+    eq(SH().preparable(pal, DnD.statistiche.derivedStats(pal, null, [])).max, 4, 'paladino: metà livello + CAR');
+    eq(SH().preparable(hero(), DnD.statistiche.derivedStats(hero(), null, [])), null, 'il ladro non prepara');
     const fighter = hero({ classId: 'guerriero', sheet: { spellcaster: true, casterType: 'mezzo' } });
-    ok(SH().isCaster(fighter) && DnD.combattenti.derivedStats(fighter, null, []).spell.slotsTotal[0] === 4, 'casella «Incantatore»: come la classe personalizzata');
+    ok(SH().isCaster(fighter) && DnD.statistiche.derivedStats(fighter, null, []).spell.slotsTotal[0] === 4, 'casella «Incantatore»: come la classe personalizzata');
   });
 
   test('Scheda: condizioni e tiri contro la morte tra scheda e combattimento', () => {

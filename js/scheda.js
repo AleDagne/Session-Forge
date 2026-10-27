@@ -107,26 +107,9 @@
   const exampleFeats = (sessionId) => K().FEATS.map((f) => normalizeFeat(own(f, sessionId)));
 
   // ---------- Talenti ----------
-  const storeFeats = () => (DnD.store && DnD.store.state && DnD.store.state.feats) || [];
-  // Talenti della scheda (privilegi con featId) e loro effetti sommati; i talenti eliminati finiscono in missing.
-  function featEffects(c, feats) {
-    const lib = feats || storeFeats();
-    const out = { abilities: {}, skills: [], saves: [], ac: 0, hp: 0, hpPerLevel: 0, speed: 0, initiative: 0, names: [], missing: [] };
-    for (const f of arr(c && c.sheet && c.sheet.features)) {
-      if (!f.featId) continue;
-      const feat = lib.find((x) => x.id === f.featId);
-      if (!feat) { out.missing.push(f.name); continue; }
-      const e = feat.effects;
-      for (const [ab, v] of Object.entries(e.abilities)) out.abilities[ab] = (out.abilities[ab] || 0) + v;
-      for (const k of e.skills) if (!out.skills.includes(k)) out.skills.push(k);
-      for (const k of e.saves) if (!out.saves.includes(k)) out.saves.push(k);
-      out.ac += e.ac; out.hp += e.hp; out.hpPerLevel += e.hpPerLevel; out.speed += e.speed; out.initiative += e.initiative;
-      out.names.push(feat.name);
-    }
-    return out;
-  }
-  // Punti caratteristica più i bonus dei talenti (stesso tetto dei punti).
-  const addAbilities = (asi, extra) => Object.fromEntries(ABS().map((ab) => [ab, (obj(asi)[ab] || 0) + (obj(extra)[ab] || 0)]));
+  // Effetti dei talenti e somma ai punti caratteristica: in statistiche.js (servono ai valori derivati).
+  const featEffects = (c, feats) => DnD.statistiche.featEffects(c, feats);
+  const addAbilities = (asi, extra) => DnD.statistiche.addAbilities(asi, extra);
   // Punti caratteristica disponibili: quelli del livello meno 2 per ogni talento preso al loro posto.
   function asiAvailable(c) {
     const taken = arr(c.sheet && c.sheet.features).filter((f) => f.featId && f.asi).length;
@@ -158,7 +141,7 @@
     return Math.max(sheet, feat, legend);
   }
   // Bonus di un'abilità: mod. + competenza × grado (maestria = doppia); senza competenza, «metà competenza» (per
-  // difetto) se attiva; più il bonus scritto a mano. d: DnD.combattenti.derivedStats. Restituisce { total, level, detail }.
+  // difetto) se attiva; più il bonus scritto a mano. d: DnD.statistiche.derivedStats. Restituisce { total, level, detail }.
   function skillBonus(c, skill, d, fx, st) {
     const ab = SKILLS()[skill] || 'SAG';
     const m = R().modifier(d.abilities[ab]);
@@ -174,26 +157,9 @@
   const passive = (c, skill, d, fx, st) => 10 + skillBonus(c, skill, d, fx, st).total;
 
   // ---------- Iniziativa, velocità, carico, sintonia ----------
-  // Bonus di iniziativa oltre la DES (scheda + talenti) o, se sovrascritta, la differenza dal valore scritto.
-  function initiative(c, d, fx) {
-    const dex = R().modifier(d.abilities.DES);
-    const bonus = ((c.sheet && c.sheet.initiativeBonus) || 0) + ((fx && fx.initiative) || 0);
-    const auto = dex + bonus;
-    const ov = c.sheet ? c.sheet.overrides.initiative : null;
-    return { auto, total: ov === null ? auto : ov, manual: ov !== null, bonus: (ov === null ? auto : ov) - dex,
-      detail: 'DES ' + R().formatModifier(dex) + (bonus ? ' + bonus ' + R().formatModifier(bonus) : '') + ' = ' + R().formatModifier(auto) };
-  }
-  // Velocità a piedi (m): razza + oggetti equipaggiati + scheda + talenti, o il valore scritto.
-  function speed(c, race, fx, catalog) {
-    const base = race ? race.speed : 9;
-    const items = DnD.attrezzatura.speedBonus(c.inventory, catalog || []);
-    const extra = ((c.sheet && c.sheet.speedBonus) || 0) + ((fx && fx.speed) || 0);
-    const auto = Math.max(0, Math.round((base + items + extra) * 10) / 10);
-    const ov = c.sheet ? c.sheet.overrides.speed : null;
-    const m = (v) => String(v).replace('.', ',') + ' m';
-    return { auto, total: ov === null ? auto : ov, manual: ov !== null,
-      detail: 'razza ' + m(base) + (items ? ' + oggetti ' + m(items) : '') + (extra ? ' + bonus ' + m(extra) : '') + ' = ' + m(auto) };
-  }
+  // Iniziativa e velocità: in statistiche.js (servono ai valori derivati).
+  const initiative = (c, d, fx) => DnD.statistiche.initiative(c, d, fx);
+  const speed = (c, race, fx, catalog) => DnD.statistiche.speed(c, race, fx, catalog);
   // Carico: peso dell'inventario (monete comprese) e capacità FOR × fattore (o scritta a mano).
   function carry(c, d, catalog) {
     const weight = DnD.attrezzatura.inventoryWeight(c.inventory, catalog || [], c.coins);
@@ -306,7 +272,7 @@
     const p = clone(c);
     p.sheet = normalizeSheet(p.sheet);
     const race = ctx && ctx.race;
-    const before = DnD.combattenti.derivedStats(c, race, ctx && ctx.catalog);
+    const before = DnD.statistiche.derivedStats(c, race, ctx && ctx.catalog);
     const info = before.info;
     const from = c.level;
     const max = c.type === 'leggendario' ? 40 : 20;
@@ -326,7 +292,7 @@
     const names = arr(opts.featureNames).length ? opts.featureNames : ['Privilegio di livello ' + p.level];
     for (const n of names) p.sheet.features.push(normalizeFeature({ name: n, source: 'classe', level: p.level }));
     if (p.spellcasting) p.spellcasting.known = [...new Set(p.spellcasting.known.concat(arr(opts.spells)))];
-    const after = DnD.combattenti.derivedStats(p, race, ctx && ctx.catalog);
+    const after = DnD.statistiche.derivedStats(p, race, ctx && ctx.catalog);
     const slots = (d) => (d.spell ? d.spell.slotsTotal : [0, 0, 0, 0, 0, 0, 0, 0, 0]);
     return {
       player: p,

@@ -112,7 +112,7 @@
     const out = { nome: p.name, livello: p.level || 1, razza: '', classe: '', ca: null, pf: null, pfMax: p.maxHp, iniziativa: null, velocita: null, competenza: null, caratteristiche: [], percezione: null, condizioni: [], dadiVita: null };
     try {
       const race = arr(st.races).find((r) => r.id === p.raceId) || null;
-      const d = DnD.combattenti.derivedStats(p, race, st.equipment);
+      const d = DnD.statistiche.derivedStats(p, race, st.equipment);
       const fx = d.fx || (DnD.scheda ? DnD.scheda.featEffects(p) : null);
       const R = DnD.regole;
       Object.assign(out, {

@@ -95,7 +95,7 @@
     }
     const R = DnD.regole;
     const race = ctx.race || null;
-    const d = DnD.combattenti.derivedStats(c, race, ctx.catalog);
+    const d = DnD.statistiche.derivedStats(c, race, ctx.catalog);
     const abilities = d.abilities || c.abilities;
     const level = c.level || 1;
     const crs = DnD.creatureDati.CRS;
