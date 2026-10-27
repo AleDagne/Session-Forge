@@ -1,6 +1,6 @@
 // Regole di D&D 5e come funzioni pure: caratteristiche e modificatori, bonus di competenza, tiri (d20 con
 // vantaggio/svantaggio, attacchi, salvezze, iniziativa), danni e cure, CA calcolata, PF per livello.
-// Livello regole. Espone DnD.regole; usa DnD.dadi, DnD.classi, DnD.condizioni (turni saltati).
+// Livello regole. Espone DnD.regole; usa DnD.dadi e DnD.classi.
 // Non deve toccare DOM, disco o rete. La costruzione dei combattenti è in combattenti.js.
 (function (DnD) {
   'use strict';
@@ -118,7 +118,9 @@
   // In attesa: NPC diventato ostile che entra nell'ordine di iniziativa solo dal round joinRound; o fuggito.
   const waiting = (c, round) => Boolean(c.fled || (c.joinRound && c.joinRound > round));
   // Saltato nei turni: a terra (salvo chi tira contro la morte) o in attesa.
-  const skipped = (c, round) => (isDown(c) && !DnD.condizioni.dying(c)) || waiting(c, round);
+  // In fin di vita: a 0 PF con i tiri contro la morte attivi, non stabile e non morto (il turno non si salta).
+  const dying = (c) => Boolean(c && c.deathSaves && c.deathSaves.active && !c.deathSaves.stable && !c.dead && c.hp <= 0);
+  const skipped = (c, round) => (isDown(c) && !dying(c)) || waiting(c, round);
 
   function firstTurn(order, round) {
     const c = order.find((x) => !skipped(x, round || 1));
@@ -289,7 +291,7 @@
   DnD.regole = {
     ABILITIES, ABILITY_NAMES, MODES,
     modifier, formatModifier, racialBonus, finalAbilities, asiPointsAvailable, asiPointsAssigned,
-    rollD20, resolveAttack, applyDamage, heal, hpLevel, isDown,
+    rollD20, resolveAttack, applyDamage, heal, hpLevel, isDown, dying,
     sortByInitiative, firstTurn, nextTurn, waiting, rollInitiative,
     STANDARD_ARRAY, roll4d6DropLowest, shuffle, resolvePriority, randomizeAbilities,
     hitDieAverage, computeHp, ARMOR_TYPES, ARMOR_NAMES, ARMOR_BASE, computeAc,

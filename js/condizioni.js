@@ -2,6 +2,7 @@
 // (tipo, origine, durata, incantesimo collegato, note); le condizioni sono una fonte di modificatori letta dalle
 // funzioni di tiro (attacco, salvezza, prova), dal movimento e dall'IA. Tabella degli effetti, condizioni
 // personalizzate, durata con lo scorrere dei turni, concentrazione con i suoi effetti collegati, tiri contro la morte.
+// Livello regole, sopra regole.js. Espone DnD.condizioni; usa DnD.regole (tiri) e DnD.dadi. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -440,7 +441,8 @@
     return { active: Boolean(d.active), successes: int(d.successes, 0, 0, 3), failures: int(d.failures, 0, 0, 3), stable: Boolean(d.stable) };
   }
   // Combattente che a 0 PF tira contro la morte (resta nell'ordine dei turni).
-  const dying = (c) => Boolean(c && c.deathSaves && c.deathSaves.active && !c.deathSaves.stable && !c.dead && c.hp <= 0);
+  // Unica definizione in regole.js (serve anche all'ordine dei turni): qui riesportata per chi legge le condizioni.
+  const dying = (c) => DnD.regole.dying(c);
   // Appena sceso a 0 PF. Modifica c; restituisce le righe.
   function dropToZero(c, rules) {
     const r = rules || { deathSaves: true, enemiesDie: true };
