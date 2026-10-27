@@ -2,6 +2,7 @@
 // collegata (griglia di battaglia o esplorazione), segnaposto sulla mappa di esplorazione, ambiente e regole
 // (armi vietate, coprifuoco, tasse), quest ed eventi collegati. L'atteggiamento verso il party viene dalla
 // reputazione con la fazione dominante. La fazione della città è quella predefinita per NPC e nemici creati lì.
+// Livello regole, gruppo Mondo. Espone DnD.citta; usa dati/mondo, fazioni, eventi, dadi, icone. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
