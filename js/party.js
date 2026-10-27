@@ -1,6 +1,7 @@
 // Party (logica pura): nome, colore, icona, fazione, giocatori (anche leggendari), ordine di marcia, inventario
 // e monete condivisi facoltativi, reputazione comune verso le fazioni e note. Più party per sessione, uno attivo;
 // un giocatore appartiene a un solo party alla volta (tra quelli visibili nella sessione).
+// Livello regole, gruppo Mondo. Espone DnD.party; usa attrezzatura, fazioni, dadi, icone. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
