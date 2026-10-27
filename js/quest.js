@@ -5,6 +5,7 @@
 // Disponibile, Attiva, Completata, Fallita, Scaduta, con l'avanzamento degli obiettivi. I giocatori vedono solo
 // le quest offerte e accettate. Eventi e combattimento avanzano gli obiettivi; la consegna restituisce le
 // ricompense da distribuire (con conferma del master).
+// Livello regole, gruppo Mondo. Espone DnD.quest; usa dati/mondo, fazioni, party, eventi (premi), griglia (etichette delle celle), dadi. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
