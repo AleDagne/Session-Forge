@@ -3,6 +3,10 @@
 // modalità di viaggio, scorte, condizioni dei personaggi, variabili, pila delle mappe, registro, coda delle
 // finestre evento) e regole: movimento cella per cella con costo e ore dal bioma, tempo che avanza con
 // scorte, meteo, pericoli ambientali, incontri casuali e inneschi degli eventi; nebbia; entra/esci da una mappa.
+// Livello regole, gruppo Mondo (sopra la mappa): gioco dell'esplorazione. Espone DnD.esplorazione; usa DnD.misure,
+// griglia, visione, biomi, eventi, riposi, fazioni, party, quest, dadi, icone. Non deve toccare il DOM. Da sistemare
+// con lo stato (audit A6): worldOf() ripiega su sessioni.current se l'esplorazione non è in una sessione.
+// Si aggancia al ridimensionamento della griglia (griglia.registraRidimensionamento).
 (function (DnD) {
   'use strict';
 
