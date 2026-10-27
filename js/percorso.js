@@ -4,6 +4,8 @@
 // Effetti dei nodi (bonus, competenze, magie, slot, privilegi creati dall'utente, trasformazioni, testo),
 // modifiche al grafo (aggiungi, collega, scollega, elimina, duplica), validazione (irraggiungibili, cicli di
 // esclusività), disposizione a raggiera, cronologia per annulla/ripeti, percorso d'esempio originale.
+// Livello regole, gruppo entità. Espone DnD.percorso; usa creature (meccaniche), dati/creature, regole, icone, dadi.
+// Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
