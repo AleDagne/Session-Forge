@@ -6202,6 +6202,8 @@
       E.dadiDiProva(seq(4, 17, 6));
       e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
       eq([e.stato, x('g1').hp], ['eseguita', 1]);
+      // L'esito passa dal filtro come il log: i PF del Goblin solo a parole (audit A1).
+      ok(e.testo.includes('Goblin') && !/\d+ → \d+ PF/.test(e.testo) && !/PF \d+\/\d+/.test(e.testo), 'esito filtrato: ' + e.testo);
       const riga = c().log.find((r) => r.text.includes('attacca Goblin'));
       ok(riga.text.includes('vantaggio') && riga.text.includes('[4, 17]'), riga.text);
       eq([dadi.Ale.length, dadi.Bice.length, dadi.Ale[0].tiro.gruppi.map((g) => g.values)], [1, 1, [[4, 17], [6]]], 'stessi dadi del master sui due lati');

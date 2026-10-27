@@ -170,7 +170,8 @@
   }
   const testoPulito = (t, max) => String(t || '').replace(/\s*Nota del master:.*$/s, '').trim().slice(0, max || 400);
 
-  function combattimento(st, c, o, mio, raccolta) {
+  // Combattenti che il giocatore vede e nomi per ripulire i testi (non visti; nemici visti con i PF massimi).
+  function visibili(st, c) {
     const tsIndex = DnD.tilemap.tilesetIndex(st.tilesets);
     const vg = DnD.visione.visioneGiocatore({ grid: grigliaNpcRivelati(c.grid), combatants: c.combatants }, { tilesets: tsIndex });
     const fogOn = Boolean(c.grid.fog && c.grid.fog.enabled);
@@ -182,6 +183,25 @@
       nascosti: c.combatants.filter((x) => !ids.has(x.id)).map((x) => x.name),
       nemici: new Map(mostrati.filter((x) => !delParty(x)).map((x) => [x.name, x.maxHp])),
     };
+    return { vg, mostrati, ids, nomi };
+  }
+
+  /**
+   * Testo dell'esito di un'intenzione (di solito l'ultima riga del registro del master), ripulito come le righe del log:
+   * PF dei nemici a parole (salvo opts.pfNemici), niente combattenti non visti né note del master.
+   * @param {object} st stato del master  @param {string} testo  @param {{pfNemici?: boolean}} opts
+   * @returns {string} testo per il giocatore ('Fatto.' se la riga non può partire)
+   */
+  function testoEsito(st, testo, opts) {
+    const sess = DnD.sessioni.current(st);
+    const c = sess && sess.combat;
+    if (!c) return testoPulito(testo);
+    const r = rigaLog({ type: 'esito', text: testo }, visibili(st, c).nomi, opts || {});
+    return r ? r.testo : 'Fatto.';
+  }
+
+  function combattimento(st, c, o, mio, raccolta) {
+    const { vg, mostrati, ids, nomi } = visibili(st, c);
     const opzPedina = { pfNemici: Boolean(o.pfNemici), combattenteId: mio ? mio.id : '', regole: o.regole, piedi: c.grid.feetPerCell || 5, economia: o.economia };
     const griglia = Object.assign({}, vg);
     delete griglia.combatants;
@@ -629,7 +649,7 @@
 
   DnD.rete = DnD.rete || {};
   DnD.rete.filtro = {
-    SALUTE, salute, rigaLog, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
+    SALUTE, salute, rigaLog, testoEsito, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
     statoPerGiocatore, eventoPerGiocatore, ammetti, statoNpcPerGiocatore, statoScenaPerGiocatore, visioneGiocatore, nonRicevuto,
     contestoPrezzi, npcPiazzato, negozio, SCHEMA: VISTA,
   };

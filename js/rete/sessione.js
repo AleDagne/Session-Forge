@@ -448,7 +448,9 @@
       if (r && r.ok === false) return rispondi(g, id, 'rifiutata', r.testo);
       // Dadi del combattimento tirati dal master: anche ai giocatori (stessi valori, stessa animazione).
       if (r && r.tiro && v.diffondi) diffondiDado({ da: v.diffondi, colore: g.colore, tiro: r.tiro });
-      return rispondi(g, id, 'eseguita', (r && r.testo) || 'Fatto.', v.avviso || (r && r.avviso) || '');
+      // Il testo è la riga del registro del master: passa dal filtro come il log (PF dei nemici, combattenti non visti).
+      const testo = r && r.testo ? F().testoEsito(o.stato(), r.testo, { pfNemici: o.pfNemici }) : 'Fatto.';
+      return rispondi(g, id, 'eseguita', testo, v.avviso || (r && r.avviso) || '');
     }
 
     function intenzione(g, m) {
