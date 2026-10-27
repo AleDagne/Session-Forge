@@ -652,4 +652,7 @@
     hideAll, brushCells, roomsSweep, trackGhosts, refreshFog, visioneGiocatore, setCarried, tickLights, spellEffect, castLight, pruneLinked,
     discoveryCells, discoveryRadius, signature, sourceById, feetPerCell,
   };
+
+  // Combattimento da una griglia salvata senza luce o nebbia: si parte da quelle vuote.
+  DnD.griglia.registraVisioneVuota((w, h) => ({ vision: emptyVision(w, h), fog: emptyFog(w, h) }));
 })(globalThis.DnD = globalThis.DnD || {});

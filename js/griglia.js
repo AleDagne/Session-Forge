@@ -2,6 +2,9 @@
 // sfondo, ridimensionamento, annulla/ripeti e griglie salvate. Nessun accesso al DOM.
 // Le griglie hanno una dimensione libera (w × h celle, da 5 a 100 per lato, di base 50×50): le celle
 // si identificano con la chiave y·STRIDE + x, con un passo fisso indipendente dalla dimensione.
+// Livello regole (gruppo mappa). Espone DnD.griglia (unico punto per il blocco delle celle: isCellBlocked); usa
+// DnD.misure, tileset, tilemap, collisioni. Non deve toccare il DOM. Visione ed esplorazione (sopra) si agganciano
+// con registraRidimensionamento e registraVisioneVuota.
 (function (DnD) {
   'use strict';
 
@@ -362,12 +365,8 @@
       g.background.x = (g.background.x || 0) + dx;
       g.background.y = (g.background.y || 0) + dy;
     }
-    // Esplorazione e visione: biomi, nebbia, sorgenti e stanze seguono le celle, gli eventi fuori dall'area si tolgono.
-    if (DnD.esplorazione && (g.biomeMap || (g.events && g.events.length) || g.fog || g.vision)) {
-      const ex = DnD.esplorazione.resizeExtras(g, old.w, old.h, w, h, dx, dy);
-      if (ex.lostEvents) lost.push(ex.lostEvents + (ex.lostEvents === 1 ? ' evento' : ' eventi'));
-      Object.assign(g, { biomeMap: ex.biomeMap, fog: ex.fog, vision: ex.vision, events: ex.events });
-    }
+    // Esplorazione e visione (registrate da esplorazione.js): biomi, nebbia, sorgenti e stanze seguono le celle.
+    for (const fn of estensioni.ridimensiona) fn({ grid: g, old, w, h, dx, dy, lost });
     g.w = w;
     g.h = h;
     return { grid: g, lost };
@@ -522,8 +521,9 @@
     Object.assign(combat.grid, gridProps(saved));
     const d = dims(saved);
     // Il combattimento lavora su una copia di luce, sorgenti, stanze e nebbia (nulla torna alla griglia salvata).
-    combat.grid.vision = saved.vision ? clone(saved.vision) : DnD.visione.emptyVision(d.w, d.h);
-    combat.grid.fog = saved.fog ? clone(saved.fog) : DnD.visione.emptyFog(d.w, d.h);
+    const vuota = !saved.vision || !saved.fog ? estensioni.visioneVuota(d.w, d.h) : null;
+    combat.grid.vision = saved.vision ? clone(saved.vision) : vuota.vision;
+    combat.grid.fog = saved.fog ? clone(saved.fog) : vuota.fog;
     combat.grid.sourceGridId = saved.id;
     for (const c of combat.combatants) c.pos = null;
     const board = boardOf(combat.grid, combat.combatants);
@@ -534,6 +534,21 @@
     return placeInZones(combat);
   }
 
+  // ---------- Estensioni dei livelli superiori ----------
+  // La griglia non conosce visione ed esplorazione (stanno sopra): sono loro a registrarsi al caricamento.
+  const estensioni = { ridimensiona: [], visioneVuota: () => ({ vision: undefined, fog: undefined }) };
+  /**
+   * Aggiunge un passo al ridimensionamento della griglia.
+   * @param {(p: {grid, old: {w, h}, w: number, h: number, dx: number, dy: number, lost: string[]}) => void} fn
+   *   aggiorna p.grid sul posto e aggiunge a p.lost ciò che va perso
+   */
+  const registraRidimensionamento = (fn) => { estensioni.ridimensiona.push(fn); };
+  /**
+   * Luce e nebbia vuote per una griglia salvata che non le ha.
+   * @param {(w: number, h: number) => {vision: object, fog: object}} fn
+   */
+  const registraVisioneVuota = (fn) => { estensioni.visioneVuota = fn; };
+
   DnD.griglia = {
     blockedCells, boardOf, isCellBlocked, objectBlocks, canPlaceItem, templateShape, placedFields, transformPlaced,
     SIZE, DEFAULT_SIZE, MIN_SIZE, MAX_SIZE, STRIDE, CELL_PX, MIN_ZOOM, MAX_ZOOM, MAX_TOKEN, PRESETS, PRESET_NAMES, TOKEN_SIZES, TOKEN_PRESETS,
@@ -541,7 +556,7 @@
     dims, key, keyX, keyY, colLabel, cellLabel, shapeFrom, isFilled, presetShape, rotateShape, mirrorShape, resizeShape, squareShape, rectShape,
     tokenSize, gridSizeFor, tokenDims, tokenShape, tokenCovers, tokenCells, cellsAt, inBounds, canPlaceToken, canPlaceStructure, findFreeSpot,
     screenToCell, cellToScreen, zoomAt, cellDistance, tokenDistance, formatDistance, formatSpeed,
-    backgroundRect, calibrate, resizeGrid,
+    backgroundRect, calibrate, resizeGrid, registraRidimensionamento, registraVisioneVuota,
     createHistory, gridSnapshot, restoreSnapshot, combatantKey, gridProps, createSavedGrid, applySavedGrid,
     ZONE_KINDS, rectBetween, placeInZones,
   };

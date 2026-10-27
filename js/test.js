@@ -598,6 +598,17 @@
     eq(M().resolveSpell({ spell: cure, slotLevel: 2, caster, targets: [{ id: 'a' }, { id: 'b' }] }, seq(3, 5)).targets.map((t) => t.amount), [11, 11]);
   });
 
+  // Agganci della griglia registrati da visione ed esplorazione (la griglia non le conosce).
+  test('Griglia: luce e nebbia vuote per una griglia salvata senza; eventi fuori area persi ridimensionando', () => {
+    const combat = { combatants: [], grid: { structures: [], items: [], labels: [], zones: [] } };
+    G().applySavedGrid(combat, { id: 's', w: 6, h: 4, structures: [], items: [], labels: [], zones: [], positions: [] }, DnD.dadi.uid);
+    eq([combat.grid.vision, combat.grid.fog], [DnD.visione.emptyVision(6, 4), DnD.visione.emptyFog(6, 4)]);
+    const g = { w: 10, h: 10, structures: [], items: [], labels: [], zones: [], tileMap: null,
+      events: [{ id: 'e1', cells: [{ x: 8, y: 8 }] }, { id: 'e2', cells: [{ x: 1, y: 1 }] }] };
+    const r = G().resizeGrid(g, 5, 5);
+    eq([r.grid.events.map((e) => e.id), r.lost], [['e2'], ['1 evento']]);
+  });
+
   test('copia della griglia in combattimento non modifica l\'originale', () => {
     const saved = DnD.dati.normalizeSavedGrid({
       id: 'g1', name: 'Cripta',

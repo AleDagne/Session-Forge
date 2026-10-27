@@ -586,4 +586,13 @@
     normalizeState, normalizeParty, normalizeMember, create, biomeAt, activeParty, partyMembers, memberState, placeName, log, queue, eventCtx, worldOf, questOp,
     advanceTime, rest, resolveHazard, checkEncounter, stepCost, step, path, moveTo, split, merge, discoveryView, reveal, isSeen, setSeen, enterMap, exitMap, fireEvent, resumeAfterCombat,
   };
+
+  // Ridimensionando una griglia, biomi, nebbia, luce e stanze seguono le celle; gli eventi fuori dall'area si tolgono.
+  DnD.griglia.registraRidimensionamento((p) => {
+    const g = p.grid;
+    if (!(g.biomeMap || (g.events && g.events.length) || g.fog || g.vision)) return;
+    const ex = resizeExtras(g, p.old.w, p.old.h, p.w, p.h, p.dx, p.dy);
+    if (ex.lostEvents) p.lost.push(ex.lostEvents + (ex.lostEvents === 1 ? ' evento' : ' eventi'));
+    Object.assign(g, { biomeMap: ex.biomeMap, fog: ex.fog, vision: ex.vision, events: ex.events });
+  });
 })(globalThis.DnD = globalThis.DnD || {});
