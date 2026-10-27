@@ -1,4 +1,6 @@
-// Incantesimi come funzioni pure: CD e attacco, slot, livello superiore e risoluzione del lancio.
+// Incantesimi come funzioni pure: CD e attacco, slot, livello superiore e risoluzione del lancio; file di incantesimi.
+// Livello regole. Espone DnD.magie; usa DnD.dadi e DnD.regole (tiro per colpire, salvezze).
+// Non deve toccare DOM, disco o rete (la normalizzazione degli incantesimi importati arriva come parametro).
 (function (DnD) {
   'use strict';
 
@@ -77,13 +79,9 @@
 
     if (e.type === 'attacco') {
       for (const t of p.targets) {
-        const d20 = DnD.regole.rollD20(t.mode || p.mode, rng);
-        const fumble = d20.natural === 1;
-        const total = d20.natural + caster.attack;
-        const hit = d20.natural === 20 || (!fumble && total >= t.ac);
-        const crit = d20.natural === 20 || Boolean(t.autoCrit && hit);
-        const r = hit ? rollDice(crit ? 2 : 1) : null;
-        out.targets.push({ id: t.id, d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble, roll: r, amount: r ? Math.max(0, r.total) : 0 });
+        const h = DnD.regole.rollToHit({ mode: t.mode || p.mode, toHit: caster.attack, targetAC: t.ac, autoCrit: t.autoCrit }, rng);
+        const r = h.hit ? rollDice(h.crit ? 2 : 1) : null;
+        out.targets.push(Object.assign({ id: t.id }, h, { roll: r, amount: r ? Math.max(0, r.total) : 0 }));
       }
     } else if (e.type === 'salvezza') {
       out.roll = rollDice(1);

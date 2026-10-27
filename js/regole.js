@@ -63,17 +63,24 @@
 
   // Risolve un attacco. 20 naturale: colpo critico (dadi di danno raddoppiati).
   // 1 naturale: fallimento automatico. Altrimenti colpisce se totale >= CA.
-  function resolveAttack(p, rng) {
+  /**
+   * Tiro per colpire (armi e incantesimi): 20 naturale colpisce sempre, 1 naturale manca sempre.
+   * @param {{mode: string, toHit: number, targetAC: number, autoCrit?: boolean}} p
+   * @returns {{d20Rolls: number[], natural: number, total: number, hit: boolean, crit: boolean, fumble: boolean}}
+   */
+  function rollToHit(p, rng) {
     const d20 = rollD20(p.mode, rng);
     const fumble = d20.natural === 1;
     const total = d20.natural + p.toHit;
     const hit = d20.natural === 20 || (!fumble && total >= p.targetAC);
     // Critico: 20 naturale, oppure ogni colpo a segno se la condizione del bersaglio lo rende automatico.
     const crit = d20.natural === 20 || Boolean(p.autoCrit && hit);
-    const result = {
-      d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble,
-      damageRolls: [], damageDiceCount: 0, damage: 0,
-    };
+    return { d20Rolls: d20.rolls, natural: d20.natural, total, hit, crit, fumble };
+  }
+
+  function resolveAttack(p, rng) {
+    const result = Object.assign(rollToHit(p, rng), { damageRolls: [], damageDiceCount: 0, damage: 0 });
+    const { hit, crit } = result;
     if (hit) {
       const dice = DnD.dadi.parseExpr(p.damageDice);
       const count = dice && dice.count ? dice.count * (crit ? 2 : 1) : 0;
@@ -291,7 +298,7 @@
   DnD.regole = {
     ABILITIES, ABILITY_NAMES, MODES,
     modifier, formatModifier, racialBonus, finalAbilities, asiPointsAvailable, asiPointsAssigned,
-    rollD20, resolveAttack, applyDamage, heal, hpLevel, isDown, dying,
+    rollD20, rollToHit, resolveAttack, applyDamage, heal, hpLevel, isDown, dying,
     sortByInitiative, firstTurn, nextTurn, waiting, rollInitiative,
     STANDARD_ARRAY, roll4d6DropLowest, shuffle, resolvePriority, randomizeAbilities,
     hitDieAverage, computeHp, ARMOR_TYPES, ARMOR_NAMES, ARMOR_BASE, computeAc,
