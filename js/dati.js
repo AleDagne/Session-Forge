@@ -6,10 +6,8 @@
   const DB_NAME = 'dnd-battaglie';
   const DB_STORE = 'kv';
   const DB_KEY = 'stato';
-  const VERSION = 18;
+  const { VERSION, LOG_MAX, DICE_HISTORY_MAX } = DnD.modello;
   const DEFAULT_SESSION_NAME = 'Sessione predefinita';
-  const DICE_HISTORY_MAX = 20;
-  const LOG_MAX = 500;
   const AB = () => DnD.regole.ABILITIES;
   const G = () => DnD.griglia;
 
@@ -213,11 +211,8 @@
   }
 
   // Dimensione sulla griglia: Automatica (dalla taglia della razza o della creatura) o w × h a scelta.
-  function normalizeGridSize(gs) {
-    gs = obj(gs);
-    const side = (v) => int(v, 1, 1, G().MAX_TOKEN);
-    return { auto: gs.auto !== false, w: side(gs.w), h: side(gs.h) };
-  }
+  // Dimensione sulla griglia: definita in griglia.js (serve anche alle regole), qui riesportata.
+  const normalizeGridSize = (gs) => G().normalizeGridSize(gs);
 
   function abilityList(v, max) {
     return [...new Set(arr(v).filter((ab) => AB().includes(ab)))].slice(0, max);
@@ -1323,22 +1318,18 @@
     return store;
   }
 
-  function pushDiceHistory(state, entry) {
-    state.diceHistory.unshift(entry);
-    state.diceHistory.length = Math.min(state.diceHistory.length, DICE_HISTORY_MAX);
-  }
-
-  function pushLog(combat, type, text) {
-    combat.log.push({ round: combat.round, type, text });
-    if (combat.log.length > LOG_MAX) combat.log.splice(0, combat.log.length - LOG_MAX);
-  }
+  // Definite in modello.js (base dello stato), qui riesportate.
+  const { pushDiceHistory, pushLog } = DnD.modello;
 
   DnD.dati = {
     VERSION, emptyState, defaultRaces, defaultStructures, defaultSpells, defaultMapObjects, defaultCreatures, makeBonuses,
     normalizeState, normalizeRace, normalizeCreature, normalizeWeapon, normalizeGridSize, normalizeStructure, normalizeEquipment, normalizeMapObject, normalizeSpell,
     normalizePlacedStructure, normalizePlacedItem, normalizeLabel, normalizeZone, normalizeBackground, normalizeGridContent, normalizeSavedGrid, normalizeGridDraft,
-    migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, addDefaultParties, defaultWorld, eachRawGrid, normalizeGridSize, parseCost, normalizeCombatant, normalizeCombat,
+    migrateV8, migrateV9, migrateV10, migrateV11, migrateV12, addDefaultParties, defaultWorld, eachRawGrid, parseCost, normalizeCombatant, normalizeCombat,
     normalizeSession, DEFAULT_SESSION_NAME, normalizeTileset, normalizeSource, normalizeTileProps, normalizeTiles,
     exportJSON, importJSON, parseSaved, openStore, saveErrorMessage, pushDiceHistory, pushLog,
   };
+
+  // Le regole con creature annidate (forme leggendarie, NPC, import di personaggi) normalizzano attraverso il modello.
+  DnD.modello.registraNormalizzaCreatura(normalizeCreature);
 })(globalThis.DnD = globalThis.DnD || {});

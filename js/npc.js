@@ -7,8 +7,7 @@
 // la fazione o aiuta il party; provocato diventa ostile secondo la regola: solo lui, la fazione, la città),
 // Informatore. Dialoghi ad albero con condizioni ed esiti. statoNpcPerGiocatore() è la vista dei giocatori.
 // Livello regole, gruppo Mondo. Espone DnD.npc; usa fazioni, citta, eventi, oggetti-mappa, attrezzatura, griglia, regole,
-// boss (isMonster), dati/mondo, dadi. Non deve toccare DOM, disco o rete. Da sistemare con lo stato (ciclo con dati.js):
-// normalizeNpc usa dati.normalizeCreature, che andrà in un modulo di normalizzazione sotto il Mondo.
+// boss (isMonster), dati/mondo, dadi, modello (normalizzaCreatura per la scheda riusata). Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -97,7 +96,7 @@
     const base = n.base === 'creatura' ? 'creatura' : 'standard';
     // Scheda riusata: standard (razza, classe, livello) o creatura del Manuale dei Mostri.
     const rawStats = Object.assign({}, obj(n.stats), { id: 'scheda', name: str(n.name, 60) || obj(n.stats).name, type: base === 'creatura' ? 'creatura' : 'standard' });
-    const stats = DnD.dati.normalizeCreature(rawStats, false);
+    const stats = DnD.modello.normalizzaCreatura(rawStats, false);
     delete stats.sessionId;
     delete stats.shared;
     return {

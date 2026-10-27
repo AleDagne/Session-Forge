@@ -5,7 +5,7 @@
 // con il danno in eccesso, usi e durata, fine anticipata), promozione e declassamento.
 // Livello regole, gruppo entità (sopra scheda e percorso). Espone DnD.leggendario; usa statistiche, scheda, percorso,
 // creature, boss, magie, movimento, griglia, classi, regole, dati/leggendario, dadi, icone. Non deve toccare il DOM.
-// Da sistemare con lo stato: usa dati.normalizeCreature e dati.normalizeGridSize.
+// Le forme normalizzano la creatura con modello.normalizzaCreatura.
 (function (DnD) {
   'use strict';
 
@@ -37,7 +37,7 @@
     const u = obj(t.uses);
     const d = obj(t.duration);
     const c = obj(t.creature);
-    const creature = DnD.dati.normalizeCreature(Object.assign({ name: t.name || 'Forma' }, c, { type: 'boss', boss: c.boss || { theme: 'infernale' } }), false);
+    const creature = DnD.modello.normalizzaCreatura(Object.assign({ name: t.name || 'Forma' }, c, { type: 'boss', boss: c.boss || { theme: 'infernale' } }), false);
     delete creature.sessionId;
     delete creature.shared;
     return {
@@ -57,7 +57,7 @@
       minRank: int(t.minRank, 0, 0, 20),
       requireNode: Boolean(t.requireNode),
       icon: DnD.icone.normalizeIcon(t.icon || creature.icon, false),
-      gridSize: DnD.dati.normalizeGridSize ? DnD.dati.normalizeGridSize(t.gridSize) : creature.gridSize,
+      gridSize: DnD.griglia.normalizeGridSize(t.gridSize),
       theme: THEMES.includes(t.theme) || (DnD.boss.THEME_IDS || []).includes(t.theme) ? t.theme : '',
       enterText: str(t.enterText, 2000),
       exitText: str(t.exitText, 2000),

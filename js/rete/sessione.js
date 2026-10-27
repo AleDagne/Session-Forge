@@ -270,7 +270,7 @@
             testo = p2.name + ': ' + DnD.npc.checkout(def, pz2.item.npcState, cart, b, F().contestoPrezzi(s2, se2, def, pz2.item.npcState));
             p2.inventory = b.inventory;
             p2.coins = b.coins;
-            if (se2.combat) DnD.dati.pushLog(se2.combat, 'sistema', '🛒 ' + testo);
+            if (se2.combat) DnD.modello.pushLog(se2.combat, 'sistema', '🛒 ' + testo);
           });
           return { testo };
         });
@@ -339,7 +339,7 @@
             const c2 = DnD.sessioni.current(s2).combat;
             const x2 = mioCombattente(g, c2);
             riga = I().applicaDelta(p2, x2, d);
-            if (c2) DnD.dati.pushLog(c2, 'sistema', riga);
+            if (c2) DnD.modello.pushLog(c2, 'sistema', riga);
           });
           return { testo: riga };
         });
@@ -359,7 +359,7 @@
           aggiornaStato((s2) => {
             r = I().trasferisci(s2.players.find((y) => y.id === p.id), s2.players.find((y) => y.id === dest.id), d.indice, d.qty, s2.equipment);
             const c2 = DnD.sessioni.current(s2).combat;
-            if (r.ok && c2) DnD.dati.pushLog(c2, 'sistema', '🎒 ' + p.name + ' dà ' + d.qty + ' × ' + r.nome + ' a ' + dest.name + '.');
+            if (r.ok && c2) DnD.modello.pushLog(c2, 'sistema', '🎒 ' + p.name + ' dà ' + d.qty + ' × ' + r.nome + ' a ' + dest.name + '.');
           });
           return r.ok ? { testo: p.name + ' dà ' + d.qty + ' × ' + r.nome + ' a ' + dest.name + '.' } : { ok: false, testo: r.testo };
         };

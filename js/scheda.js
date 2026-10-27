@@ -5,8 +5,7 @@
 // esportazione e importazione di un personaggio. I calcoli di base restano in regole.js, dati/classi.js, attrezzatura.js.
 // Livello regole, gruppo entità (sotto leggendario.js). Espone DnD.scheda; usa statistiche, regole, classi, attrezzatura,
 // condizioni, note (sanificazione della storia), dati/scheda, dati/creature, dadi, icone. Non deve toccare il DOM.
-// Il Percorso leggendario si aggancia con registraLivelloLeggendario. Da sistemare con lo stato: esporta/importa
-// personaggio usa dati.VERSION e dati.normalizeCreature.
+// Il Percorso leggendario si aggancia con registraLivelloLeggendario; l'import usa modello.normalizzaCreatura e VERSION.
 (function (DnD) {
   'use strict';
 
@@ -350,7 +349,7 @@
   // File: il personaggio con il background e i talenti che usa (per importarlo altrove).
   function exportCharacter(c, st) {
     return {
-      app: DnD.config ? DnD.config.APP_NAME : 'Session Forge', kind: 'personaggio', version: DnD.dati.VERSION, exportedAt: new Date().toISOString(),
+      app: DnD.config ? DnD.config.APP_NAME : 'Session Forge', kind: 'personaggio', version: DnD.modello.VERSION, exportedAt: new Date().toISOString(),
       character: clone(c),
       backgrounds: arr(st.backgrounds).filter((b) => b.id === c.sheet.background).map(clone),
       feats: arr(st.feats).filter((f) => c.sheet.features.some((x) => x.featId === f.id)).map(clone),
@@ -360,8 +359,8 @@
   // { player, backgrounds, feats, warnings } senza modificare lo stato.
   function importCharacter(raw, st, sessionId) {
     if (!raw || raw.kind !== 'personaggio' || !raw.character || typeof raw.character !== 'object') throw new Error('il file non contiene un personaggio di questa app.');
-    if (typeof raw.version === 'number' && raw.version > DnD.dati.VERSION) throw new Error('il personaggio viene da una versione più recente dell\'app.');
-    const player = DnD.dati.normalizeCreature(Object.assign({}, raw.character, { id: uid(), sessionId, shared: false }), true);
+    if (typeof raw.version === 'number' && raw.version > DnD.modello.VERSION) throw new Error('il personaggio viene da una versione più recente dell\'app.');
+    const player = DnD.modello.normalizzaCreatura(Object.assign({}, raw.character, { id: uid(), sessionId, shared: false }), true);
     const backgrounds = arr(raw.backgrounds).map(normalizeBackground).filter((b) => !arr(st.backgrounds).some((x) => x.id === b.id)).map((b) => Object.assign(b, { sessionId, shared: false }));
     const feats = arr(raw.feats).map(normalizeFeat).filter((f) => !arr(st.feats).some((x) => x.id === f.id)).map((f) => Object.assign(f, { sessionId, shared: false }));
     const after = Object.assign({}, st, { backgrounds: arr(st.backgrounds).concat(backgrounds), feats: arr(st.feats).concat(feats) });

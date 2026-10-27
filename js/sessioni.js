@@ -210,7 +210,7 @@
     return clone({
       app: DnD.config ? DnD.config.APP_NAME : 'Session Forge',
       kind: 'sessione',
-      version: DnD.dati.VERSION,
+      version: DnD.modello.VERSION,
       exportedAt: new Date().toISOString(),
       session,
       npcs,
@@ -249,7 +249,7 @@
   // griglie ricevono id nuovi, tranne quelli condivisi già presenti, che vengono riusati.
   function importSession(state, raw, newId) {
     if (!isSessionFile(raw) || !raw.session || typeof raw.session !== 'object') throw new Error('Il file non contiene una sessione.');
-    if (typeof raw.version === 'number' && raw.version > DnD.dati.VERSION) throw new Error('La sessione proviene da una versione più recente dell\'app.');
+    if (typeof raw.version === 'number' && raw.version > DnD.modello.VERSION) throw new Error('La sessione proviene da una versione più recente dell\'app.');
     const before12 = !(typeof raw.version === 'number' && raw.version >= 12);
     raw = DnD.dati.migrateV8(DnD.migrazioniTile.migrateRaw(clone(raw)));
     const D = DnD.dati;

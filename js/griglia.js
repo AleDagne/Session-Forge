@@ -549,12 +549,22 @@
    */
   const registraVisioneVuota = (fn) => { estensioni.visioneVuota = fn; };
 
+  /**
+   * Dimensione di una pedina sulla griglia { auto, w, h } (lati interi da 1 a MAX_TOKEN).
+   * @param {object} gs grezza
+   */
+  function normalizeGridSize(gs) {
+    gs = gs && typeof gs === 'object' && !Array.isArray(gs) ? gs : {};
+    const side = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(MAX_TOKEN, Math.max(1, n)) : 1; };
+    return { auto: gs.auto !== false, w: side(gs.w), h: side(gs.h) };
+  }
+
   DnD.griglia = {
     blockedCells, boardOf, isCellBlocked, objectBlocks, canPlaceItem, templateShape, placedFields, transformPlaced,
     SIZE, DEFAULT_SIZE, MIN_SIZE, MAX_SIZE, STRIDE, CELL_PX, MIN_ZOOM, MAX_ZOOM, MAX_TOKEN, PRESETS, PRESET_NAMES, TOKEN_SIZES, TOKEN_PRESETS,
     BG_FITS, BG_FIT_NAMES,
     dims, key, keyX, keyY, colLabel, cellLabel, shapeFrom, isFilled, presetShape, rotateShape, mirrorShape, resizeShape, squareShape, rectShape,
-    tokenSize, gridSizeFor, tokenDims, tokenShape, tokenCovers, tokenCells, cellsAt, inBounds, canPlaceToken, canPlaceStructure, findFreeSpot,
+    tokenSize, gridSizeFor, normalizeGridSize, tokenDims, tokenShape, tokenCovers, tokenCells, cellsAt, inBounds, canPlaceToken, canPlaceStructure, findFreeSpot,
     screenToCell, cellToScreen, zoomAt, cellDistance, tokenDistance, formatDistance, formatSpeed,
     backgroundRect, calibrate, resizeGrid, registraRidimensionamento, registraVisioneVuota,
     createHistory, gridSnapshot, restoreSnapshot, combatantKey, gridProps, createSavedGrid, applySavedGrid,

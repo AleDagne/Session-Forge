@@ -306,14 +306,14 @@
     if (st0.hidden) lines.push('👁 I nemici partono nascosti ai giocatori.');
     const env = [st0.light ? K().LIGHT_NAMES[st0.light] : '', st0.weather, st0.hour === null ? '' : 'ore ' + String(st0.hour).padStart(2, '0') + ':00'].filter(Boolean);
     if (env.length) lines.push('🌙 ' + env.join(' · ') + '.');
-    DnD.dati.pushLog(combat, 'sistema', '🎬 Scena «' + scene.title + '», incontro «' + enc.name + '»: combattimento ' + (opts.start === 'avvia' ? 'avviato' : 'preparato') + '.');
-    for (const l of lines) DnD.dati.pushLog(combat, 'sistema', l);
+    DnD.modello.pushLog(combat, 'sistema', '🎬 Scena «' + scene.title + '», incontro «' + enc.name + '»: combattimento ' + (opts.start === 'avvia' ? 'avviato' : 'preparato') + '.');
+    for (const l of lines) DnD.modello.pushLog(combat, 'sistema', l);
     if (opts.start === 'avvia') {
       const sorted = R.sortByInitiative(combat.combatants);
       combat.phase = 'attivo';
       combat.currentId = R.firstTurn(sorted);
       for (const x of combat.combatants) DnD.movimento.resetTurn(x);
-      DnD.dati.pushLog(combat, 'sistema', 'Inizia il combattimento. Ordine: ' + sorted.map((x) => x.name + ' (' + x.initiative + ')').join(', ') + '.');
+      DnD.modello.pushLog(combat, 'sistema', 'Inizia il combattimento. Ordine: ' + sorted.map((x) => x.name + ' (' + x.initiative + ')').join(', ') + '.');
     }
     return { combat, unplaced, missing, lines };
   }
