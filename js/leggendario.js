@@ -3,6 +3,9 @@
 // nodi sbloccati applicati ai calcoli della scheda e del combattimento (con il dettaglio «da: nodo»), privilegi
 // creati dall'utente come azioni a pulsanti, trasformazioni (regole di fusione, PF che passano al personaggio
 // con il danno in eccesso, usi e durata, fine anticipata), promozione e declassamento.
+// Livello regole, gruppo entità (sopra scheda e percorso). Espone DnD.leggendario; usa statistiche, scheda, percorso,
+// creature, boss, magie, movimento, griglia, classi, regole, dati/leggendario, dadi, icone. Non deve toccare il DOM.
+// Da sistemare con lo stato: usa dati.normalizeCreature e dati.normalizeGridSize.
 (function (DnD) {
   'use strict';
 
@@ -198,7 +201,7 @@
     if (save && isAbility) return d.saveTotals[what];
     if (isAbility) return R().modifier(d.abilities[what]);
     // Abilità: competenza e maestria dalla scheda, dai talenti e dal Percorso, «metà competenza», bonus a mano (scheda.js).
-    if (c.sheet && DnD.scheda) return DnD.scheda.skillBonus(c, what, d, DnD.scheda.featEffects(c, st && st.feats), st).total;
+    if (c.sheet && DnD.scheda) return DnD.scheda.skillBonus(c, what, d, DnD.statistiche.featEffects(c, st && st.feats), st).total;
     return R().modifier(d.abilities[SKILL_ABILITY()[what] || 'SAG']) + skillLevel(c, what, st) * d.profBonus;
   }
 
@@ -406,4 +409,7 @@
     normalizeLegend, normalizeTransformation, isLegendary, rank, points, effects, effectivePlayer, derived, hpParams, featureActions,
     applyToCombatant, available, usesLeft, skillLevel, checkBonus, dailySpells, fusedAbilities, transform, revert, damage, tick, promote, demote, rest,
   };
+
+  // Grado delle abilità dal Percorso: la scheda lo chiede senza conoscere questo modulo.
+  DnD.scheda.registraLivelloLeggendario(skillLevel);
 })(globalThis.DnD = globalThis.DnD || {});

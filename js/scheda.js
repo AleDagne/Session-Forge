@@ -3,6 +3,10 @@
 // carico e sintonia, PE e livelli, applicazione di un background (anteprima, senza duplicati), effetti dei
 // talenti, avanzamento di livello, incantesimi preparabili, avvisi della creazione guidata, riferimenti mancanti,
 // esportazione e importazione di un personaggio. I calcoli di base restano in regole.js, dati/classi.js, attrezzatura.js.
+// Livello regole, gruppo entità (sotto leggendario.js). Espone DnD.scheda; usa statistiche, regole, classi, attrezzatura,
+// condizioni, note (sanificazione della storia), dati/scheda, dati/creature, dadi, icone. Non deve toccare il DOM.
+// Il Percorso leggendario si aggancia con registraLivelloLeggendario. Da sistemare con lo stato: esporta/importa
+// personaggio usa dati.VERSION e dati.normalizeCreature.
 (function (DnD) {
   'use strict';
 
@@ -134,10 +138,16 @@
 
   // ---------- Abilità e passive ----------
   // Grado di competenza: il più alto tra scheda, talenti e Percorso leggendario.
+  // Grado dal Percorso leggendario: lo registra leggendario.js (sta sopra la scheda); senza, 0.
+  let livelloLeggendario = () => 0;
+  /**
+   * @param {(c: object, skill: string, st: object) => number} fn grado di competenza dato dal Percorso leggendario
+   */
+  const registraLivelloLeggendario = (fn) => { livelloLeggendario = fn; };
   function skillLevel(c, skill, fx, st) {
     const sheet = (c.sheet && c.sheet.skills[skill]) || 0;
     const feat = fx && fx.skills.includes(skill) ? 1 : 0;
-    const legend = DnD.leggendario && c.type === 'leggendario' ? DnD.leggendario.skillLevel(c, skill, st) : 0;
+    const legend = c.type === 'leggendario' ? livelloLeggendario(c, skill, st) : 0;
     return Math.max(sheet, feat, legend);
   }
   // Bonus di un'abilità: mod. + competenza × grado (maestria = doppia); senza competenza, «metà competenza» (per
@@ -360,7 +370,7 @@
 
   DnD.scheda = {
     normalizeSheet, normalizeFeature, normalizeProf, normalizeAlly, normalizeBackground, normalizeFeat, exampleBackgrounds, exampleFeats,
-    featEffects, addAbilities, asiAvailable, pointBuy, canBuy, pointBuyStart, skillLevel, skillBonus, skills, passive,
+    featEffects, addAbilities, asiAvailable, pointBuy, canBuy, pointBuyStart, skillLevel, skillBonus, skills, passive, registraLivelloLeggendario,
     initiative, speed, carry, attunement, canAttune, levelForXp, xpInfo, autoHp, applyBackground, profSuggestions, classSkillChoice,
     isCaster, preparable, maxSpellLevel, levelUp, STEPS, STEP_NAMES, missing, missingRefs, exportCharacter, importCharacter,
   };
