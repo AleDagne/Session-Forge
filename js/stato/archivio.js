@@ -167,6 +167,8 @@
   }
 
   DnD.archivio = { openStore, saveErrorMessage };
+  // Sorgente dello stato corrente per le regole (modello.statoCorrente): lo store aperto, se c'è.
+  DnD.modello.registraFonteStato(() => (DnD.store ? DnD.store.state : null));
   // DnD.dati resta la facciata pubblica dello stato (app.js, test): qui le si aggiungono le funzioni dell'archivio.
   Object.assign(DnD.dati, { openStore, saveErrorMessage });
 })(globalThis.DnD = globalThis.DnD || {});

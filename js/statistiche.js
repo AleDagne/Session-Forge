@@ -3,7 +3,7 @@
 // Sta sotto scheda, boss, leggendario, riposi e combattenti, che la usano tutti.
 // Livello regole, gruppo entità (base). Espone DnD.statistiche { derivedStats, autoAc, spellStats, catalogOf,
 // featEffects, addAbilities, initiative, speed }; usa regole, classi, magie, attrezzatura. Non deve toccare il DOM.
-// Eccezione (audit A6): talenti e catalogo predefiniti letti da DnD.store se il chiamante non li passa.
+// Talenti e catalogo predefiniti, se il chiamante non li passa: dallo stato corrente (modello.statoCorrente).
 (function (DnD) {
   'use strict';
 
@@ -12,7 +12,7 @@
   const arr = (v) => (Array.isArray(v) ? v : []);
 
   // ---------- Talenti della scheda ----------
-  const storeFeats = () => (DnD.store && DnD.store.state && DnD.store.state.feats) || [];
+  const storeFeats = () => { const st = DnD.modello.statoCorrente(); return (st && st.feats) || []; };
   // Talenti della scheda (privilegi con featId) e loro effetti sommati; i talenti eliminati finiscono in missing.
   function featEffects(c, feats) {
     const lib = feats || storeFeats();
@@ -76,7 +76,7 @@
   }
 
   // Catalogo dell'Attrezzatura (di base quello dell'archivio).
-  const catalogOf = (catalog) => catalog || (DnD.store ? DnD.store.state.equipment : []);
+  const catalogOf = (catalog) => catalog || (DnD.modello.statoCorrente() || { equipment: [] }).equipment;
 
   // CA automatica: armatura e scudo del catalogo se scelti, altrimenti i campi scritti a mano.
   function autoAc(c, abilities, unarmored, catalog) {

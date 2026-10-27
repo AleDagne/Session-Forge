@@ -9,8 +9,8 @@
 // "above" = sopra le pedine. overrides: per cella "-" (normale), "b" (bloccata), "l" (libera).
 // Modalità "immagine" (strutture e oggetti): la sorgente intera, un tile per cella, con la maschera
 // dei tile selezionati come ingombro.
-// Livello regole (gruppo mappa). Espone DnD.tilemap; usa DnD.tileset. Non deve toccare il DOM. Eccezione da togliere
-// col riordino dello stato (audit A6): storeIndex() legge i TileSet da DnD.store se il chiamante non li passa.
+// Livello regole (gruppo mappa). Espone DnD.tilemap; usa DnD.tileset. Non deve toccare il DOM. storeIndex(): TileSet
+// dello stato corrente (modello.statoCorrente) se il chiamante non li passa.
 // L'ingombro (footprint) è in collisioni.js.
 (function (DnD) {
   'use strict';
@@ -53,7 +53,7 @@
   }
 
   const tilesetIndex = (list) => Object.fromEntries((list || []).map((t) => [t.id, t]));
-  const storeIndex = () => (DnD.store ? tilesetIndex(DnD.store.state.tilesets) : {});
+  const storeIndex = () => { const st = DnD.modello.statoCorrente(); return st ? tilesetIndex(st.tilesets) : {}; };
 
   // Indice del TileSet nella tilemap (lo aggiunge se manca: più TileSet nella stessa mappa).
   function tilesetRef(t, tilesetId) {

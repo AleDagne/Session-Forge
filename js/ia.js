@@ -12,7 +12,7 @@
 // - Tetto di tempo con ripiego, casualità riproducibile con il seed del combattimento.
 // Livello regole, gruppo entità (sopra creature, mappa e Mondo). Espone DnD.ia; usa ia-comportamento, creature, boss,
 // condizioni, magie, movimento, visione, griglia, collisioni, fazioni, misure, dati/ia, classi, dadi. Non deve toccare
-// DOM, disco o rete né modificare lo stato. Eccezione (audit A6): tilemap.storeIndex() se i TileSet non vengono passati.
+// DOM, disco o rete né modificare lo stato. TileSet predefiniti: tilemap.storeIndex().
 (function (DnD) {
   'use strict';
 

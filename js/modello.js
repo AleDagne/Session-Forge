@@ -47,6 +47,13 @@
     return Boolean(raw && typeof raw === 'object' && raw.kind === 'sessione');
   }
 
+  // Stato corrente dell'app, per i valori predefiniti delle regole (talenti, catalogo, TileSet) quando chi chiama
+  // non li passa. La sorgente la registra lo stato (stato/archivio.js); senza, null.
+  let fonteStato = () => null;
+  /** @param {() => object|null} fn */
+  const registraFonteStato = (fn) => { fonteStato = fn; };
+  const statoCorrente = () => fonteStato();
+
   function pushDiceHistory(state, entry) {
     state.diceHistory.unshift(entry);
     state.diceHistory.length = Math.min(state.diceHistory.length, DICE_HISTORY_MAX);
@@ -72,5 +79,5 @@
     return normalizzatore(c, isPlayer);
   }
 
-  DnD.modello = { VERSION, LOG_MAX, DICE_HISTORY_MAX, current, isVisible, visible, isSessionFile, pushDiceHistory, pushLog, registraNormalizzaCreatura, normalizzaCreatura };
+  DnD.modello = { VERSION, LOG_MAX, DICE_HISTORY_MAX, current, isVisible, visible, isSessionFile, pushDiceHistory, pushLog, registraNormalizzaCreatura, normalizzaCreatura, registraFonteStato, statoCorrente };
 })(globalThis.DnD = globalThis.DnD || {});

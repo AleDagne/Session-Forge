@@ -2,7 +2,7 @@
 // a partire dalle schede salvate. I valori derivati sono in statistiche.js.
 // Livello regole, in cima al gruppo entità. Espone DnD.combattenti { toCombatant, createCombatants }; usa statistiche,
 // regole, leggendario, boss, creature, riposi, griglia, movimento, visione, ia-comportamento, attrezzatura, dadi.
-// Non deve toccare il DOM. Eccezione (audit A6): il catalogo predefinito dell'Attrezzatura viene da DnD.store.
+// Non deve toccare il DOM. Catalogo predefinito: statistiche.catalogOf.
 (function (DnD) {
   'use strict';
 

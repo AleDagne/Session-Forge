@@ -6,7 +6,7 @@
 // `visioneGiocatore()` (lo stato filtrato che il master può mandare ai giocatori). I raggi sono in piedi.
 // Livello regole (gruppo mappa), sopra griglia. Espone DnD.visione (unica fonte di «chi vede chi»: canSee); usa
 // DnD.misure, dati/visione, griglia, tilemap, collisioni, condizioni, movimento, eventi, dadi. Non deve toccare il DOM
-// (il disegno è in ui-visione.js). Eccezione (audit A6): tilemap.storeIndex() se i TileSet non vengono passati.
+// (il disegno è in ui-visione.js). TileSet predefiniti: tilemap.storeIndex().
 (function (DnD) {
   'use strict';
 
