@@ -1971,6 +1971,7 @@ js/ui-quest.js        Mondo › Quest: editor, offerta, consegna, diario
 js/ui-scheda.js       scheda del giocatore: pagine, creazione guidata, vista di gioco, stampa, livelli, librerie
 js/ui-scene.js        Scene: scaletta, linea, editor di scene e incontri, libreria, lancio, scena in corso, ricompense
 js/dati/ia.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
+js/ia-comportamento.js comportamento dei nemici (temperamento, archetipo, fuga…), controllo e fazione di partenza
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»
 js/note.js            note del master (logica pura): sanificazione, testo, pagine, salvataggio automatico

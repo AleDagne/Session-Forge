@@ -10,29 +10,20 @@
 //   del turno (velocità in piedi / piedi per cella, condizioni comprese); con lo Scatto si aggiunge la velocità.
 // - Visibilità: linea di vista tra le celle, esclusi i combattenti nascosti e quelli a 0 PF.
 // - Tetto di tempo con ripiego, casualità riproducibile con il seed del combattimento.
+// Livello regole, gruppo entità (sopra creature, mappa e Mondo). Espone DnD.ia; usa ia-comportamento, creature, boss,
+// condizioni, magie, movimento, visione, griglia, collisioni, fazioni, misure, dati/ia, classi, dadi. Non deve toccare
+// DOM, disco o rete né modificare lo stato. Eccezione (audit A6): tilemap.storeIndex() se i TileSet non vengono passati.
 (function (DnD) {
   'use strict';
 
   const K = () => DnD.iaDati;
   const G = () => DnD.griglia;
   const R = () => DnD.regole;
-  const AB = ['FOR', 'DES', 'COS', 'INT', 'SAG', 'CAR'];
+  const AB = DnD.regole.ABILITIES;
 
   // ---------- Comportamento ----------
-  function normalizeBehavior(b) {
-    b = b && typeof b === 'object' ? b : {};
-    const int = (v, def, min, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
-    return {
-      temperament: K().TEMPERAMENTS.includes(b.temperament) ? b.temperament : 'aggressivo',
-      archetype: AB.includes(b.archetype) ? b.archetype : 'auto',
-      preferredRange: b.preferredRange === null || b.preferredRange === undefined || b.preferredRange === '' ? null : int(b.preferredRange, null, 1, 100),
-      fleeAt: int(b.fleeAt, 0, 0, 90),
-      randomness: int(b.randomness, 0, 0, 30),
-      sagTargets: Array.isArray(b.sagTargets) ? [...new Set(b.sagTargets.filter((x) => typeof x === 'string' && x.length <= 40))].slice(0, 20) : K().SAG_TARGETS.slice(),
-    };
-  }
-  const defaultControl = (kind) => (kind === 'player' ? 'manuale' : 'ia');
-  const defaultFaction = (kind) => (kind === 'player' ? 'giocatori' : 'nemici');
+  // Comportamento, controllo e fazione di partenza: in ia-comportamento.js (servono anche a creature.js).
+  const { normalizeBehavior, defaultControl, defaultFaction } = DnD.iaComportamento;
   // Fazioni del Mondo: l'IA attacca solo chi è Ostile o In guerra, supporta Alleati e Amichevoli e ignora i
   // Neutrali (fazioni.relazioneCombattenti, con le ostilità personali degli NPC provocati). rel = state.relations
   // (istantanea delle fazioni della sessione); senza, valgono le relazioni di partenza delle tre predefinite

@@ -3,6 +3,8 @@
 // abilità, tiri salvezza, Percezione passiva), testo delle azioni in italiano nello stile del manuale,
 // difese ai danni (valide per ogni combattente), combattimento (attacchi, salvezze, multiattacco, ricarica,
 // usi giornalieri, Resistenza leggendaria, azioni leggendarie) e stima del grado di sfida (Guida del DM).
+// Livello regole, gruppo entità. Espone DnD.creature; usa regole, condizioni, movimento, visione, griglia,
+// ia-comportamento, dati/creature, dadi. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -457,7 +459,7 @@
       creature: combatState(c),
       // Sensi della scheda (in metri) in piedi, per la luce e la visione (visione.js).
       senses: DnD.visione.sensesFromCreature(c),
-      control: 'ia', faction: 'nemici', behavior: DnD.ia.normalizeBehavior(c.behavior), abilities: Object.assign({}, c.abilities),
+      control: 'ia', faction: 'nemici', behavior: DnD.iaComportamento.normalizeBehavior(c.behavior), abilities: Object.assign({}, c.abilities),
       classId: '', level: Math.max(1, Math.round(crValue(c.cr))), hidden: false,
       spellcasting: innate.length ? {
         attack: c.innate.attackOverride === null ? prof(c) + imod : c.innate.attackOverride,
