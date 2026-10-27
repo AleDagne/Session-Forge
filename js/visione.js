@@ -4,6 +4,9 @@
 // simmetrica), mappa della luce, sensi dei combattenti, celle visibili a una pedina (anche multi-cella), chi vede chi,
 // modificatori d'attacco, nebbia per i giocatori (manuale, automatica, mista, memoria, stanze), pennelli e
 // `visioneGiocatore()` (lo stato filtrato che il master può mandare ai giocatori). I raggi sono in piedi.
+// Livello regole (gruppo mappa), sopra griglia. Espone DnD.visione (unica fonte di «chi vede chi»: canSee); usa
+// DnD.misure, dati/visione, griglia, tilemap, collisioni, condizioni, movimento, eventi, dadi. Non deve toccare il DOM
+// (il disegno è in ui-visione.js). Eccezione (audit A6): tilemap.storeIndex() se i TileSet non vengono passati.
 (function (DnD) {
   'use strict';
 
@@ -211,8 +214,8 @@
   }
 
   // Piedi per cella: quelli della griglia di battaglia; nelle mappe di esplorazione dalla scala (1,5 km = 4921 ft).
-  const feetPerCell = (grid) => (grid.kind === 'esplorazione' && grid.scale && DnD.esplorazione
-    ? Math.max(1, Math.round(DnD.esplorazione.scaleKm(grid.scale) * 3280.84)) : grid.feetPerCell || 5);
+  const feetPerCell = (grid) => (grid.kind === 'esplorazione' && grid.scale
+    ? Math.max(1, Math.round(DnD.misure.kmDaScala(grid.scale) * DnD.misure.PIEDI_PER_KM)) : grid.feetPerCell || DnD.misure.PIEDI_PER_CASELLA);
   const rectOf = (e, pos) => { const d = G().tokenDims(e); return { x0: pos.x, y0: pos.y, x1: pos.x + d.w - 1, y1: pos.y + d.h - 1 }; };
   const centerOf = (r) => ({ x: Math.floor((r.x0 + r.x1) / 2), y: Math.floor((r.y0 + r.y1) / 2), cx: (r.x0 + r.x1) / 2, cy: (r.y0 + r.y1) / 2 });
   // Sorgenti accese: piazzate, di strutture e oggetti, portate dalle pedine. { x, y (cella), cx, cy, bright, dim, color, flicker, dark, ref }

@@ -11,6 +11,18 @@
   // Tolleranza per gli errori di virgola mobile (es. 4,5 / 1,5 = 2,9999…).
   const EPSILON = 1e-9;
 
+  // Scala delle mappe di esplorazione (1 cella = valore + unità): chilometri per unità; piedi in un chilometro
+  // (conversione esatta, usata per i raggi di vista sulle mappe in scala).
+  const KM_PER_UNITA = { ft: 0.0003048, m: 0.001, km: 1, mi: 1.609344 };
+  const PIEDI_PER_KM = 3280.84;
+
+  /**
+   * Chilometri coperti da una cella di una mappa in scala.
+   * @param {{value: number, unit: 'ft'|'m'|'km'|'mi'}} scala
+   * @returns {number}
+   */
+  const kmDaScala = (scala) => scala.value * KM_PER_UNITA[scala.unit];
+
   /**
    * Caselle intere coperte da una distanza in metri (per difetto).
    * @param {number} metri
@@ -18,5 +30,5 @@
    */
   const celleDaMetri = (metri) => Math.floor(metri / METRI_PER_CASELLA + EPSILON);
 
-  DnD.misure = { METRI_PER_CASELLA, PIEDI_PER_CASELLA, METRI_PER_PIEDE, EPSILON, celleDaMetri };
+  DnD.misure = { METRI_PER_CASELLA, PIEDI_PER_CASELLA, METRI_PER_PIEDE, EPSILON, KM_PER_UNITA, PIEDI_PER_KM, celleDaMetri, kmDaScala };
 })(globalThis.DnD = globalThis.DnD || {});

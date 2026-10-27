@@ -1908,7 +1908,7 @@ js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti 
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo, verifica di un percorso proposto (walk)
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
 js/combattenti.js     valori derivati (razza, classe, scheda, catalogo) e costruzione dei combattenti di uno scontro
-js/dati/misure.js     misure della griglia: 1 casella = 5 ft = 1,5 m, caselle da metri
+js/dati/misure.js     misure: 1 casella = 5 ft = 1,5 m, caselle da metri, scala delle mappe di esplorazione in km
 js/dati/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/dati/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
 js/generatore.js      logica pura del generatore di nemici

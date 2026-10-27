@@ -9,7 +9,7 @@
   const KINDS = ['battaglia', 'esplorazione'];
   const UNITS = ['ft', 'm', 'km', 'mi'];
   const UNIT_NAMES = { ft: 'piedi', m: 'metri', km: 'km', mi: 'miglia' };
-  const UNIT_KM = { ft: 0.0003048, m: 0.001, km: 1, mi: 1.609344 };
+  const UNIT_KM = DnD.misure.KM_PER_UNITA;
   const SCALE_PRESETS = [{ value: 5, unit: 'ft' }, { value: 100, unit: 'm' }, { value: 1, unit: 'km' }, { value: 1.5, unit: 'km' }, { value: 6, unit: 'mi' }];
   const DEFAULT_SCALE = { value: 1.5, unit: 'km' };
   const LOG_MAX = 500;
@@ -30,7 +30,7 @@
 
   // ---------- Scala ----------
   const normalizeScale = (s) => { s = obj(s); return { value: num(s.value, DEFAULT_SCALE.value, 0.01, 100000), unit: UNITS.includes(s.unit) ? s.unit : DEFAULT_SCALE.unit }; };
-  const scaleKm = (s) => s.value * UNIT_KM[s.unit];
+  const scaleKm = (s) => DnD.misure.kmDaScala(s);
   const fmt = (n) => String(round2(n)).replace('.', ',');
   const scaleLabel = (s) => '1 cella = ' + fmt(s.value) + ' ' + UNIT_NAMES[s.unit];
   const formatDistance = (cells, s) => cells + (cells === 1 ? ' cella' : ' celle') + ' = ' + fmt(cells * s.value) + ' ' + UNIT_NAMES[s.unit];
