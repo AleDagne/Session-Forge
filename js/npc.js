@@ -6,6 +6,9 @@
 // oggetti sbloccati dalla reputazione), Datore di quest, Combattente neutrale (non attacca; difende se stesso,
 // la fazione o aiuta il party; provocato diventa ostile secondo la regola: solo lui, la fazione, la città),
 // Informatore. Dialoghi ad albero con condizioni ed esiti. statoNpcPerGiocatore() è la vista dei giocatori.
+// Livello regole, gruppo Mondo. Espone DnD.npc; usa fazioni, citta, eventi, oggetti-mappa, attrezzatura, griglia, regole,
+// boss (isMonster), dati/mondo, dadi. Non deve toccare DOM, disco o rete. Da sistemare con lo stato (ciclo con dati.js):
+// normalizeNpc usa dati.normalizeCreature, che andrà in un modulo di normalizzazione sotto il Mondo.
 (function (DnD) {
   'use strict';
 

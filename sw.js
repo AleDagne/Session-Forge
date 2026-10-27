@@ -1,6 +1,6 @@
 // Service worker minimale: mette in cache i file dell'app per l'uso offline.
 // Aumenta CACHE quando modifichi i file, così i client scaricano la nuova versione.
-const CACHE = 'session-forge-v54';
+const CACHE = 'session-forge-v55';
 const FILES = [
   './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './css/dadi.css', './icons/icon.svg', './js/impostazioni.js',
   './js/config.js', './js/dati/misure.js', './js/modello.js', './js/dadi.js', './js/regole.js', './js/combattenti.js', './js/dati/classi.js', './js/magie.js', './js/dati/equipaggiamento.js', './js/dati/nomi.js', './js/dati/colori.js',
