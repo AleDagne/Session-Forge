@@ -6853,7 +6853,7 @@
     return p;
   }
   const leggiFixture = async (nome) => {
-    const res = await fetch('test/fixture/' + nome);
+    const res = await fetch('test/fixture/' + nome, { cache: 'no-store' });
     if (!res.ok) throw new Error('fixture ' + nome + ' non trovata (apri test.html da un server)');
     return res.text();
   };
@@ -6876,7 +6876,7 @@
   // index.html, test.html e sw.js elencano gli stessi script (test.html: senza app.js, con test.js) e gli stessi CSS.
   test('Elenchi dei file: index.html, test.html e cache del service worker allineati', async () => {
     if (location.protocol === 'file:') return;
-    const testo = async (url) => (await fetch(url)).text();
+    const testo = async (url) => (await fetch(url, { cache: 'no-store' })).text();
     const [index, pagina, sw] = await Promise.all([testo('index.html'), testo('test.html'), testo('sw.js')]);
     const script = (html) => [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
     const css = (html) => [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);

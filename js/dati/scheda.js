@@ -1,6 +1,7 @@
 // Scheda del giocatore (dati modificabili): allineamenti, acquisto punti, soglie di PE, livelli dei punti
 // caratteristica, carico e sintonia, competenze e abilità offerte dalle classi, equipaggiamento e oro iniziali,
 // privilegi suggeriti, sei background e otto talenti ORIGINALI (scritti per questa app, modificabili).
+// Livello dati. Espone DnD.schedaDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

@@ -1,6 +1,7 @@
 // Tabelle delle creature (formato del Manuale dei Mostri, regole 5e): taglie, tipi, gradi di sfida,
 // bonus di competenza e PE, tipi di danno, condizioni, abilità, tabella della Guida del DM per la stima
 // del grado di sfida e tre creature d'esempio ORIGINALI (inventate per questa app, modificabili ed eliminabili).
+// Livello dati. Espone DnD.creatureDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

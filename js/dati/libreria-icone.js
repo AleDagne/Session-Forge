@@ -1,8 +1,9 @@
 // Libreria di icone predefinite (dati): silhouette SVG semplici e ORIGINALI, disegnate per questa app
 // (nessun file esterno, nessun personaggio o mostro di opere protette: solo versioni generiche).
 // Ogni icona è il contenuto di un <svg viewBox="0 0 64 64">: {c} = colore scelto, {d} = dettagli scuri,
-// {l} = dettagli chiari. Pedine: palette di 14 colori (colori.js), {c} diventa currentColor. Oggetti: colore libero.
+// {l} = dettagli chiari. Pedine: palette di 14 colori (dati/colori.js), {c} diventa currentColor. Oggetti: colore libero.
 // Il quinto campo facoltativo delle creature è la dimensione suggerita sulla griglia (lato in celle).
+// Livello dati. Espone DnD.libreriaIcone; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

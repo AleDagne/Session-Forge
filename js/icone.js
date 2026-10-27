@@ -1,11 +1,11 @@
-// Icone di creature e oggetti: forme geometriche, immagini e icone della libreria (vedi libreria-icone.js).
+// Icone di creature e oggetti: forme geometriche, immagini e icone della libreria (vedi dati/libreria-icone.js).
 // Normalizzazione e SVG (puri) e disegno su canvas.
 (function (DnD) {
   'use strict';
 
   const SHAPES = ['cerchio', 'quadrato', 'triangolo', 'rombo', 'esagono', 'stella'];
   const SHAPE_NAMES = { cerchio: 'Cerchio', quadrato: 'Quadrato', triangolo: 'Triangolo', rombo: 'Rombo', esagono: 'Esagono', stella: 'Stella' };
-  // Le creature usano solo i colori della palette (vedi colori.js).
+  // Le creature usano solo i colori della palette (vedi dati/colori.js).
   const CREATURE_COLORS = {};
   DnD.colori.PALETTE.forEach((c) => { CREATURE_COLORS[c.key] = c.hex; });
   const DEFAULT_COLOR = CREATURE_COLORS.grigio;
@@ -18,7 +18,7 @@
     return typeof v === 'string' && v.length <= MAX_DATA_URL && DATA_URL.test(v);
   }
 
-  // ---------- Libreria di icone predefinite (vedi libreria-icone.js) ----------
+  // ---------- Libreria di icone predefinite (vedi dati/libreria-icone.js) ----------
   const LIB = () => DnD.libreriaIcone || { LIBRARY: [], ITEM_LIBRARY: [] };
   const libraryEntry = (id) => LIB().LIBRARY.find((x) => x.id === id) || LIB().ITEM_LIBRARY.find((x) => x.id === id) || null;
   const DETAIL_DARK = 'rgba(0,0,0,0.45)';

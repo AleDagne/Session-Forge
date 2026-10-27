@@ -6,7 +6,7 @@
 // e il piano si esegue con le stesse funzioni dei comandi manuali (attacco, incantesimi, azioni delle creature).
 // Boss: dopo ogni azione si controllano le soglie di fase (boss.js) e si mostrano barra in alto, ombra ed effetti.
 // Suoni: mutate() traduce gli esiti già calcolati (nuove righe del log, PF dei giocatori, forme dei leggendari) in
-// eventi sonori (suoni-dati.js) e li mette in coda; nei turni automatici dell'IA restano solo i principali.
+// eventi sonori (dati/suoni.js) e li mette in coda; nei turni automatici dell'IA restano solo i principali.
 (function (DnD) {
   'use strict';
 

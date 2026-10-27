@@ -1,5 +1,5 @@
 // Effetti sonori: l'unico modulo che conosce la Web Audio API. Il resto dell'app chiama soltanto
-// DnD.audio.suona('critico') e simili; eventi, ricette e impostazioni stanno in suoni-dati.js.
+// DnD.audio.suona('critico') e simili; eventi, ricette e impostazioni stanno in dati/suoni.js.
 // - Sintesi nel codice (oscillatori, rumore filtrato, inviluppi): nessun file, nessuna libreria, nessuna rete.
 // - Slot: ogni evento può usare un file dell'utente (mp3, ogg, wav, massimo 2 MB) salvato una volta in IndexedDB
 //   (chiave "snd:<id>", id = impronta del contenuto), decodificato una volta e tenuto in cache. File mancante o

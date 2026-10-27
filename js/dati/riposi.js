@@ -1,5 +1,6 @@
 // Riposi (dati): durate, varianti per il master (eroico, gritty), regola delle 24 ore e regole di ripristino
 // delle risorse. Valori modificabili qui; la logica è in riposi.js.
+// Livello dati. Espone DnD.riposiDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

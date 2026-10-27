@@ -1041,7 +1041,7 @@
     return raw;
   }
 
-  // Esempi originali del Mondo (mondo-dati.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
+  // Esempi originali del Mondo (dati/mondo.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
   function defaultWorld(sessionId) {
     const E = DnD.mondoDati.EXAMPLES;
     const own = (x) => Object.assign(JSON.parse(JSON.stringify(x)), { sessionId, shared: true });

@@ -1,5 +1,6 @@
 // Scene e incontri (dati): tipi e stati delle scene, esiti e collegamenti, condizioni di inizio e fine degli
 // incontri, generatore di incontri e tre incontri d'esempio ORIGINALI (inventati per questa app, modificabili).
+// Livello dati. Espone DnD.sceneDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -30,7 +31,7 @@
   const GEN_MAX_PER_KIND = 8;
   const GEN_OPTIONS = 5;
 
-  // Incontri d'esempio: usano le creature d'esempio (creature-dati.js); se mancano compare un avviso.
+  // Incontri d'esempio: usano le creature d'esempio (dati/creature.js); se mancano compare un avviso.
   const EXAMPLES = [
     {
       id: 'incontro-esempio-agguato', name: 'Agguato nella palude', shared: true,

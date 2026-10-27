@@ -1,5 +1,6 @@
 // Palette delle pedine e delle icone della libreria (dati): 14 colori con nome italiano ed esadecimale.
 // I primi 4 sono quelli delle versioni precedenti (stessi valori, così i dati esistenti restano validi).
+// Livello dati. Espone DnD.colori; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

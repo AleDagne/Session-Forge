@@ -1,6 +1,7 @@
 // Luce, visione e nebbia di guerra (dati): livelli di luce con le regole, luce ambientale (anche dall'ora e dal
 // bioma), sorgenti di luce trasportabili, incantesimi di luce e oscurità, sensi, modalità della nebbia e celle
 // della vista. Tutti i raggi sono in piedi (si convertono in celle con i piedi per cella della mappa).
+// Livello dati. Espone DnD.visioneDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

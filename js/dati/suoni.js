@@ -7,6 +7,7 @@
 //     at: inizio (s), dur: durata (s), a: attacco (s), g: picco 0–1,
 //     filtro: { tipo: lowpass|highpass|bandpass, f: Hz o [inizio, fine], q }, colpetti: Hz (rumore a colpetti) }
 // estendibile: la durata segue opts.durata (il rotolio dura quanto l'animazione dei dadi).
+// Livello dati. Espone DnD.suoniDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

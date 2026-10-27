@@ -1,6 +1,6 @@
 // Difficoltà degli incontri (metodo della Guida del DM), solo logica: soglie di PE del party, PE grezzi dal grado
 // di sfida, moltiplicatore per numero di creature (corretto per party piccoli e grandi), fasce, PE di ricompensa,
-// chi conta (fazioni del Mondo), «Bilancia» e «Budget». Le tabelle sono in difficolta-dati.js; le regole della
+// chi conta (fazioni del Mondo), «Bilancia» e «Budget». Le tabelle sono in dati/difficolta.js; le regole della
 // casa (tabelle personalizzate, soglie dei leggendari) stanno nello stato (difficultyRules).
 (function (DnD) {
   'use strict';

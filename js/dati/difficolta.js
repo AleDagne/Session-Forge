@@ -1,6 +1,7 @@
 // Tabelle della difficoltà degli incontri (metodo della Guida del Dungeon Master): soglie di PE per personaggio,
 // moltiplicatori per numero di creature, correzione per party piccolo o grande, fasce. Modificabili: le regole
 // della casa si scrivono nelle «tabelle personalizzate» (Impostazioni › Difficoltà), che partono da queste.
+// Livello dati. Espone DnD.difficoltaDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

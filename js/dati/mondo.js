@@ -1,5 +1,6 @@
 // Mondo (dati): fazioni predefinite, livelli di relazione, soglie ed effetti della reputazione, atteggiamenti,
 // ruoli degli NPC, dimensioni delle città, stati e obiettivi delle quest. Valori e tabelle modificabili qui.
+// Livello dati. Espone DnD.mondoDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

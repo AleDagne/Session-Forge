@@ -1,5 +1,6 @@
 // IA dei nemici (dati): pesi dei punteggi di debolezza e di minaccia, classi bersaglio predefinite per SAG,
 // classi incantatrici, temperamenti, archetipi e costanti del pianificatore. Modificabili qui.
+// Livello dati. Espone DnD.iaDati; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

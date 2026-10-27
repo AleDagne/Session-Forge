@@ -232,7 +232,7 @@ Le distanze tra combattenti si misurano tra le celle più vicine delle due pedin
 
 ### Colori
 
-Pedine e icone della libreria usano una palette di **14 colori** definita in un solo file (`js/colori.js`, nome
+Pedine e icone della libreria usano una palette di **14 colori** definita in un solo file (`js/dati/colori.js`, nome
 italiano ed esadecimale): verde, blu, rosso, grigio, arancione, giallo, viola, rosa, azzurro, turchese, marrone,
 nero, bianco, oro. Il selettore è una griglia di pallini con il nome nel tooltip; le immagini caricate usano il
 colore come bordo. Bordo e contorno di contrasto sono automatici (chiaro sui colori scuri, scuro sui chiari);
@@ -242,7 +242,7 @@ stessi valori, quindi i dati esistenti restano validi. Gli oggetti mantengono il
 ### Icone
 
 Il selettore dell'icona ha tre schede: **Forma** (geometrica), **Libreria** (icone predefinite con ricerca e
-filtro per categoria) e **Immagine** (dal computer). La libreria (`js/libreria-icone.js`) contiene 82 silhouette
+filtro per categoria) e **Immagine** (dal computer). La libreria (`js/dati/libreria-icone.js`) contiene 82 silhouette
 originali e generiche per le pedine e 17 icone per gli oggetti con colore libero, tutte SVG inline. Categorie
 delle pedine: Umanoidi, Bestie, Mostri, **Draghi** (alato in volo, a figura intera, testa, viverna, serpentino,
 cucciolo), **Dinosauri** (tirannosauro, raptor, triceratopo, pterodattilo, brontosauro, stegosauro, uovo),
@@ -316,7 +316,7 @@ multiattacco se ci sono più armi); l'originale resta invariato.
 
 ## Scheda del giocatore
 
-Logica pura e testata in `js/scheda.js`, dati modificabili in `js/scheda-dati.js`, interfaccia in `js/ui-scheda.js`. La
+Logica pura e testata in `js/scheda.js`, dati modificabili in `js/dati/scheda.js`, interfaccia in `js/ui-scheda.js`. La
 creazione e la modifica di un giocatore (anche leggendario) avvengono sulla **scheda a pagine**, organizzata come la
 scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`regole.derivedStats`, classi, razze,
 Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima.
@@ -336,7 +336,7 @@ Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima
   (manuali o auto con media/tiri), attuali e temporanei, dadi vita, tiri contro la morte; **attacchi** dalle armi del
   catalogo (bonus e danni calcolati) più righe libere, con «⚔ Attacca» (apre il combattimento in corso);
   **equipaggiamento** (quantità, equipaggiato, peso, sintonia massimo 3), monete, peso e capacità (FOR × 7,5 kg,
-  regola in `scheda-dati.js` e a mano) con l'avviso di sovraccarico. A destra tratti, ideali, legami e difetti (con i
+  regola in `dati/scheda.js` e a mano) con l'avviso di sovraccarico. A destra tratti, ideali, legami e difetti (con i
   suggerimenti del background) e **privilegi e tratti** (fonte, usi a volontà o per riposo; suggeriti dalla classe;
   **talenti** dalla libreria, anche al posto di 2 punti caratteristica, con il contatore dei punti che si aggiorna).
 - **Pagina 2 — Storia**: aspetto, ritratto (separato dalla pedina), storia del personaggio (editor delle note,
@@ -355,7 +355,7 @@ Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima
   uscire quando si vuole: i campi mancanti sono segnalati ma non bloccano il salvataggio.
 - **⬆ Sali di livello**: PF (media, tiro o a mano, più i talenti), 2 punti caratteristica o un talento ai livelli
   giusti, nuovi incantesimi e privilegi da compilare, riepilogo (PF, competenza, slot) prima di confermare e
-  «↶ Annulla la salita» dopo. Soglie di PE in `scheda-dati.js`.
+  «↶ Annulla la salita» dopo. Soglie di PE in `dati/scheda.js`.
 - **Librerie** (Giocatori › Background e › Talenti, per sessione con «Condividi»): sei background e otto talenti
   originali d'esempio; i talenti hanno effetti numerici facoltativi applicati ai calcoli (caratteristiche, competenze
   in abilità e salvezze, CA, PF, velocità, iniziativa).
@@ -527,7 +527,7 @@ chiusura e schede sugli schermi stretti, preferenze proprie):
 Voce di menù **Mondo** (Alt+0) con le schede **Fazioni**, **Città**, **NPC** e **Quest**, più la scheda
 **Giocatori › ⚑ Party**. Tutto è della sessione corrente, con *Condividi con tutte le sessioni*, ed è incluso in
 Esporta/Importa (archivio e sessione) e nella duplicazione. Valori e tabelle (livelli, soglie, effetti, margini dei
-mercanti, ruoli, stati delle quest) stanno in un solo file dati, `js/mondo-dati.js`. La logica è pura e testata
+mercanti, ruoli, stati delle quest) stanno in un solo file dati, `js/dati/mondo.js`. La logica è pura e testata
 (`fazioni.js`, `party.js`, `citta.js`, `npc.js`, `quest.js`); l'interfaccia è in `ui-mondo.js`, `ui-party.js`,
 `ui-npc.js` e `ui-quest.js`.
 
@@ -886,7 +886,7 @@ dall'**IA** giocano da soli; spento, tutto funziona come prima.
   solo quelli che vede ([luce e visione](#luce-visione-e-nebbia-di-guerra): linea di vista, luce e sensi; se non ne vede
   nessuno si avvicina al più vicino) e non a terra. Punteggi di debolezza (PF e CA bassi,
   incantatore, isolato, vulnerabile all'arma) e di minaccia (danno medio per round, livello o GS, PF): pesi in
-  `js/ia-dati.js`.
+  `js/dati/ia.js`.
 - **Turno** (`js/ia.js`, funzioni pure): `pianificaTurno` restituisce un piano senza modificare nulla. Il
   percorso minimo tiene conto dell'ingombro delle pedine, del terreno difficile (costo 2), delle celle
   bloccate (porte chiuse comprese) e delle diagonali come il misuratore; non supera la velocità e, se non
@@ -1041,7 +1041,7 @@ inflitta**: quale condizione, la durata e la salvezza che la evita.
 
 ## Riposi e risorse
 
-La logica è pura e testata (`js/riposi.js`); valori, durate e varianti sono in `js/riposi-dati.js` e l'interfaccia è
+La logica è pura e testata (`js/riposi.js`); valori, durate e varianti sono in `js/dati/riposi.js` e l'interfaccia è
 in `js/ui-riposi.js`.
 
 ### Risorse
@@ -1105,7 +1105,7 @@ in `js/ui-riposi.js`.
 
 ## Difficoltà degli incontri
 
-Logica pura e testata in `js/difficolta.js`, tabelle in `js/difficolta-dati.js`, interfaccia in `js/ui-difficolta.js`.
+Logica pura e testata in `js/difficolta.js`, tabelle in `js/dati/difficolta.js`, interfaccia in `js/ui-difficolta.js`.
 Metodo della Guida del Dungeon Master:
 
 - **Soglie del party**: per ogni personaggio la riga del suo livello (facile, medio, difficile, mortale), sommate.
@@ -1141,7 +1141,7 @@ Metodo della Guida del Dungeon Master:
 
 ## Scene e incontri
 
-Logica pura e testata in `js/scene.js`, dati ed esempi in `js/scene-dati.js`, interfaccia in `js/ui-scene.js`. La
+Logica pura e testata in `js/scene.js`, dati ed esempi in `js/dati/scene.js`, interfaccia in `js/ui-scene.js`. La
 scena è un contenitore: collega mappe, creature, NPC, eventi, quest, note e tesori che esistono già e li lancia.
 
 - **Scaletta** (voce Scene, Alt+S): scene della sessione in ordine, con ricerca (titolo, tag, testo), filtri per tipo
@@ -1197,7 +1197,7 @@ scena è un contenitore: collega mappe, creature, NPC, eventi, quest, note e tes
 
 ## Luce, visione e nebbia di guerra
 
-Logica pura e testata in `js/visione.js`, dati in `js/visione-dati.js` (livelli, luce ambientale, sorgenti, incantesimi,
+Logica pura e testata in `js/visione.js`, dati in `js/dati/visione.js` (livelli, luce ambientale, sorgenti, incantesimi,
 sensi, modalità della nebbia), disegno e strumenti in `js/ui-visione.js`. Vale per tutte le griglie (Editor griglie,
 Combattimento, Esplorazione); le griglie esistenti restano come prima: nebbia spenta, giorno (luce intensa ovunque),
 nessuna sorgente.
@@ -1598,7 +1598,7 @@ soltanto `DnD.audio.suona('critico')`. Il suono accompagna e basta: non decide n
 un riscontro visivo (log, evidenziazione, banner, avviso). Tutti i suoni sono **sintetizzati nel codice** con la Web
 Audio API (oscillatori, rumore filtrato, inviluppi): nessun file audio incluso, nessuna libreria, nessuna rete.
 
-- **Eventi** (tabella in `js/suoni-dati.js`: identificatore, etichetta, categoria, volume relativo, acceso/spento di
+- **Eventi** (tabella in `js/dati/suoni.js`: identificatore, etichetta, categoria, volume relativo, acceso/spento di
   base e ricetta): *Dadi* (rotolio, tonfo, 20 e 1 naturali); *Combattimento* (colpo a segno, mancato, critico, danno
   subito da un giocatore, cura, a terra, incantesimo, tiro salvezza riuscito o fallito, azione bonus o reazione,
   condizione applicata, concentrazione spezzata);
@@ -1894,29 +1894,29 @@ css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti d
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
-js/difficolta-dati.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
-js/scene-dati.js      scene (dati): tipi, stati, esiti, condizioni di inizio e fine, incontri d'esempio
-js/visione-dati.js    luce e visione (dati): livelli, luce ambientale per ora e bioma, sorgenti, incantesimi, sensi, nebbia
+js/dati/difficolta.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
+js/dati/scene.js      scene (dati): tipi, stati, esiti, condizioni di inizio e fine, incontri d'esempio
+js/dati/visione.js    luce e visione (dati): livelli, luce ambientale per ora e bioma, sorgenti, incantesimi, sensi, nebbia
 js/visione.js         luce, visione e nebbia di guerra (logica pura): linea di vista, luce, sensi, chi vede chi, nebbia, visioneGiocatore()
-js/scheda-dati.js     scheda del giocatore (dati): allineamenti, acquisto punti, soglie di PE, classi, background e talenti d'esempio
+js/dati/scheda.js     scheda del giocatore (dati): allineamenti, acquisto punti, soglie di PE, classi, background e talenti d'esempio
 js/scheda.js          scheda del giocatore (logica pura): abilità, passive, sovrascritture, carico, background, talenti, livelli
 js/scene.js           scene e incontri (logica pura): scaletta, linea, lancio, fine, ricompense, Genera incontro
 js/difficolta.js      difficoltà degli incontri (logica pura): soglie, PE, moltiplicatore, fasce, chi conta, Bilancia, Budget
-js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
+js/dati/riposi.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
 js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combattente), risorse, dadi vita, riposo breve e lungo
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo, verifica di un percorso proposto (walk)
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
-js/classi.js          tabella delle 12 classi e degli slot incantesimo
-js/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
+js/dati/classi.js          tabella delle 12 classi e degli slot incantesimo
+js/dati/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
 js/generatore.js      logica pura del generatore di nemici
 js/magie.js           logica pura degli incantesimi
-js/nomi.js            lista dei nomi casuali (copiata da nomi.txt)
-js/colori.js          palette dei 14 colori delle pedine e bordo di contrasto
-js/libreria-icone.js  icone predefinite (SVG originali) per pedine e oggetti, con dimensione suggerita
+js/dati/nomi.js            lista dei nomi casuali (copiata da nomi.txt)
+js/dati/colori.js          palette dei 14 colori delle pedine e bordo di contrasto
+js/dati/libreria-icone.js  icone predefinite (SVG originali) per pedine e oggetti, con dimensione suggerita
 js/icone.js           icone: normalizzazione, SVG della libreria, disegno nell'ingombro, immagini
 js/immagini.js        immagini importate: archivio IndexedDB con cache, lettura dei pixel
-js/suoni-dati.js      effetti sonori (dati e logica pura): categorie, eventi con le ricette, impostazioni, esiti → eventi
+js/dati/suoni.js      effetti sonori (dati e logica pura): categorie, eventi con le ricette, impostazioni, esiti → eventi
 js/audio.js           effetti sonori: unico modulo Web Audio (sintesi, nodo master, limiti, coda, file in IndexedDB)
 js/ui-suoni.js        gruppo «Suoni» nelle impostazioni, finestra «Tutti i suoni», pulsante rapido e Alt+M
 js/tileset.js         logica pura dei TileSet: sorgenti, taglio (anche a copertura), id delle tile, proprietà, migrazioni
@@ -1932,7 +1932,7 @@ js/ui-mappa-esplorazione.js  disegno di biomi ed eventi; strumenti Bioma ed Even
 js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cache), strumenti, pannello «Luce e visione», «Vedi come»
 js/ui-esplorazione.js schermata Esplorazione: gruppo, mappa, tempo e registro, finestra evento, combattimenti
 js/layout-combattimento.js  layout del combattimento: larghezze, colonne aperte/chiuse, schede su schermi stretti
-js/creature-dati.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi
+js/dati/creature.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi
 js/creature.js        logica pura delle creature: calcoli, testo delle azioni, difese, combattimento, stima del CS
 js/boss.js            logica pura dei boss: temi (anche quelli dei leggendari, «lg:<id>»), fasi, promozione, stato nel combattimento
 js/percorso.js        logica pura del Percorso leggendario: nodi, effetti, sblocco, grafo, raggiera, modelli, esempio
@@ -1954,7 +1954,7 @@ js/ui-mostri.js       Nemici › Creature: elenco, form (riusato dai boss), sche
 js/ui-boss.js         Nemici › Boss (forgia, anteprima, evocazione) e boss nel combattimento (barre, ombra, effetti)
 js/ui-percorso.js     editor della mappa a nodi del Percorso e modalità Sblocca (canvas)
 js/ui-leggendario.js  Giocatori › Leggendari: elenco, scheda, trasformazioni, opzioni del master, Ascensione, combattimento
-js/mondo-dati.js      Mondo (dati): fazioni predefinite, livelli, soglie ed effetti della reputazione, ruoli, quest, esempi
+js/dati/mondo.js      Mondo (dati): fazioni predefinite, livelli, soglie ed effetti della reputazione, ruoli, quest, esempi
 js/fazioni.js         fazioni e reputazione (logica pura): relazione(), matrice, combattenti, registro, effetti
 js/party.js           party (logica pura): membri, un solo party per giocatore, ordine di marcia, attivo
 js/citta.js           città (logica pura): atteggiamento, contenuti, segnaposto «Entra in una mappa»
@@ -1966,7 +1966,7 @@ js/ui-npc.js          Mondo › NPC: editor, pannello sulla griglia, dialogo gio
 js/ui-quest.js        Mondo › Quest: editor, offerta, consegna, diario
 js/ui-scheda.js       scheda del giocatore: pagine, creazione guidata, vista di gioco, stampa, livelli, librerie
 js/ui-scene.js        Scene: scaletta, linea, editor di scene e incontri, libreria, lancio, scena in corso, ricompense
-js/ia-dati.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
+js/dati/ia.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»
 js/note.js            note del master (logica pura): sanificazione, testo, pagine, salvataggio automatico
@@ -1988,7 +1988,7 @@ js/test.js            test della logica
 ```
 
 **Nomi casuali:** aprendo `index.html` direttamente da file il browser non può leggere
-`nomi.txt`, quindi la lista usata dall'app è in `js/nomi.js`. Per aggiungere o cambiare nomi
+`nomi.txt`, quindi la lista usata dall'app è in `js/dati/nomi.js`. Per aggiungere o cambiare nomi
 modifica quel file.
 
 Gli script sono classici (non moduli ES) e condividono un solo oggetto globale `DnD`, così

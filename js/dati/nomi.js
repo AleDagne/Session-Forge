@@ -1,5 +1,6 @@
 // Nomi per giocatori e NPC, generati da nomi.txt (il browser non può leggere file .txt aprendo
 // l'app da file://). Per cambiare la lista modifica questo elenco.
+// Livello dati. Espone DnD.nomi; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

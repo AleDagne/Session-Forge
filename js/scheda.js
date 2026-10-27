@@ -2,7 +2,7 @@
 // punti, abilità con competenza/maestria/«metà competenza», passive, iniziativa e velocità sovrascrivibili,
 // carico e sintonia, PE e livelli, applicazione di un background (anteprima, senza duplicati), effetti dei
 // talenti, avanzamento di livello, incantesimi preparabili, avvisi della creazione guidata, riferimenti mancanti,
-// esportazione e importazione di un personaggio. I calcoli di base restano in regole.js, classi.js, attrezzatura.js.
+// esportazione e importazione di un personaggio. I calcoli di base restano in regole.js, dati/classi.js, attrezzatura.js.
 (function (DnD) {
   'use strict';
 

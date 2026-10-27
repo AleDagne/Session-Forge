@@ -1,6 +1,7 @@
 // Tabella delle 12 classi di D&D 5e: dado vita, competenze nei tiri salvezza,
 // caratteristiche principali in ordine di priorità (un array interno = alternative equivalenti)
 // e caratteristica aggiunta alla "Difesa senza armatura" (solo Barbaro e Monaco).
+// Livello dati. Espone DnD.classi; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 

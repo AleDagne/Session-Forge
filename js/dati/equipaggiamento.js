@@ -2,6 +2,7 @@
 // Arma: nome, dado di danno, caratteristica (FOR, oppure DES per armi accurate e a distanza), tipo di danno.
 // diceByLevel: dado che cresce con il livello ([livello minimo, dado], in ordine crescente).
 // Armatura: tipo ('nessuna' | 'leggera' | 'media' | 'pesante'), CA base e nome; shield = scudo (+2).
+// Livello dati. Espone DnD.equipaggiamento; nessuna dipendenza. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
