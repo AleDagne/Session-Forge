@@ -9,7 +9,7 @@ Session Forge: Italian-language D&D 5e session planner/player (maps, characters,
 ## Commands
 
 - Run: open `index.html` directly, or serve it (needed for PWA/service worker). `.claude/launch.json` defines the `session-forge` server: `python -m http.server 5617` → `http://localhost:5617/index.html`.
-- Tests: open `test.html` in a **visible** browser window (served, e.g. `http://localhost:5617/test.html`). It loads every script then runs `DnD.runTests()`; results are listed on the page with a pass/fail summary (hidden pane stays on "Esecuzione…"). There is no CLI runner and no single-test filter: tests are registered with `test(name, fn)` in `js/test.js` (helpers `eq`, `ok`, `seq(...)` for deterministic dice); to run one in isolation, temporarily narrow the list there.
+- Tests: open `test.html` in a **visible** browser window (served, e.g. `http://localhost:5617/test.html`). It loads every script then runs `DnD.runTests()`; results are listed on the page with a pass/fail summary (hidden pane stays on "Esecuzione…"). There is no CLI runner: tests are registered with `test(name, fn)` in `js/test.js` (helpers `eq`, `ok`, `seq(...)` for deterministic dice); `DnD.runTests('part of name')` runs only matching tests (from the console; the page's own run still executes everything), and `DnD.testInCorso` names the running one. A hidden page throttles timers, so the async online tests become very slow there.
 - Browsers cache scripts aggressively: hard reload (Ctrl+F5) after edits.
 - No lint/build commands exist.
 
@@ -37,5 +37,5 @@ Session Forge: Italian-language D&D 5e session planner/player (maps, characters,
 ## Conventions
 
 - Match the existing style: 2-space indent, single quotes, `const`/arrow functions, short Italian comments describing intent.
-- After modifying any cached file, bump `CACHE` in `sw.js` (currently `session-forge-v35`).
+- After modifying any cached file, bump `CACHE` in `sw.js` (currently `session-forge-v36`).
 - New logic should get tests in `js/test.js` and a README update (features, data model, migration notes, "Struttura" file list).

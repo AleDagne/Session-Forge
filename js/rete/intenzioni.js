@@ -81,6 +81,23 @@
     ping: (d) => { richiedi(intero(d.x, 0, 999) && intero(d.y, 0, 999), 'cella non valida'); return { x: d.x, y: d.y }; },
     domanda: (d) => { const t = P().pulisciTesto(d.testo, 300); richiedi(t, 'domanda vuota'); return { testo: t }; },
     annulla: (d) => { richiedi(isId(d.intenzioneId), 'richiesta mancante'); return { intenzioneId: d.intenzioneId }; },
+    // Tappa 3: esplorazione, scambio con un mercante, risposta a un dialogo, richiesta di riposo.
+    muoviGruppo: (d) => { richiedi(intero(d.x, 0, 999) && intero(d.y, 0, 999), 'cella non valida'); return { x: d.x, y: d.y }; },
+    scambio: (d) => {
+      richiedi(isId(d.npcId), 'mercante mancante');
+      const righe = (v, chiave) => {
+        richiedi(v === undefined || (Array.isArray(v) && v.length <= 30), 'carrello non valido');
+        const out = (v || []).map((x) => (obj(x) && isId(x[chiave]) && intero(x.qty, 1, 9999) ? { [chiave]: x[chiave], qty: x.qty } : null));
+        richiedi(out.every(Boolean), 'carrello non valido');
+        return out;
+      };
+      const compra = righe(d.compra, 'lineId');
+      const vendi = righe(d.vendi, 'equipmentId');
+      richiedi(compra.length + vendi.length > 0, 'carrello vuoto');
+      return { npcId: d.npcId, compra, vendi };
+    },
+    rispostaDialogo: (d) => { richiedi(isId(d.dialogoId) && isId(d.rispostaId), 'risposta non valida'); return { dialogoId: d.dialogoId, rispostaId: d.rispostaId }; },
+    richiediRiposo: (d) => { richiedi(d.tipo === 'breve', 'si può chiedere solo un riposo breve'); return { tipo: 'breve' }; },
   };
   const TIPI = Object.keys(SCHEMI);
   function pulisci(tipo, dati) {
@@ -103,17 +120,25 @@
     ping: true, chat: true,
     confermaManuale: false, // attacchi e magie approvati a mano dal master
     confermaArea: true,     // magie ad area approvate a mano
+    esplorazione: 'approvazione', // muovere il gruppo: 'approvazione' | 'sempre' | 'mai'
+    scambi: true,           // comprare e vendere dai mercanti aperti
+    riposi: true,           // chiedere un riposo breve (sempre con approvazione)
   };
   const PERMESSI_NOMI = {
     muovi: 'Spostare la propria pedina', attaccare: 'Attaccare', magie: 'Lanciare incantesimi', azioni: 'Altre azioni, azione bonus e reazione',
     tiri: 'Tirare dadi e prove', tiriPrivati: 'Tiri privati al master', schedaRisorse: 'Modificare PF, slot, inventario e monete',
     schedaBase: 'Modificare caratteristiche e livello', ping: 'Indicare un punto (ping)', chat: 'Usare la chat e le domande',
     confermaManuale: 'Conferma manuale di attacchi e magie', confermaArea: 'Conferma manuale delle magie ad area',
+    esplorazione: 'Muovere il gruppo nell\'esplorazione', scambi: 'Comprare e vendere dai mercanti', riposi: 'Chiedere un riposo breve',
   };
   function normalizzaPermessi(p) {
     const o = obj(p) || {};
     const out = {};
-    for (const [k, v] of Object.entries(PERMESSI_BASE)) out[k] = k === 'muovi' ? (['turno', 'sempre', 'mai'].includes(o.muovi) ? o.muovi : v) : typeof o[k] === 'boolean' ? o[k] : v;
+    for (const [k, v] of Object.entries(PERMESSI_BASE)) {
+      if (k === 'muovi') out[k] = ['turno', 'sempre', 'mai'].includes(o.muovi) ? o.muovi : v;
+      else if (k === 'esplorazione') out[k] = ['approvazione', 'sempre', 'mai'].includes(o.esplorazione) ? o.esplorazione : v;
+      else out[k] = typeof o[k] === 'boolean' ? o[k] : v;
+    }
     return out;
   }
   // Permesso che serve a un'intenzione (null = sempre permessa).
@@ -128,9 +153,12 @@
     if (tipo === 'dai') return 'schedaRisorse';
     if (tipo === 'ping') return 'ping';
     if (tipo === 'domanda') return 'chat';
+    if (tipo === 'muoviGruppo') return 'esplorazione';
+    if (tipo === 'scambio') return 'scambi';
+    if (tipo === 'richiediRiposo') return 'riposi';
     return null;
   }
-  const permesso = (perm, tipo, d) => { const k = permessoDi(tipo, d); return !k || (k === 'muovi' ? perm.muovi !== 'mai' : Boolean(perm[k])); };
+  const permesso = (perm, tipo, d) => { const k = permessoDi(tipo, d); return !k || (k === 'muovi' || k === 'esplorazione' ? perm[k] !== 'mai' : Boolean(perm[k])); };
 
   // ---------- Economia delle azioni ----------
   // Per combattente: azione (con gli attacchi rimasti dell'azione Attacco), azione bonus, reazione. Si azzera

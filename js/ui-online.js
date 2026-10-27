@@ -3,6 +3,9 @@
 // Modifica / Rifiuta, domande, tiri salvezza richiesti, rivelazioni, registro di sicurezza, chat), schermata del
 // giocatore (azioni come richieste al master, propria scheda modificabile, griglia con la propria pedina da
 // trascinare, ping, turni, log, chat e dadi) e pagina «Test connessione».
+// Tappa 3: pannello unificato (visibilità, ingressi chiusi, spettatori, «Vedi come giocatore», Mondo, dialoghi,
+// scene, «sto preparando», log completo, ripresa della sessione), schermata del giocatore con esplorazione, Mondo
+// (quest, NPC, mercanti), dialoghi, riposo breve, barra dei partecipanti, «Connessione persa» con Rientra, diagnostica.
 // La logica è in js/rete/ (protocollo, trasporto, codici, segnalazione, filtro, immagini, intenzioni, sessione): qui
 // solo DOM. L'app offline resta com'è: la rete parte solo quando si ospita o ci si unisce a una sessione.
 (function (DnD) {
@@ -14,6 +17,7 @@
   const PROFILO = 'dnd-battaglie:online-profilo';
   const GETTONE = 'dnd-battaglie:online-gettone';
   const NOTE = 'dnd-battaglie:online-note';
+  const RIPRESA = 'dnd-battaglie:online-ripresa'; // gettoni del master per riprendere la sessione dopo una chiusura
   const BATTITO_MS = 3000;
   const PING_MS = 3500;
   const COLORE = /^#[0-9a-f]{6}$/i;
@@ -168,6 +172,13 @@
     const leggiQ = () => { const q = { nome: NET().protocollo.pulisciTesto(nome.value, 30).replace(/\n/g, ' ') || 'Senza nome', colore: colore.value, comprimi: !semplici.checked }; scrivi(PROFILO, q); return q; };
     const S = NET().segnalazione;
     const env = S.ambiente();
+    // Ripresa: il master aveva chiuso l'app con una sessione aperta su questa sessione dell'archivio.
+    const rip = leggi(RIPRESA, null);
+    const sessId = DnD.sessioni.current(DnD.store.state).id;
+    const riprendi = rip && rip.sessionId === sessId && Array.isArray(rip.gettoni) && rip.gettoni.length
+      ? el('button', { type: 'button', class: 'btn', text: '↻ Riprendi la sessione online (' + rip.gettoni.length + (rip.gettoni.length === 1 ? ' giocatore' : ' giocatori') + ')',
+        title: 'I personaggi restano legati ai gettoni: rinvita i giocatori con codici nuovi',
+        disabled: !env.RTCPeerConnection, onclick: () => { const q = leggiQ(); d.dismiss(); avviaMaster(q, rip.gettoni); nuovoInvito(); } }) : null;
     const d = openDialog('Gioco online', el('div', { class: 'form online-start' },
       el('p', { class: 'muted small', text: 'Collegamento diretto tra browser (WebRTC), senza server e senza account: master e giocatore si scambiano due codici (per esempio nella chat che usate già). Il giocatore chiede le azioni, il master le verifica e tira i dadi.' }),
       env.RTCPeerConnection ? null : el('p', { class: 'error-text', text: 'Questo browser non supporta WebRTC: il gioco online non è disponibile. Ripiego: condividi lo schermo.' }),
@@ -176,15 +187,30 @@
       el('div', { class: 'online-choice' },
         el('button', { type: 'button', class: 'btn primary', text: '🏠 Ospita (master)', disabled: !env.RTCPeerConnection, onclick: () => { const q = leggiQ(); d.dismiss(); avviaMaster(q); nuovoInvito(); } }),
         el('button', { type: 'button', class: 'btn primary', text: '🔗 Unisciti (giocatore)', disabled: !env.RTCPeerConnection, onclick: () => { const q = leggiQ(); d.dismiss(); unisciti(q); } })),
+      riprendi,
       el('button', { type: 'button', class: 'btn small', text: '🩺 Test connessione', onclick: () => { d.dismiss(); testConnessione(); } })));
     nome.focus();
   }
 
   // ---------- Master ----------
-  function avviaMaster(q) {
+  // gettoni: ripresa di una sessione chiusa (i personaggi restano legati ai gettoni, i codici sono nuovi).
+  function avviaMaster(q, gettoni) {
     if (master) return;
     const s = NET().sessione.master({
-      nome: q.nome, stato: () => DnD.store.state,
+      nome: q.nome, stato: () => DnD.store.state, gettoni: gettoni || [],
+      // Esplorazione: il gruppo si muove con le regole dell'esplorazione (costo, ore, eventi).
+      esploraGruppo: (x, y) => (DnD.uiEsplorazione ? DnD.uiEsplorazione.muoviOnline({ x, y }) : { ok: false, testo: 'Esplorazione non disponibile.' }),
+      // Riposo breve chiesto e approvato: il master lo avvia con la finestra di sempre.
+      riposo: (id) => { setTimeout(() => DnD.uiRiposi.restPlayers('breve', [id], 'Riposo breve richiesto online'), 0); return { testo: 'Il master avvia il riposo breve.' }; },
+      suDialogo: (d) => {
+        const dl = master && master.dialogo && master.dialogo.id === d.dialogoId ? master.dialogo : null;
+        const r = dl ? dl.risposte.find((x) => x.id === d.rispostaId) : null;
+        const testo = d.nome + ' sceglie: «' + (r ? r.testo : '?') + '»';
+        toast('🗨 ' + testo, 'success');
+        aggiungiFeed({ da: d.nome, colore: '#c9a24f', testo: '🗨 ' + (r ? r.testo : '?') });
+        if (master) master.dialogo = null;
+        return { testo };
+      },
       aggiornaStato: (fn) => { DnD.store.update(fn); rinfrescaCombattimento(); },
       esecutore: DnD.uiCombattimento.online,
       regole: () => DnD.impostazioni.movementRules(),
@@ -204,7 +230,8 @@
       suViolazione: () => aggiornaPannello(true),
       immagine: (id) => DnD.immagini.get(id),
     });
-    master = { s, q, attesa: null, domande: [], registro: NET().codici.registro(), timer: setInterval(() => { s.battito(); aggiornaPannello(); }, BATTITO_MS) };
+    master = { s, q, attesa: null, domande: [], dialogo: null, registro: NET().codici.registro(), timer: setInterval(() => { s.battito(); salvaRipresa(); aggiornaPannello(); }, BATTITO_MS) };
+    if (gettoni && gettoni.length) toast('Sessione ripresa: invita di nuovo i giocatori (codici nuovi); con il gettone ritrovano il loro personaggio.', 'success');
     // Ogni modifica dello stato (combattimento, griglia, PF…) diventa un evento per i giocatori.
     DnD.store.onChange = () => {
       if (!master) return;
@@ -256,20 +283,35 @@
   }
 
   const personaggi = () => DnD.sessioni.visible(DnD.store.state, 'players');
+  // Gettoni assegnati, salvati nel browser del master: se chiude l'app può riprendere la sessione.
+  function salvaRipresa() {
+    if (!master) return;
+    const gettoni = master.s.esportaGettoni();
+    scrivi(RIPRESA, gettoni.length ? { sessionId: DnD.sessioni.current(DnD.store.state).id, gettoni, ora: Date.now() } : null);
+  }
+  // Scelte dell'ingresso: personaggio, oppure spettatore («tavolo» o come un personaggio).
+  function sceltaPersonaggio(pgs, usati, pre, attuale) {
+    return el('select', { 'aria-label': 'Personaggio o spettatore' },
+      el('optgroup', { label: 'Giocatore' }, pgs.map((p) => el('option', { value: 'pg:' + p.id, text: p.name + (usati.has(p.id) ? ' (già assegnato)' : ''), selected: attuale ? attuale === 'pg:' + p.id : p.id === pre }))),
+      el('optgroup', { label: 'Spettatore (sola vista)' }, el('option', { value: 'sp:', text: 'Spettatore: come il tavolo (ciò che tutti sanno)', selected: attuale === 'sp:' || (!attuale && !pre) }),
+        pgs.map((p) => el('option', { value: 'sp:' + p.id, text: 'Spettatore: come ' + p.name, selected: attuale === 'sp:' + p.id }))));
+  }
+  const leggiScelta = (v) => (v.startsWith('sp:') ? { spettatore: true, come: v.slice(3) || null } : { spettatore: false, personaggioId: v.slice(3) || null });
   function richiestaDialog(r) {
     suona('online-richiesta');
     const pgs = personaggi();
     const usati = new Set(master.s.giocatori().filter((g) => g.stato === 'attivo').map((g) => g.personaggioId).filter(Boolean));
     const pre = r.rientro ? r.rientro.personaggioId : (pgs.find((p) => !usati.has(p.id) && p.sheet && p.sheet.playerName && p.sheet.playerName.trim().toLowerCase() === r.nome.toLowerCase()) || {}).id;
-    const sel = el('select', {}, el('option', { value: '', text: '— nessuno (spettatore) —' }),
-      pgs.map((p) => el('option', { value: p.id, text: p.name + (usati.has(p.id) ? ' (già assegnato)' : ''), selected: p.id === pre })));
+    const attuale = r.rientro ? (r.rientro.spettatore ? 'sp:' + (r.rientro.come || '') : r.rientro.personaggioId ? 'pg:' + r.rientro.personaggioId : '') : '';
+    const sel = sceltaPersonaggio(pgs, usati, pre, attuale);
     let risposto = false;
     const d = openDialog('Richiesta di ingresso', el('div', { class: 'form' },
       el('p', {}, pallino(r.colore), ' ', el('b', { text: r.nome }), ' vuole entrare nella sessione.'),
       r.rientro ? el('p', { class: 'small', text: r.rientro.gettone ? '🔑 Rientro con il gettone: riprende lo stesso posto e lo stesso personaggio.' : '↩ Rientro: stesso nome di un giocatore caduto. Accettando riprende il suo posto.' }) : null,
-      field('Personaggio (potrà agire solo con lui)', sel)), [
+      r.pieno ? el('p', { class: 'small warning-text', text: 'Ci sono già ' + NET().sessione.MAX_GIOCATORI + ' giocatori: può entrare solo come spettatore.' }) : null,
+      field('Personaggio (potrà agire solo con lui) o spettatore', sel)), [
       { text: 'Rifiuta', class: 'danger', onclick: () => { risposto = true; r.rifiuta(); } },
-      { text: 'Accetta', class: 'primary', onclick: () => { risposto = true; r.accetta({ personaggioId: sel.value || null }); } },
+      { text: 'Accetta', class: 'primary', onclick: () => { risposto = true; r.accetta(leggiScelta(sel.value)); } },
     ]);
     d.addEventListener('close', () => { if (!risposto) r.rifiuta('Il master ha chiuso la richiesta.'); });
   }
@@ -354,6 +396,111 @@
     ]);
   }
 
+  // ---------- Strumenti del master della tappa 3 ----------
+  // «Vedi come giocatore»: ciò che il client ha ricevuto davvero (gli stessi dati inviati) e, evidenziato, ciò che no.
+  function vediComeDialog(idIniziale) {
+    const dest = el('select', { 'aria-label': 'Vedi come' }, el('option', { value: '', text: 'Il tavolo (ciò che tutti sanno)' }),
+      master.s.giocatori().filter((g) => g.stato === 'attivo').map((g) => el('option', { value: g.id, text: g.nome + (g.spettatore ? ' (spettatore)' : ''), selected: g.id === idIniziale })));
+    const out = el('div', { class: 'online-seeas' });
+    const voce = (t) => el('li', { text: t });
+    const disegna = () => {
+      const r = master.s.vediCome(dest.value || null);
+      const v = r.vista || {};
+      const c = v.combattimento;
+      const e = v.esplorazione;
+      const m = v.mondo;
+      const riceve = [];
+      if (v.scheda) riceve.push('Scheda: ' + v.scheda.nome + ' (' + v.scheda.pf + '/' + v.scheda.pfMax + ' PF)');
+      if (c) riceve.push('Combattimento: round ' + c.round + ', pedine ' + c.pedine.map((p) => p.nome + ' (' + (Number.isFinite(p.pf) ? p.pf + ' PF' : p.salute) + ')').join(', '),
+        'Mappa: ' + c.griglia.items.length + ' oggetti, ' + (c.griglia.cells.match(/[12]/g) || []).length + ' celle note su ' + c.griglia.cells.length, 'Log: ' + c.log.length + ' righe');
+      if (c && c.boss.length) riceve.push('Boss rivelati: ' + c.boss.map((b) => b.nome + ' — ' + b.titolo).join(', '));
+      if (e) riceve.push('Esplorazione: giorno ' + e.tempo.giorno + ', ' + (e.griglia.cells.match(/[12]/g) || []).length + ' celle scoperte, bioma ' + (e.bioma ? e.bioma.nome : '—'));
+      if ((v.scene || []).length) riceve.push('Scene rivelate: ' + v.scene.map((x) => x.titolo).join(', '));
+      if (m) riceve.push('NPC incontrati: ' + (m.npc.map((n) => n.nome + (n.negozio.length ? ' 🛒' : '')).join(', ') || '—'), 'Quest: ' + (m.quest.map((q) => q.titolo).join(', ') || '—'),
+        'Fazioni note: ' + (m.fazioni.map((f) => f.nome).join(', ') || '—') + (m.reputazioni.length ? ' (con le reputazioni)' : ''));
+      fill(out,
+        el('h3', { text: '✔ Riceve' }), el('ul', { class: 'small' }, riceve.map(voce)),
+        el('h3', { text: '✖ Non riceve' }), el('ul', { class: 'small online-manca' }, r.manca.length ? r.manca.map((x) => el('li', {}, el('b', { text: x.sezione + ': ' }), x.testo)) : [voce('—')]),
+        el('details', {}, el('summary', { class: 'small', text: 'Dati inviati (grezzi)' }), el('pre', { class: 'small player-view', text: JSON.stringify(v, null, 1).slice(0, 20000) })));
+    };
+    dest.addEventListener('change', disegna);
+    disegna();
+    openDialog('Vedi come giocatore', el('div', { class: 'form' }, field('Vista di', dest), out), [{ text: 'Chiudi', class: 'primary' }]);
+  }
+  // NPC piazzati sulle mappe della sessione (combattimento ed esplorazione), con il loro modello del Mondo.
+  function npcPiazzati() {
+    const st = DnD.store.state;
+    const se = DnD.sessioni.current(st);
+    const v = DnD.fazioni.view(st, se.id);
+    const grids = [se.combat && se.combat.grid, se.exploration && (st.savedGrids || []).find((g) => g.id === se.exploration.gridId)].filter(Boolean);
+    return grids.flatMap((g) => (g.items || []).filter((it) => it.otype === 'npc')).map((it) => ({ it, def: v.npcs.find((n) => n.id === it.npcId) || null })).filter((x) => x.def);
+  }
+  // Mondo rivelato: città visitate, NPC incontrati, negozi aperti, fazioni conosciute.
+  function mondoDialog() {
+    const st = DnD.store.state;
+    const v = DnD.fazioni.view(st, DnD.sessioni.current(st).id);
+    const riv = master.s.rivelati();
+    const ha = (k, id) => (riv[k] || []).includes(id);
+    const casella = (k, id, testo) => el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: ha(k, id), onchange: (e) => master.s.rivelaMondo(k, id, e.target.checked) }), ' ' + testo);
+    const npc = npcPiazzati();
+    openDialog('Mondo per i giocatori', el('div', { class: 'form online-world' },
+      el('p', { class: 'muted small', text: 'I giocatori vedono solo ciò che spunti qui (oltre agli NPC che hanno davanti e alle quest accettate). Atteggiamenti segreti, ruoli nascosti, dialoghi e note non partono mai.' }),
+      el('h3', { text: 'Città visitate' }), v.cities.length ? v.cities.map((c) => casella('citta', c.id, c.name)) : el('p', { class: 'muted small', text: 'Nessuna città.' }),
+      el('h3', { text: 'NPC sulle mappe' }), npc.length ? npc.map((x) => el('div', { class: 'online-row' }, casella('npc', x.it.id, x.it.name + ' (incontrato)'),
+        x.def.roles.includes('mercante') ? casella('negozi', x.it.id, '🛒 negozio aperto') : null)) : el('p', { class: 'muted small', text: 'Nessun NPC piazzato.' }),
+      el('h3', { text: 'Fazioni conosciute' }), v.factions.filter((f) => !f.builtin).map((f) => casella('fazioni', f.id, f.name))), [{ text: 'Chiudi', class: 'primary' }]);
+  }
+  // Dialogo di un NPC mostrato ai giocatori: il master sceglie il nodo; «Il giocatore sceglie» manda anche le risposte.
+  function dialogoDialog() {
+    const npc = npcPiazzati().filter((x) => x.def.dialog && x.def.dialog.nodes.length);
+    if (!npc.length) { toast('Nessun NPC con un dialogo sulle mappe della sessione.', 'error'); return; }
+    const chi = el('select', { 'aria-label': 'NPC' }, npc.map((x, i) => el('option', { value: String(i), text: x.it.name })));
+    const nodo = el('select', { 'aria-label': 'Nodo' });
+    const anteprima = el('div', { class: 'small' });
+    const scelta = el('input', { type: 'checkbox' });
+    const dest = el('select', { 'aria-label': 'A chi' }, el('option', { value: '', text: 'A tutti' }), master.s.giocatori().filter((g) => g.stato === 'attivo' && !g.spettatore).map((g) => el('option', { value: g.id, text: 'Solo a ' + g.nome })));
+    const corrente = () => { const x = npc[Number(chi.value)]; return { x, n: x.def.dialog.nodes.find((y) => y.id === nodo.value) || x.def.dialog.nodes[0] }; };
+    const nodi = () => { const x = npc[Number(chi.value)]; fill(nodo, x.def.dialog.nodes.map((n) => el('option', { value: n.id, text: n.title || n.text.slice(0, 40), selected: n.id === x.def.dialog.start }))); vedi(); };
+    const vedi = () => { const { n } = corrente(); fill(anteprima, el('p', { text: n.text }), el('ul', {}, n.answers.map((a) => el('li', { text: a.text })))); };
+    chi.addEventListener('change', nodi);
+    nodo.addEventListener('change', vedi);
+    nodi();
+    openDialog('Mostra un dialogo', el('div', { class: 'form' }, field('NPC', chi), field('Nodo', nodo), anteprima,
+      el('label', { class: 'check small' }, scelta, ' Il giocatore sceglie la risposta (altrimenti la sceglie il master)'), field('A chi', dest),
+      el('p', { class: 'muted small', text: 'Parte solo il testo del nodo e delle risposte: mai condizioni, esiti o note.' })), [
+      { text: 'Annulla' },
+      { text: 'Mostra ai giocatori', class: 'primary', onclick: () => {
+        const { x, n } = corrente();
+        const nome = x.it.npcState && x.it.npcState.revealed && x.it.npcState.revealed.name === false ? 'Sconosciuto' : x.it.name;
+        const risposte = n.answers.map((a) => ({ id: a.id, testo: a.text }));
+        const id = master.s.mostraDialogo({ npc: nome, testo: n.text, risposte, scelta: scelta.checked }, dest.value || null);
+        master.dialogo = { id, risposte };
+        toast('Dialogo mostrato.', 'success');
+      } },
+    ]);
+  }
+  // Scena ai giocatori: la segna come rivelata e manda subito il testo da leggere (finestra chiudibile).
+  function scenaDialog() {
+    const st = DnD.store.state;
+    const scene = DnD.scene.sessionScenes(st, DnD.sessioni.current(st).id);
+    if (!scene.length) { toast('Nessuna scena in questa sessione.', 'error'); return; }
+    const sel = el('select', { 'aria-label': 'Scena' }, scene.map((s) => el('option', { value: s.id, text: s.title + (s.revealed ? ' (già rivelata)' : '') })));
+    openDialog('Mostra una scena ai giocatori', el('div', { class: 'form' }, field('Scena', sel),
+      el('p', { class: 'muted small', text: 'Parte solo il titolo e il testo da leggere; note, incontri, tesori e collegamenti restano al master.' })), [
+      { text: 'Annulla' },
+      { text: 'Mostra ai giocatori', class: 'primary', onclick: () => {
+        const sc = scene.find((s) => s.id === sel.value);
+        DnD.store.update((s2) => { const x = (s2.scenes || []).find((y) => y.id === sc.id); if (x) x.revealed = true; });
+        master.s.rivela({ titolo: sc.title, testo: DnD.note.htmlToText(sc.readAloud || '').trim().slice(0, NET().protocollo.LIMITI.rivelazione), immagine: null }, null);
+        toast('Scena mostrata ai giocatori.', 'success');
+      } },
+    ]);
+  }
+  function scaricaRegistro() {
+    if (!master) return;
+    DnD.uiImpostazioni.download(['Sessione online (master) — ' + new Date().toLocaleString('it-IT'), ''].concat(master.s.registroCompleto()).join('\n'), 'sessione-online-master-' + DnD.uiImpostazioni.today() + '.txt', 'text/plain');
+  }
+
   // Pannello del master: barra in basso a sinistra, si apre con giocatori, interruttori, richieste e chat.
   function pannello(aperto) {
     if (!master) return;
@@ -366,6 +513,10 @@
       m.pf = el('input', { type: 'checkbox', onchange: () => { master.s.impostaPfNemici(m.pf.checked); master.s.aggiorna(); } });
       m.pausa = el('input', { type: 'checkbox', onchange: () => { master.s.impostaPausa(m.pausa.checked); toast(m.pausa.checked ? 'Gioco in pausa: le richieste dei giocatori sono bloccate.' : 'Pausa finita.'); } });
       m.convalidati = el('input', { type: 'checkbox', checked: true, onchange: () => master.s.impostaConvalidati(m.convalidati.checked) });
+      m.schede = el('input', { type: 'checkbox', checked: true, onchange: () => master.s.impostaVisibilita({ schedeAltri: m.schede.checked }) });
+      m.rep = el('input', { type: 'checkbox', onchange: () => master.s.impostaVisibilita({ mostraReputazioni: m.rep.checked }) });
+      m.chiusa = el('input', { type: 'checkbox', onchange: () => { master.s.chiudiIngressi(m.chiusa.checked); toast(m.chiusa.checked ? 'Nuovi ingressi chiusi: entra solo chi rientra con il gettone.' : 'Ingressi aperti.'); } });
+      m.lavoro = el('input', { type: 'checkbox', onchange: () => master.s.lavoro(m.lavoro.checked) });
       m.soglia = DnD.ui.numberInput(master.s.soglia(), { min: 1, max: 100, class: 'qty', 'aria-label': 'Soglia di espulsione', onchange: () => master.s.impostaSoglia(Number(m.soglia.value)) });
       m.invita = el('button', { type: 'button', class: 'btn small primary', text: '➕ Invita un giocatore', onclick: nuovoInvito });
       m.chat = chatBox({
@@ -383,10 +534,16 @@
         el('div', { class: 'online-actions' }, m.invita,
           el('label', { class: 'check small', title: 'Blocca tutte le richieste dei giocatori (utile per discutere)' }, m.pausa, ' ⏸ Pausa'),
           el('label', { class: 'check small', title: 'I tiri liberi dei giocatori li tira il master. Spento: si accetta il tiro del giocatore, segnato come non verificato' }, m.convalidati, ' Tiri convalidati'),
-          el('label', { class: 'check small', title: 'Di base i giocatori vedono solo «illeso / ferito / grave / a terra»' }, m.pf, ' PF dei nemici')),
+          el('label', { class: 'check small', title: 'Di base i giocatori vedono solo «illeso / ferito / grave / a terra»' }, m.pf, ' PF dei nemici'),
+          el('label', { class: 'check small', title: 'Nome, classe, livello, salute, CA e condizioni dei compagni' }, m.schede, ' Schede degli altri'),
+          el('label', { class: 'check small', title: 'Reputazione del party con le fazioni che conosce' }, m.rep, ' Reputazioni'),
+          el('label', { class: 'check small', title: 'Entra solo chi rientra con il gettone' }, m.chiusa, ' 🚪 Chiudi nuovi ingressi'),
+          el('label', { class: 'check small', title: 'I giocatori vedono «Il master sta preparando la scena…»' }, m.lavoro, ' 🛠 Sto preparando')),
         el('div', { class: 'online-actions' },
-          btn('🔐 Permessi…', () => permessiDialog(null)), btn('📜 Rivela…', rivelaDialog),
-          btn('🩺 Test connessione', testConnessione), el('button', { type: 'button', class: 'btn small danger', text: '⏹ Termina sessione', onclick: terminaMaster })),
+          btn('🔐 Permessi…', () => permessiDialog(null)), btn('👁 Vedi come…', () => vediComeDialog(null)), btn('📜 Rivela…', rivelaDialog),
+          btn('🎬 Scena…', scenaDialog), btn('🌍 Mondo…', mondoDialog), btn('🗨 Dialogo…', dialogoDialog)),
+        el('div', { class: 'online-actions' },
+          btn('🩺 Test connessione', testConnessione), btn('⬇ Log completo', scaricaRegistro), el('button', { type: 'button', class: 'btn small danger', text: '⏹ Termina sessione', onclick: terminaMaster })),
         m.coda,
         el('details', { class: 'online-security' }, el('summary', { text: 'Registro di sicurezza' }),
           el('label', { class: 'inline small' }, 'Espelli dopo ', m.soglia, ' violazioni gravi'), m.registro),
@@ -405,14 +562,16 @@
     const attivi = lista.filter((g) => g.stato === 'attivo');
     const coda = master.s.coda();
     const peggiore = attivi.some((g) => g.linea === 'rosso') ? 'rosso' : attivi.some((g) => g.linea === 'giallo') ? 'giallo' : attivi.length ? 'verde' : 'grigio';
-    fill(m.head, lineaDot(peggiore), ' 🌐 Online · ' + attivi.length + (attivi.length === 1 ? ' giocatore' : ' giocatori'),
+    const nSpett = attivi.filter((g) => g.spettatore).length;
+    fill(m.head, lineaDot(peggiore), ' 🌐 Online · ' + (attivi.length - nSpett) + (attivi.length - nSpett === 1 ? ' giocatore' : ' giocatori') + (nSpett ? ' + ' + nSpett + ' spett.' : ''),
+      master.s.ingressiChiusi() ? el('span', { class: 'tag small', text: '🚪 chiusa' }) : null,
       coda.length + master.domande.length ? el('span', { class: 'badge', text: String(coda.length + master.domande.length) }) : null,
       master.s.pausa() ? el('span', { class: 'tag small', text: '⏸ pausa' }) : null,
       el('span', { class: 'muted small', text: m.root.classList.contains('open') ? ' ▾' : ' ▴' }));
-    m.invita.disabled = attivi.length >= NET().sessione.MAX_GIOCATORI;
+    m.invita.disabled = master.s.ingressiChiusi();
     if (!m.root.classList.contains('open')) return;
     // Le righe si ricostruiscono solo se cambia qualcosa di strutturale (così i menù aperti non si chiudono).
-    const firma = JSON.stringify(lista.map((g) => [g.id, g.nome, g.stato, g.personaggioId, g.gettone, g.salta, Boolean(g.permessi)]));
+    const firma = JSON.stringify(lista.map((g) => [g.id, g.nome, g.stato, g.personaggioId, g.gettone, g.salta, Boolean(g.permessi), g.spettatore, g.come]));
     if (firma !== m.firma || forza) {
       m.firma = firma;
       const pgs = personaggi();
@@ -420,12 +579,24 @@
         el('div', { class: 'online-row' },
           el('span', { class: 'online-dot-slot' }), pallino(g.colore), el('b', { text: g.nome }),
           g.stato === 'disconnesso' ? el('span', { class: 'tag small', text: g.assente ? 'assente' : 'disconnesso' }) : null,
+          g.spettatore ? el('span', { class: 'tag small', text: '👁 spettatore' }) : null,
           g.permessi ? el('span', { class: 'tag small', title: 'Permessi personalizzati', text: '🔐' }) : null,
           g.violazioni ? el('span', { class: 'tag small danger', title: 'Violazioni gravi', text: '⚠ ' + g.violazioni }) : null,
           el('span', { class: 'online-lat small muted' })),
         g.stato === 'attivo' ? el('div', { class: 'online-row' },
-          el('select', { class: 'small', 'aria-label': 'Personaggio di ' + g.nome, onchange: (e) => master.s.assegna(g.id, e.target.value) },
-            el('option', { value: '', text: '— spettatore —' }), pgs.map((p) => el('option', { value: p.id, text: p.name, selected: p.id === g.personaggioId }))),
+          (() => {
+            const s = sceltaPersonaggio(pgs, new Set(), null, g.spettatore ? 'sp:' + (g.come || '') : g.personaggioId ? 'pg:' + g.personaggioId : 'sp:');
+            s.classList.add('small');
+            s.setAttribute('aria-label', 'Personaggio di ' + g.nome);
+            s.addEventListener('change', () => {
+              const x = leggiScelta(s.value);
+              if (x.spettatore) master.s.impostaSpettatore(g.id, true, x.come);
+              else { master.s.impostaSpettatore(g.id, false, null); master.s.assegna(g.id, x.personaggioId); }
+              aggiornaPannello(true);
+            });
+            return s;
+          })(),
+          btn('👁', () => vediComeDialog(g.id), { title: 'Vedi come ' + g.nome, 'aria-label': 'Vedi come ' + g.nome }),
           btn('🎯 Salvezza…', () => tiroDialog(g), { title: 'Chiedi un tiro salvezza' }),
           btn('📣', () => { master.s.richiama(g.id); toast('«Tocca a te!» mandato a ' + g.nome + '.'); }, { title: 'Evidenzia: «Tocca a te!»', 'aria-label': 'Richiama ' + g.nome }),
           btn('🔐', () => permessiDialog(g.id), { title: 'Permessi di ' + g.nome, 'aria-label': 'Permessi di ' + g.nome }),
@@ -464,13 +635,16 @@
       const li = m.righe.querySelector('[data-id="' + g.id + '"]');
       if (!li) continue;
       fill(li.querySelector('.online-dot-slot'), lineaDot(g.stato === 'attivo' ? g.linea : 'grigio'));
-      li.querySelector('.online-lat').textContent = g.stato !== 'attivo' ? '' : ' ' + (g.latenza !== null ? g.latenza + ' ms' : '…') + (g.eco !== null ? ' · eco ' + g.eco + ' ms' : '');
+      li.querySelector('.online-lat').textContent = g.stato !== 'attivo' ? '' : ' ' + (g.latenza !== null ? g.latenza + ' ms' : '…') + (g.eco !== null ? ' · eco ' + g.eco + ' ms' : '') +
+        (g.coda ? ' · in coda ' + g.coda : '') + (g.scaricando ? ' · ⬇ sta scaricando la mappa' : '');
     }
     m.chat.refresh();
   }
   function terminaMaster() {
     if (!master || !confirm('Terminare la sessione online? I giocatori verranno scollegati.')) return;
     master.s.termina();
+    scrivi(RIPRESA, null);
+
     clearInterval(master.timer);
     clearTimeout(master.attesa);
     DnD.store.onChange = null;
@@ -482,7 +656,8 @@
   }
 
   // ---------- Giocatore ----------
-  function unisciti(q) {
+  // suTrasporto: per il rientro (stesso giocatore, nuovo scambio di codici); di base si entra come giocatore nuovo.
+  function unisciti(q, suTrasporto) {
     const invito = el('textarea', { class: 'code-box', rows: 4, spellcheck: false, placeholder: 'Incolla qui il codice di invito del master', 'aria-label': 'Codice di invito' });
     const out = el('div');
     const stato = el('p', { class: 'small', 'aria-live': 'polite' });
@@ -504,10 +679,11 @@
       fill(out, el('p', {}, el('b', { text: '2. ' }), 'Manda questo codice di risposta a ' + (tentativo.master || 'il master') + '. Quando lo incolla, il collegamento parte da solo.'),
         campoCodice(tentativo.codice));
       stato.textContent = '⏳ In attesa del master…';
-      tentativo.connessione.then((t) => { fatto = true; d.dismiss(); entraComeGiocatore(q, t, tentativo.master); })
+      tentativo.connessione.then((t) => { fatto = true; d.dismiss(); if (suTrasporto) suTrasporto(t); else entraComeGiocatore(q, t, tentativo.master); })
         .catch((e) => { stato.className = 'small error-text'; stato.textContent = e.message; });
     } });
-    const d = openDialog('Unisciti a una sessione', el('div', { class: 'form online-codes' },
+    const d = openDialog(suTrasporto ? 'Rientra nella sessione' : 'Unisciti a una sessione', el('div', { class: 'form online-codes' },
+      suTrasporto ? el('p', { class: 'small', text: '🔑 Con il gettone salvato riprendi lo stesso personaggio: chiedi al master un nuovo invito.' }) : null,
       el('p', {}, el('b', { text: '1. ' }), 'Incolla il codice di invito che ti ha mandato il master.'), invito,
       el('div', { class: 'form-actions' }, crea), out, stato));
     d.addEventListener('close', () => { if (tentativo && !fatto) tentativo.annulla(); });
@@ -550,13 +726,23 @@
       suRichiamo: (testo) => { suona('turno-giocatore'); toast('📣 ' + testo, 'success'); evidenzia(); },
       suScrive: (nome) => gioc.chat.scrive(nome),
       suPermessi: () => renderGiocatore(),
+      suPersa: (motivo) => { suona('online-disconnessione'); toast(motivo + ' Premi «Rientra» quando il master ti manda un nuovo invito.', 'error'); renderGiocatore(); },
+      suDialogo: dialogoNpc,
+      suLavoro: () => renderGiocatore(),
       archivio: {
         ha: async (id) => { const data = await DnD.immagini.get(id); if (data) gioc.icone.set(id, data); return Boolean(data); },
         metti: async (id, data) => { await DnD.immagini.put(data); gioc.icone.set(id, data); },
       },
     });
+    aggancia();
+    document.body.classList.add('online-giocatore');
+    document.querySelectorAll('dialog[open]').forEach((x) => x.close());
+    renderGiocatore();
+  }
+  // Battito e dadi del menù (con «Tiri convalidati» li tira il master; altrimenti il tiro del giocatore, non verificato).
+  function aggancia() {
+    clearInterval(gioc.timer);
     gioc.timer = setInterval(() => { if (gioc && !gioc.finita) { gioc.s.battito(); aggiornaLinea(); } }, BATTITO_MS);
-    // Dadi del menù: con «Tiri convalidati» li tira il master; altrimenti il tiro del giocatore (non verificato).
     DnD.uiDadi.remoto = (spec) => {
       if (!gioc || gioc.finita || !gioc.s.stato().convalidati) return false;
       chiedi('tira', spec, 'Tiro');
@@ -565,11 +751,73 @@
     DnD.uiDadi.suTiro = (tiro) => {
       if (!gioc || gioc.finita || gioc.s.stato().convalidati) return;
       gioc.s.dado(tiro);
-      aggiungiFeed({ da: q.nome, colore: q.colore, testo: tiroTesto(tiro), dado: true, verificato: false });
+      aggiungiFeed({ da: gioc.q.nome, colore: gioc.q.colore, testo: tiroTesto(tiro), dado: true, verificato: false });
     };
-    document.body.classList.add('online-giocatore');
-    document.querySelectorAll('dialog[open]').forEach((x) => x.close());
-    renderGiocatore();
+  }
+  // Rientro dopo una caduta o dopo che il master ha riaperto la sessione: nuovo scambio di codici, stesso gettone.
+  function rientra() {
+    if (!gioc) return;
+    unisciti(gioc.q, (t) => {
+      if (!gioc) { t.chiudi(); return; }
+      gioc.finita = false;
+      gioc.dom = null;
+      aggancia();
+      if (!gioc.s.riconnetti(t)) { t.chiudi(); toast('Non è possibile rientrare da qui: torna all\'app e unisciti di nuovo.', 'error'); return; }
+      renderGiocatore();
+    });
+  }
+  // Dialogo di un NPC mostrato dal master (con le risposte se puoi scegliere).
+  function dialogoNpc(d) {
+    if (!gioc) return;
+    gioc.dialoghi = gioc.dialoghi || new Map();
+    if (d.chiuso) { const x = gioc.dialoghi.get(d.id); if (x && x.open) x.close(); gioc.dialoghi.delete(d.id); return; }
+    suona('online-richiesta');
+    let dl = null;
+    dl = openDialog('🗨 ' + (d.npc || 'NPC'), el('div', { class: 'online-reveal' }, el('p', { class: 'online-reveal-text', text: d.testo }),
+      d.risposte.length ? el('div', { class: 'online-answers' }, d.risposte.map((r) => d.scelta
+        ? el('button', { type: 'button', class: 'btn', text: r.testo, onclick: () => { chiedi('rispostaDialogo', { dialogoId: d.id, rispostaId: r.id }, 'Risposta'); dl.close(); } })
+        : el('p', { class: 'muted small', text: '• ' + r.testo }))) : null,
+      !d.scelta && d.risposte.length ? el('p', { class: 'muted small', text: 'Sceglie il master.' }) : null), [{ text: 'Chiudi' }]);
+    gioc.dialoghi.set(d.id, dl);
+  }
+  // Scambio con un mercante: carrello sulla merce ricevuta; prezzi e verifiche li fa il master.
+  function mercanteDialog(n) {
+    const sc = gioc.s.stato().vista.scheda;
+    const qty = new Map();
+    const totale = el('p', { class: 'small', 'aria-live': 'polite' });
+    const conto = () => { const t = n.negozio.reduce((s, r) => s + r.prezzo * (qty.get(r.lineId) || 0), 0); totale.textContent = t ? 'Totale indicativo: ' + DnD.npc.formatCopper(t) + ' (lo conferma il master)' : ''; };
+    openDialog('🛒 ' + n.nome, el('div', { class: 'form' },
+      el('table', { class: 'small online-shop' }, el('tbody', {}, n.negozio.map((r) => el('tr', {}, el('td', { text: r.nome }), el('td', { text: r.testoPrezzo }), el('td', { text: '×' + r.qty }),
+        el('td', {}, DnD.ui.numberInput(0, { min: 0, max: r.qty, class: 'qty', 'aria-label': 'Quantità di ' + r.nome, oninput: (e) => { qty.set(r.lineId, Math.max(0, Math.min(r.qty, Number(e.target.value) || 0))); conto(); } })))))),
+      totale, sc ? el('p', { class: 'muted small', text: 'Monete: ' + DnD.attrezzatura.formatCoins(sc.monete || {}) }) : null), [
+      { text: 'Annulla' },
+      { text: 'Compra', class: 'primary', onclick: () => {
+        const compra = [...qty].filter(([, q]) => q > 0).map(([lineId, q]) => ({ lineId, qty: q }));
+        if (!compra.length) { toast('Carrello vuoto.', 'error'); return false; }
+        chiedi('scambio', { npcId: n.id, compra }, 'Acquisto da ' + n.nome);
+        return undefined;
+      } },
+    ]);
+  }
+  // Mondo e scene del giocatore: quest accettate, NPC incontrati (con il negozio se aperto), città, fazioni, scene.
+  function mondoNode(v) {
+    const m = v.mondo;
+    const out = [];
+    if ((v.scene || []).length) out.push(el('details', { class: 'online-scenes' }, el('summary', { text: '🎬 Scene (' + v.scene.length + ')' }),
+      v.scene.map((s) => el('div', { class: 'small' }, el('b', { text: s.titolo }), s.testo ? el('p', { class: 'online-reveal-text', text: s.testo }) : null))));
+    if (!m) return out;
+    out.push(el('details', { class: 'online-quests', open: true }, el('summary', { text: '📜 Diario delle quest (' + m.quest.length + ')' }),
+      m.quest.length ? m.quest.map((q) => el('div', { class: 'small' }, el('b', { text: q.titolo }), ' · ' + q.stato,
+        el('ul', {}, q.obiettivi.map((o) => el('li', { text: (o.fatto ? '✔ ' : '◻ ') + o.testo + (o.quanti > 1 ? ' (' + o.progresso + '/' + o.quanti + ')' : '') })))))
+        : el('p', { class: 'muted small', text: 'Nessuna quest accettata.' })));
+    if (m.npc.length) out.push(el('details', {}, el('summary', { text: '🧑 NPC incontrati (' + m.npc.length + ')' }),
+      m.npc.map((n) => el('div', { class: 'online-row small' }, DnD.icone.iconCanvas(iconaDi(n.icona), 20), el('b', { text: n.nome }),
+        n.ruoli.length ? ' · ' + n.ruoli.join(', ') : '', n.atteggiamento ? ' · ' + n.atteggiamento : '', n.stato ? ' · ' + n.stato : '',
+        n.negozio.length && !gioc.s.stato().spettatore ? btn('🛒 Negozio', () => mercanteDialog(n)) : null))));
+    if (m.citta.length || m.fazioni.length) out.push(el('details', {}, el('summary', { text: '🗺 Città e fazioni' }),
+      m.citta.map((c) => el('div', { class: 'small', text: '🏰 ' + c.nome })),
+      m.fazioni.map((f) => { const r = m.reputazioni.find((x) => x.fazioneId === f.id); return el('div', { class: 'small' }, pallino(f.colore), ' ' + f.nome + (r ? ' · reputazione ' + r.valore : '')); })));
+    return out;
   }
 
   // ---------- Richieste (intenzioni) ----------
@@ -587,8 +835,8 @@
     const r = gioc.richieste.get(e.id);
     if (e.stato === 'attesa') { if (r) r.stato = 'attesa'; aggiornaRichieste(); return; }
     gioc.richieste.delete(e.id);
-    if (e.stato === 'rifiutata') toast('✖ ' + e.testo, 'error');
-    else if (e.stato === 'eseguita' && r && r.etichetta !== 'Tiro') toast((e.avviso ? '⚠ ' + e.avviso + ' ' : '') + (e.testo || 'Fatto.'), e.avviso ? null : 'success');
+    if (e.stato === 'rifiutata') { suona('errore'); toast('✖ ' + e.testo, 'error'); }
+    else if (e.stato === 'eseguita' && r && r.etichetta !== 'Tiro') { suona('conferma'); toast((e.avviso ? '⚠ ' + e.avviso + ' ' : '') + (e.testo || 'Fatto.'), e.avviso ? null : 'success'); }
     gioc.esiti.unshift({ ok: e.stato === 'eseguita', testo: (r ? r.etichetta + ': ' : '') + (e.avviso ? e.avviso + ' ' : '') + e.testo });
     gioc.esiti.length = Math.min(gioc.esiti.length, 5);
     aggiornaRichieste();
@@ -684,10 +932,18 @@
     gioc.grid.requestDraw();
     if (gioc.anim.size) requestAnimationFrame(animaPedine);
   }
+  // Griglia mostrata: quella del combattimento attivo, altrimenti quella dell'esplorazione.
+  function vistaGriglia(v) {
+    if (!v) return null;
+    if (v.combattimento && v.combattimento.fase === 'attivo') return v.combattimento;
+    const e = v.esplorazione;
+    return e ? { griglia: e.griglia, tilesets: e.tilesets, turno: null, esplorazione: true,
+      pedine: e.gruppi.map((p) => ({ id: p.id, nome: p.nome, icona: p.icona, pos: p.pos, w: 1, h: 1, lato: 'giocatore', salute: 'illeso', fazione: 'giocatori' })) } : null;
+  }
   // Nebbia del giocatore (celle sconosciute coperte, esplorate velate) e ping.
   function disegnaSopra(ctx, view, s) {
     const v = gioc && gioc.s.stato().vista;
-    const c = v && v.combattimento;
+    const c = vistaGriglia(v);
     const cells = c && typeof c.griglia.cells === 'string' ? c.griglia.cells : '';
     if (cells && /[01]/.test(cells)) {
       const w = gioc.doc.grid.w;
@@ -743,7 +999,11 @@
     d.turni = el('section', { class: 'panel turn-panel' });
     d.log = el('ol', { class: 'log' });
     d.altri = el('section', { class: 'panel online-altri' });
-    d.presenza = el('div', { class: 'online-presence small' });
+    d.presenza = el('div', { class: 'online-presence small', role: 'list', 'aria-label': 'Partecipanti' });
+    d.lavoro = el('div', { class: 'online-banner online-working', hidden: true, role: 'status' });
+    d.persa = el('div', { class: 'online-banner online-lost', hidden: true, role: 'alert' });
+    d.mondo = el('section', { class: 'panel online-mondo', 'aria-label': 'Mondo' });
+    d.esplora = el('section', { class: 'panel online-esplora', hidden: true, 'aria-label': 'Esplorazione' });
     d.vuoto = el('div', { class: 'panel online-empty' });
     gioc.grid = DnD.uiGriglia.create({
       getDoc: () => gioc.doc, update: () => {}, readOnly: true, tools: ['misura'], showCombatants: false,
@@ -766,10 +1026,19 @@
     });
     const annullaPressione = (e) => { if (pressione && (e.type !== 'pointermove' || Math.hypot(e.clientX - pressione.p0.x, e.clientY - pressione.p0.y) > 6)) { clearTimeout(pressione.t); pressione = null; } };
     for (const ev of ['pointermove', 'pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(ev, annullaPressione);
+    // Esplorazione: doppio clic su una cella scoperta = chiedi di muovere il gruppo (costo e ore li calcola il master).
+    canvas.addEventListener('dblclick', (e) => {
+      const g = vistaGriglia(gioc.s.stato().vista);
+      if (!g || !g.esplorazione || gioc.s.stato().spettatore) return;
+      const r = canvas.getBoundingClientRect();
+      const cell = DnD.griglia.screenToCell(gioc.grid.view(), e.clientX - r.left, e.clientY - r.top);
+      if (cell.x < 0 || cell.y < 0 || cell.x >= g.griglia.w || cell.y >= g.griglia.h) return;
+      chiedi('muoviGruppo', { x: cell.x, y: cell.y }, 'Gruppo verso ' + DnD.griglia.cellLabel(cell.x, cell.y));
+    });
     d.center = el('div', { class: 'combat-center' }, d.vuoto, gioc.grid.node, el('p', { class: 'muted small online-hint', text: 'Trascina la tua pedina per chiedere lo spostamento · clic prolungato = ping a tutti' }));
     const cols = DnD.uiCombattimento.columns({
       key: 'dnd-battaglie:layout-online',
-      left: { title: 'Tu', body: [d.azioni, d.scheda, d.cards] },
+      left: { title: 'Tu', body: [d.azioni, d.esplora, d.scheda, d.mondo, d.cards] },
       center: d.center,
       right: { title: 'Turni', head: [el('button', { type: 'button', class: 'btn small dice-inline', text: '🎲 Dadi', title: 'Tira i dadi: il risultato lo decide il master', onclick: () => DnD.uiDadi.openPanel() })],
         body: [d.turni, el('section', { class: 'panel log-panel' }, el('h2', { text: 'Log' }), d.log), gioc.chat.node, d.altri] },
@@ -782,8 +1051,9 @@
           btn('❓ Chiedi al master…', domandaDialog),
           btn('📡 Eco', () => { gioc.s.eco(); setTimeout(aggiornaLinea, 1500); }, { title: 'Prova di eco con il master' }),
           btn('🩺 Test connessione', testConnessione),
+          btn('⬇ Riepilogo', esportaRiepilogo, { title: 'Scarica il riepilogo della partita (solo ciò che hai visto)' }),
           el('button', { type: 'button', class: 'btn small danger', text: 'Esci', onclick: () => { if (confirm('Uscire dalla sessione online?')) gioc.s.esci(); } }))),
-      d.banner, d.avanz, cols.layout);
+      d.persa, d.lavoro, d.banner, d.avanz, cols.layout);
     fill(document.getElementById('main'), d.root);
   }
   function domandaDialog() {
@@ -1051,14 +1321,34 @@
     const d = gioc.dom;
     const v = s.vista;
     const c = v.combattimento;
-    fill(d.presenza, (s.presenza || []).map((p) => el('span', { class: 'online-who', title: p.stato === 'master' ? 'Master' : p.stato }, pallino(p.colore), ' ' + p.nome + (p.stato === 'master' ? ' (master)' : p.stato === 'disconnesso' ? ' (disconnesso)' : ''))));
-    fill(d.azioni, ...azioniNode());
+    // Barra dei partecipanti: colore, nome, personaggio, stato e chi ha il turno.
+    fill(d.presenza, (s.presenza || []).map((p) => el('span', { class: 'online-who' + (p.turno ? ' turn' : ''), role: 'listitem', title: p.stato === 'master' ? 'Master' : p.stato === 'disconnesso' ? 'Assente' : p.spettatore ? 'Spettatore' : 'Connesso' },
+      pallino(p.colore), ' ' + (p.turno ? '⭐ ' : '') + p.nome + (p.personaggio ? ' · ' + p.personaggio : '') + (p.stato === 'master' ? ' (master)' : p.stato === 'disconnesso' ? ' (assente)' : p.spettatore ? ' 👁' : ''))));
+    // Connessione persa: banner con «Rientra» (stesso gettone, nuovo scambio di codici).
+    d.persa.hidden = s.stato !== 'persa';
+    if (s.stato === 'persa') fill(d.persa, '⚠ ' + (s.motivo || 'Connessione persa.') + ' ', btn('🔑 Rientra', rientra, { class: 'btn small primary' }));
+    d.lavoro.hidden = !s.lavoro;
+    d.lavoro.textContent = s.lavoro ? '🛠 ' + s.lavoro : '';
+    fill(d.azioni, ...(s.spettatore ? [el('h2', { text: 'Spettatore' }), el('p', { class: 'muted small', text: 'Sei uno spettatore: vedi la partita, puoi scrivere in chat e fare domande, ma non agire.' })] : azioniNode()));
     aggiornaRichieste();
     fill(d.scheda, ...schedaNode(v.scheda, v));
     fill(d.altri, ...altriNode(v));
+    fill(d.mondo, ...mondoNode(v));
+    d.mondo.hidden = !d.mondo.childNodes.length;
     const attivo = Boolean(c && c.fase === 'attivo');
-    d.vuoto.hidden = attivo;
-    gioc.grid.node.hidden = !attivo;
+    const esplora = !attivo && v.esplorazione ? v.esplorazione : null;
+    d.esplora.hidden = !esplora;
+    if (esplora) {
+      const ora = Math.floor(esplora.tempo.ora);
+      fill(d.esplora, el('h2', { text: '🧭 Esplorazione' }),
+        el('p', { class: 'small' }, 'Giorno ' + esplora.tempo.giorno + ', ore ' + String(ora).padStart(2, '0') + ':' + String(Math.round((esplora.tempo.ora - ora) * 60)).padStart(2, '0'),
+          esplora.meteo ? ' · ' + esplora.meteo.nome : '', esplora.bioma ? ' · ' + (esplora.bioma.icona ? esplora.bioma.icona + ' ' : '') + esplora.bioma.nome : ''),
+        s.spettatore ? null : el('p', { class: 'muted small', text: 'Doppio clic su una cella scoperta per proporre lo spostamento del gruppo: il master lo approva e calcola costo e ore.' }),
+        s.spettatore ? null : btn('🛏 Chiedi un riposo breve', () => chiedi('richiediRiposo', { tipo: 'breve' }, 'Riposo breve')),
+        esplora.eventi.length ? el('ol', { class: 'log small' }, esplora.eventi.slice(-8).map((x) => el('li', { text: 'G' + x.giorno + ' ' + x.testo }))) : null);
+    }
+    d.vuoto.hidden = attivo || Boolean(esplora);
+    gioc.grid.node.hidden = !attivo && !esplora;
     // Inizio del proprio turno: suono, avviso e pagina evidenziata.
     const mio = attivo && v.io.combattenteId && c.turno === v.io.combattenteId;
     if (mio && gioc.turnoPrima !== c.round + ':' + c.turno) {
@@ -1070,9 +1360,11 @@
     gioc.turnoPrima = attivo ? c.round + ':' + c.turno : null;
     if (!attivo) {
       fill(d.vuoto, el('h2', { text: c ? 'Si tira l\'iniziativa…' : 'Nessun combattimento in corso' }),
-        el('p', { class: 'muted', text: c ? 'Il combattimento comincia tra poco.' : v.master + ' non ha ancora iniziato un combattimento. Intanto puoi scrivere in chat, tirare i dadi e fare domande.' }));
+        el('p', { class: 'muted', text: c ? 'Il combattimento comincia tra poco.' : v.master + ' non ha ancora iniziato un combattimento. Intanto puoi scrivere in chat, tirare i dadi e fare domande.' }),
+        !c && !s.spettatore && v.scheda ? btn('🛏 Chiedi un riposo breve', () => chiedi('richiediRiposo', { tipo: 'breve' }, 'Riposo breve')) : null);
       clear(d.cards); clear(d.log);
       fill(d.turni, el('div', { class: 'muted small', text: 'In attesa del combattimento.' }));
+      if (esplora) { gioc.doc = documento(vistaGriglia(v)); gioc.grid.refresh(); }
     } else {
       const corrente = c.pedine.find((p) => p.id === c.turno) || null;
       fill(d.cards, c.pedine.filter((p) => !p.mia).map((p) => cartaPedina(p, p.id === c.turno)));
@@ -1093,6 +1385,11 @@
     aggiornaLinea();
   }
 
+  // Riepilogo di fine partita: solo ciò che il giocatore ha ricevuto (già filtrato dal master).
+  function esportaRiepilogo() {
+    if (!gioc) return;
+    DnD.uiImpostazioni.download(gioc.s.riepilogo(), 'sessione-online-' + DnD.uiImpostazioni.today() + '.txt', 'text/plain');
+  }
   function fineGiocatore(motivo, stato) {
     if (!gioc) return;
     gioc.finita = true;
@@ -1101,19 +1398,14 @@
     DnD.uiDadi.remoto = null;
     suona('online-disconnessione');
     if (stato === 'espulso') scrivi(GETTONE, null);
-    const v = gioc.s.stato().vista;
     const titolo = stato === 'rifiutato' ? 'Ingresso rifiutato' : stato === 'espulso' ? 'Sei stato espulso' : 'La sessione è terminata';
-    const esporta = () => {
-      const righe = ['Sessione online' + (v ? ' con ' + v.master : '') + ' — ' + new Date().toLocaleString('it-IT'), ''];
-      if (v && v.combattimento) righe.push('Log del combattimento:', ...v.combattimento.log.map((e) => 'R' + e.round + ' ' + e.testo), '');
-      righe.push('Chat e dadi:', ...feed.map((m) => oraTesto(m.ora) + ' ' + m.da + (m.privato ? ' (privato)' : '') + (m.dado ? ' 🎲 ' : ': ') + m.testo));
-      DnD.uiImpostazioni.download(righe.join('\n'), 'sessione-online-' + DnD.uiImpostazioni.today() + '.txt', 'text/plain');
-    };
+    const puoRientrare = stato === 'finito' && Boolean(gioc.s.stato().gettone);
     fill(document.getElementById('main'), el('div', { class: 'panel online-wait' },
       el('h1', { text: titolo }), el('p', { text: motivo || '' }),
-      stato === 'finito' ? el('p', { class: 'muted small', text: 'Per rientrare chiedi al master un nuovo invito: con il gettone salvato riprendi lo stesso personaggio.' }) : null,
+      stato === 'finito' ? el('p', { class: 'muted small', text: 'Per rientrare chiedi al master un nuovo invito: con il gettone salvato riprendi lo stesso personaggio (anche se il master ha chiuso e riaperto l\'app).' }) : null,
       el('div', { class: 'form-actions' },
-        el('button', { type: 'button', class: 'btn', text: '⬇ Esporta il log', onclick: esporta }),
+        el('button', { type: 'button', class: 'btn', text: '⬇ Riepilogo della partita', onclick: esportaRiepilogo }),
+        puoRientrare ? el('button', { type: 'button', class: 'btn', text: '🔑 Rientra', onclick: rientra }) : null,
         el('button', { type: 'button', class: 'btn primary', text: 'Torna all\'app', onclick: () => location.reload() }))));
   }
 
@@ -1155,6 +1447,27 @@
     } else {
       eco = el('p', { class: 'muted small', text: 'La prova di eco misura il tempo di risposta tra master e giocatore: avvia o raggiungi una sessione (Ospita / Unisciti), poi torna qui.' });
     }
+    // Diagnostica: collegati, latenze, traffico per client e ultimi errori; «Copia diagnostica» per una segnalazione.
+    const diagnostica = () => {
+      const base = { app: DnD.config.APP_NAME, protocollo: NET().protocollo.VERSIONE, browser: navigator.userAgent, ora: new Date().toISOString(), requisiti: req.map((r) => r.nome + ': ' + (r.ok ? 'ok' : 'NO')) };
+      if (master) return Object.assign(base, { ruolo: 'master' }, master.s.diagnostica());
+      if (gioc) { const s = gioc.s.stato(); return Object.assign(base, { ruolo: 'giocatore', stato: s.stato, latenza: s.latenza, eco: s.eco, linea: gioc.s.linea(), rientri: s.tentativi, spettatore: s.spettatore }); }
+      return Object.assign(base, { ruolo: 'nessuna sessione' });
+    };
+    const diag = diagnostica();
+    const diagNode = master ? el('div', { class: 'small' },
+      el('p', { text: 'Giocatori collegati: ' + diag.giocatori + (diag.spettatori ? ' + ' + diag.spettatori + ' spettatori' : '') + ' · latenza media ' + (diag.latenzaMedia === null ? '—' : diag.latenzaMedia + ' ms') + ', massima ' + (diag.latenzaMassima === null ? '—' : diag.latenzaMassima + ' ms') }),
+      diag.client.length ? el('table', { class: 'online-diag' }, el('thead', {}, el('tr', {}, ['Client', 'Stato', 'Latenza', 'Inviati', 'Messaggi', 'In coda'].map((t) => el('th', { text: t })))),
+        el('tbody', {}, diag.client.map((x) => el('tr', {}, el('td', { text: x.nome + (x.spettatore ? ' 👁' : '') }), el('td', {}, lineaDot(x.stato === 'attivo' ? x.linea : 'grigio'), ' ' + x.stato),
+          el('td', { text: x.latenza === null ? '—' : x.latenza + ' ms' }), el('td', { text: Math.round(x.byte / 1024) + ' KB' }), el('td', { text: String(x.messaggi) }),
+          el('td', { text: String(x.coda) + (x.scaricando ? ' ⬇' : '') }))))) : null,
+      diag.errori.length ? el('ul', {}, diag.errori.map((e) => el('li', { text: oraTesto(e.ora) + ' ' + e.testo }))) : el('p', { class: 'muted', text: 'Nessun errore recente.' }))
+      : el('p', { class: 'small muted', text: gioc ? 'Stato: ' + diag.stato + ' · latenza ' + (diag.latenza === null ? '—' : diag.latenza + ' ms') : 'Nessuna sessione online aperta.' });
+    const copiaDiag = btn('📋 Copia diagnostica', async () => {
+      const testo = JSON.stringify(diagnostica(), null, 1);
+      try { await navigator.clipboard.writeText(testo); toast('Diagnostica copiata: incollala nella segnalazione.', 'success'); } catch (e) { toast('Appunti non disponibili: seleziona e copia il testo qui sotto.', 'error'); diagPre.hidden = false; }
+    });
+    const diagPre = el('pre', { class: 'small player-view', hidden: true, text: JSON.stringify(diag, null, 1) });
     const stun = el('textarea', { rows: 2, class: 'code-box', spellcheck: false, 'aria-label': 'Server STUN, uno per riga' });
     stun.value = S.stun().join('\n');
     const problemi = [
@@ -1163,12 +1476,16 @@
       ['«Codice non valido» o «danneggiato»', 'Copiatelo per intero, senza tagli né spazi aggiunti: meglio con il pulsante «Copia».'],
       ['«Versione incompatibile»', 'Master e giocatore usano versioni diverse dell\'app: aggiornate entrambi la pagina (Ctrl+F5).'],
       ['Pagina aperta da file (file://)', 'Appunti e cache offline non funzionano. Servite la cartella in locale (python -m http.server) oppure pubblicatela gratis su un sito statico (per esempio GitHub Pages).'],
+      ['«Connessione persa» durante la partita', 'Premi «Rientra» e chiedi al master un nuovo invito: con il gettone riprendi personaggio e stato. Le richieste che avevi in sospeso sono annullate (ripetile). Brevi cadute della rete si recuperano da sole.'],
+      ['«La sessione è piena» o «non accetta nuovi ingressi»', 'Al massimo ' + NET().sessione.MAX_GIOCATORI + ' giocatori più gli spettatori; il master può aver chiuso i nuovi ingressi (entra solo chi rientra con il gettone).'],
+
     ];
     openDialog('Test connessione', el('div', { class: 'online-test' },
       el('h3', { text: 'Requisiti' }),
       el('ul', { class: 'online-req' }, req.map((r) => el('li', { class: r.ok ? 'ok' : 'ko' }, el('span', { text: r.ok ? '✔ ' : '✖ ' }), el('b', { text: r.nome }), r.nota ? el('div', { class: 'small muted', text: r.nota }) : null))),
       el('h3', { text: 'Rete' }), analizza, rete,
       el('h3', { text: 'Prova di eco' }), eco, ecoOut,
+      el('h3', { text: 'Diagnostica' }), diagNode, copiaDiag, diagPre,
       el('h3', { text: 'Problemi tipici' }),
       el('dl', { class: 'online-problems small' }, problemi.flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })])),
       el('details', {}, el('summary', { text: 'Server STUN (avanzato)' }),
@@ -1180,6 +1497,13 @@
   window.addEventListener('beforeunload', (e) => {
     if (master || (gioc && !gioc.finita)) { e.preventDefault(); e.returnValue = ''; }
   });
+  // Il master chiude l'app: messaggio chiaro ai giocatori; i gettoni restano salvati per riprendere la sessione.
+  window.addEventListener('pagehide', () => {
+    if (!master) return;
+    salvaRipresa();
+    master.s.termina('Il master ha chiuso l\'app: quando la riapre potrà riprendere la sessione e mandarvi un nuovo invito.');
+  });
+
 
   DnD.uiOnline = {
     apri, testConnessione, disegnaPing,

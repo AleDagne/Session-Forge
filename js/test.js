@@ -6030,7 +6030,8 @@
     eq(p.g.linea(), 'giallo', 'silenzio: giallo');
     ora += 15000;
     p.g.battito();
-    eq([p.g.stato().stato, p.ricevuti.fine[0].includes('non risponde')], ['finito', true], 'master in silenzio: sessione terminata');
+    // Tappa 3: con il gettone la sessione non finisce, il collegamento risulta perso (si può rientrare).
+    eq([p.g.stato().stato, p.g.stato().motivo.includes('non risponde')], ['persa', true], 'master in silenzio: connessione persa');
   });
 
   test('Online: due giocatori seguono un turno completo', async () => {
@@ -6430,7 +6431,7 @@
     a.suMessaggio((t) => ricevuti.push(JSON.parse(t)));
     a.invia(JSON.stringify({ versione: 1, tipo: 'ciao', id: 'v1', seq: 1, dati: { nome: 'Vecchio' } }));
     await pausa();
-    eq([ricevuti[0].tipo, ricevuti[0].dati.versione], ['incompatibile', 2]);
+    eq([ricevuti[0].tipo, ricevuti[0].dati.versione], ['incompatibile', NET().protocollo.VERSIONE]);
     ok(errori[0].includes('protocollo 1') && errori[0].includes('aggiornare'), errori[0]);
   });
 
@@ -6458,9 +6459,393 @@
     });
   });
 
-  async function runTests() {
+  // ---------- Gioco online, tappa 3: filtro unico, più giocatori, riconnessione ----------
+  // Chiavi e valori che non devono mai comparire in un messaggio al giocatore (stato di prova con valori marcatori).
+  const CHIAVI_VIETATE = ['notes', 'note', 'hidden', 'nascosto', 'soglia', 'threshold', 'thresholds', 'piano', 'plan', 'tactics', 'readAloud', 'npcState',
+    'trap', 'lock', 'contents', 'hiddenRole', 'dialog', 'stock', 'merchant', 'why', 'phases', 'lair'];
+  const VALORI_VIETATI = ['MK-', 'NOTA-SEGRETA', 'TESORO-SEGRETO', 'Assassino', 'Piano:', 'soffio al prossimo turno'];
+  // Scorre ricorsivamente ogni messaggio (chiavi e valori) e restituisce i problemi trovati.
+  function cercaSegreti(testi) {
+    const out = [];
+    const scorri = (v, via) => {
+      if (typeof v === 'string') { for (const s of VALORI_VIETATI) if (v.includes(s)) out.push(via + ' = ' + v.slice(0, 60)); return; }
+      if (Array.isArray(v)) { v.forEach((x, i) => scorri(x, via + '[' + i + ']')); return; }
+      if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { if (CHIAVI_VIETATE.includes(k)) out.push(via + '.' + k); scorri(x, via + '.' + k); }
+    };
+    for (const t of testi) { if (!t.startsWith('{')) continue; scorri(JSON.parse(t), 'msg'); }
+    return out;
+  }
+  // Stato pieno di segreti: combattimento di onlineState più Mondo (fazione segreta, mercante e spia piazzati, quest non
+  // offerta, città segreta, reputazioni), scene (una rivelata, una no), boss con fasi e tana, log dell'IA.
+  function statoMarcatori() {
+    const st = onlineState();
+    const se = S().current(st);
+    const sid = se.id;
+    st.players[0].coins = { mr: 0, ma: 0, me: 0, mo: 5, mp: 0 };
+    const c = se.combat;
+    const boss = c.combatants.find((x) => x.id === 'b1');
+    boss.boss.phases = [{ threshold: 50, name: 'MK-FASE', notes: 'MK-NOTA-FASE' }];
+    boss.creature = { legendary: [{ name: 'Colpo di coda', cost: 1 }], legendaryPoints: { max: 3, left: 2 }, lair: [{ name: 'MK-TANA' }] };
+    DnD.dati.pushLog(c, 'ia', 'MK-PIANO: il drago aspetta.');
+    st.factions.push(FZ().normalizeFaction({ id: 'gilda', name: 'Gilda', sessionId: sid }), FZ().normalizeFaction({ id: 'segreta', name: 'MK-FAZIONE', notes: 'MK-NOTE-FAZIONE', sessionId: sid }));
+    st.cities.push(CT().normalizeCity({ id: 'cx', name: 'MK-CITTA', notes: 'MK-NOTE-CITTA', sessionId: sid }));
+    const merc = Object.assign(merchantNpc({ notes: 'MK-NOTE-MERCANTE' }), { sessionId: sid });
+    const spia = Object.assign(NPC().normalizeNpc({ id: 'spia', name: 'Vel', roles: ['informatore'], hiddenRole: true, attitude: 'ostile', factionId: 'segreta', notes: 'MK-NOTE-SPIA',
+      dialog: { start: 'n1', nodes: [{ id: 'n1', title: 'MK-NODO', text: 'MK-DIALOGO', answers: [] }] } }), { sessionId: sid });
+    st.worldNpcs.push(merc, spia);
+    const im = NPC().placedItem(merc, 'npc-m', 2, 2);
+    im.npcState.revealed.role = true;
+    const is = NPC().placedItem(spia, 'npc-s', 4, 2);
+    c.grid.items.push(im, is);
+    st.quests.push(QS().normalizeQuest({ id: 'q1', title: 'Lupi', factionId: 'gilda', description: 'Caccia ai lupi', sessionId: sid, notes: 'MK-NOTE-QUEST' }),
+      QS().normalizeQuest({ id: 'q2', title: 'MK-QUEST', factionId: 'segreta', sessionId: sid, hidden: true }));
+    const party = st.parties.find((p) => p.sessionId === sid);
+    Object.assign(party, { memberIds: ['pg1'], reputation: { gilda: 30, segreta: -50 } });
+    se.world.activePartyId = party.id;
+    QS().offer(se.world.quests, st.quests.find((q) => q.id === 'q1'));
+    QS().accept(se.world.quests, st.quests.find((q) => q.id === 'q1'), 0, party.id);
+    st.scenes.push(SC().normalizeScene({ id: 's1', title: 'Arrivo', order: 1, sessionId: sid, revealed: true, readAloud: '<p>Benvenuti a Rocca</p>', notes: 'MK-NOTE-SCENA' }),
+      SC().normalizeScene({ id: 's2', title: 'MK-SCENA', order: 2, sessionId: sid, readAloud: '<p>MK-TESTO</p>' }));
+    return st;
+  }
+  // Rete di prova della tappa 3: un master e più client in memoria. scelte(nome) -> scelte di accetta.
+  function rete3(st, mopts, scelte) {
+    const m = NET().sessione.master(Object.assign({ nome: 'Dario', stato: () => st, suRichiesta: (r) => (scelte ? scelte(r) : r.accetta({ personaggioId: 'pg1' })) }, mopts));
+    const unisci = (nome, gopts) => {
+      const [a, b] = NET().trasporto.coppiaMemoria();
+      const inviati = [];
+      const inv = b.invia;
+      b.invia = (t) => { inviati.push(t); return inv(t); };
+      m.collega(b);
+      const esiti = [];
+      const g = NET().sessione.giocatore(Object.assign({ nome, colore: '#3366aa', trasporto: a, suEsito: (e) => esiti.push(e) }, gopts));
+      return { g, a, b, inviati, esiti, chiedi: async (tipo, dati) => { const id = g.intenzione(tipo, dati); await pausa(); return esiti.filter((e) => e.id === id).pop() || null; } };
+    };
+    return { m, unisci };
+  }
+
+  test('Online 3: whitelist — nessun marcatore segreto in nessun messaggio, sezione per sezione', async () => {
+    const st = statoMarcatori();
+    const { m, unisci } = rete3(st);
+    const c1 = unisci('Ale');
+    await pausa();
+    const v = c1.g.stato().vista;
+    eq([v.mondo.npc.map((n) => n.nome), v.mondo.npc.find((n) => n.id === 'npc-s').ruoli, v.mondo.npc.find((n) => n.id === 'npc-s').atteggiamento], [['Bera', 'Vel'], [], ''], 'NPC incontrati, ruolo e atteggiamento della spia nascosti');
+    eq([v.mondo.quest.map((q) => q.titolo), v.mondo.fazioni.map((f) => f.nome), v.mondo.citta, v.mondo.reputazioni], [['Lupi'], ['Gilda'], [], []], 'quest accettate, fazioni conosciute, reputazioni nascoste');
+    eq(v.scene, [{ id: 's1', titolo: 'Arrivo', tipo: v.scene[0].tipo, stato: v.scene[0].stato, testo: 'Benvenuti a Rocca' }], 'solo la scena rivelata, in testo semplice');
+    eq(v.mondo.npc.find((n) => n.id === 'npc-m').negozio, [], 'negozio chiuso: nessuna merce');
+    eq([v.combattimento.boss, v.combattimento.pedine.find((p) => p.id === 'b1').tema], [[], ''], 'boss non rivelato: nessun tema né azioni');
+    // Il master apre il negozio, rivela il boss e le reputazioni: arrivano come eventi, ancora senza segreti.
+    m.rivelaMondo('negozi', 'npc-m');
+    S().current(st).combat.combatants.find((x) => x.id === 'b1').boss.revealed = true;
+    m.impostaVisibilita({ mostraReputazioni: true });
+    await pausa();
+    const v2 = c1.g.stato().vista;
+    eq(v2.mondo.npc.find((n) => n.id === 'npc-m').negozio.map((r) => [r.lineId, r.nome, r.qty]), [['l1', 'Pugnale', 3]], 'negozio aperto: solo le righe sbloccate');
+    eq([v2.mondo.reputazioni, v2.combattimento.boss[0].leggendarie, v2.combattimento.boss[0].puntiLeggendari, v2.combattimento.pedine.find((p) => p.id === 'b1').tema],
+      [[{ fazioneId: 'gilda', valore: 30 }], [{ nome: 'Colpo di coda' }], 2, 'fuoco'], 'reputazione rivelata solo per le fazioni note; azioni leggendarie solo a boss rivelato');
+    eq(c1.inviati.some((t) => t.includes('"tipo":"evento"')), true, 'aggiornamenti incrementali');
+    eq(cercaSegreti(c1.inviati), [], 'nessuna chiave o valore segreto in tutti i messaggi');
+  });
+
+  test('Online 3: campo nuovo non ammesso scartato con avviso; eventi filtrati per operazione', () => {
+    const F = NET().filtro;
+    const avvisi = [];
+    const r = F.ammetti({ master: 'Dario', nuovoCampo: 'MK-X', notes: 'MK-N', io: { giocatoreId: 'a', extra: 1 }, altri: [{ id: 'p', nome: 'Bea', segreto: 'MK' }] }, F.SCHEMA, 'vista', avvisi);
+    eq(r, { master: 'Dario', io: { giocatoreId: 'a' }, altri: [{ id: 'p', nome: 'Bea' }] }, 'solo i campi ammessi');
+    eq(avvisi, ['vista.nuovoCampo', 'vista.io.extra', 'vista.altri[0].segreto'], 'avviso per i campi sconosciuti (le chiavi private note si scartano in silenzio)');
+    const ev = F.eventoPerGiocatore({ n: 4, cambi: [{ op: 'pedina', pedina: { id: 'g1', nome: 'Goblin', hp: 7, piano: 'MK' } }, { op: 'segreto', x: 1 }, { op: 'celle', d: [[3, 2]] }] }, 'g', { silenzioso: true });
+    eq(ev, { n: 4, cambi: [{ op: 'pedina', pedina: { id: 'g1', nome: 'Goblin' } }, { op: 'celle', d: [[3, 2]] }] }, 'operazione sconosciuta scartata, campi della pedina filtrati');
+  });
+
+  test('Online 3: «Vedi come giocatore» mostra i dati inviati e ciò che non arriva', async () => {
+    const st = statoMarcatori();
+    const { m, unisci } = rete3(st);
+    const c1 = unisci('Ale');
+    await pausa();
+    const id = c1.g.stato().id;
+    const vc = m.vediCome(id);
+    eq(vc.vista, m.vistaInviata(id), 'la stessa vista inviata, non una ricostruzione della UI');
+    const testi = vc.manca.map((x) => x.sezione + ': ' + x.testo);
+    for (const atteso of ['Note: Note del master', 'Combattimento: Assassino (nascosto)', 'Boss: Drago', 'Mappa: Trappola (nascosto)', 'Scene: «MK-SCENA» (non rivelata)', 'Quest: «MK-QUEST»', 'Fazioni: MK-FAZIONE', 'Combattimento: PF esatti dei nemici']) {
+      ok(testi.some((t) => t.startsWith(atteso)), 'non ricevuto: ' + atteso);
+    }
+    const tavolo = m.vediCome(null);
+    eq([tavolo.vista.io.spettatore, tavolo.vista.scheda], [true, null], 'vista del tavolo (spettatore senza personaggio)');
+  });
+
+  test('Online 3: esplorazione e nebbia — solo celle scoperte, aggiornamenti incrementali, gruppo mosso con approvazione', async () => {
+    const w = exploreWorld();
+    w.grid.fog.enabled = true;
+    w.grid.items = [DnD.dati.normalizePlacedItem({ id: 'lontano', name: 'MK-OGGETTO', x: 9, y: 9 })];
+    XP().reveal(w);
+    const mosse = [];
+    const { m, unisci } = rete3(w.st, { esploraGruppo: (x, y) => { w.ex.parties[0].pos = { x, y }; XP().reveal(w); mosse.push([x, y]); return { testo: 'Il gruppo si sposta.' }; } }, (r) => r.accetta({ personaggioId: 'p1' }));
+    const c1 = unisci('Ale');
+    await pausa();
+    const ve = c1.g.stato().vista.esplorazione;
+    ok(ve && ve.griglia.cells.includes('0') && ve.griglia.cells.includes('2'), 'celle coperte e visibili');
+    eq([ve.griglia.items, ve.gruppi.map((p) => p.pos), ve.tempo.giorno, Boolean(ve.bioma && ve.bioma.nome)], [[], [{ x: 0, y: 0 }], 1, true], 'nessun oggetto fuori vista; gruppo, tempo e bioma');
+    let e = await c1.chiedi('muoviGruppo', { x: 9, y: 9 });
+    eq([e.stato, e.testo], ['rifiutata', 'Non puoi andare lì.'], 'cella non scoperta');
+    e = await c1.chiedi('muoviGruppo', { x: 1, y: 0 });
+    eq([e.stato, m.coda().length], ['attesa', 1], 'serve l\'approvazione del master');
+    const prima = c1.inviati.length;
+    m.approva(m.coda()[0].id);
+    m.aggiorna();
+    await pausa();
+    const nuovi = c1.inviati.slice(prima).map((t) => JSON.parse(t)).filter((x) => x.tipo === 'evento');
+    const ops = nuovi.flatMap((x) => x.dati.cambi.map((c) => c.op));
+    ok(ops.includes('celleEsp') && !ops.includes('nebbiaEsp'), 'nebbia: solo le celle rivelate (' + ops.join(', ') + ')');
+    eq([mosse, c1.g.stato().vista, cercaSegreti(c1.inviati)], [[[1, 0]], m.vistaInviata(c1.g.stato().id), []], 'gruppo mosso, vista coerente, nessun segreto');
+    // Mappa 100×100: lo spostamento manda solo le differenze, molto meno della maschera intera.
+    const F = NET().filtro;
+    const a = '0'.repeat(10000);
+    const b = a.slice(0, 5050) + '22222' + a.slice(5055);
+    const d = F.diffCelle(a, b);
+    eq([d.length, F.applicaCelle(a, d) === b, JSON.stringify(d).length < 200], [5, true, true], 'differenze delle celle su 100×100');
+  });
+
+  test('Online 3: scambio col mercante convalidato dal master, quest e scene', async () => {
+    const st = statoMarcatori();
+    const { m, unisci } = rete3(st);
+    const c1 = unisci('Ale');
+    await pausa();
+    let e = await c1.chiedi('scambio', { npcId: 'npc-m', compra: [{ lineId: 'l1', qty: 1 }] });
+    eq([e.stato, e.testo], ['rifiutata', 'Mercante non disponibile.'], 'negozio non aperto');
+    e = await c1.chiedi('scambio', { npcId: 'npc-zzz', compra: [{ lineId: 'l1', qty: 1 }] });
+    eq(e.testo, 'Mercante non disponibile.', 'mercante inesistente: stesso rifiuto, nulla da dedurre');
+    m.rivelaMondo('negozi', 'npc-m');
+    m.rivelaMondo('negozi', 'npc-s');
+    await pausa();
+    e = await c1.chiedi('scambio', { npcId: 'npc-s', compra: [{ lineId: 'l1', qty: 1 }] });
+    eq(e.testo, 'Mercante non disponibile.', 'ruolo nascosto: nessun negozio');
+    e = await c1.chiedi('scambio', { npcId: 'npc-m', compra: [{ lineId: 'l2', qty: 1 }] });
+    eq(e.testo, 'Oggetto non in vendita.', 'riga bloccata dalla reputazione');
+    e = await c1.chiedi('scambio', { npcId: 'npc-m', compra: [{ lineId: 'l1', qty: 9 }] });
+    eq(e.stato, 'rifiutata', 'quantità oltre la disponibilità');
+    const prezzo = c1.g.stato().vista.mondo.npc.find((n) => n.id === 'npc-m').negozio[0].prezzo;
+    e = await c1.chiedi('scambio', { npcId: 'npc-m', compra: [{ lineId: 'l1', qty: 1 }] });
+    const pg = st.players.find((p) => p.id === 'pg1');
+    eq([e.stato, pg.inventory.some((x) => x.equipmentId === 'eq-pugnale'), NPC().toCopper(pg.coins), S().current(st).combat.grid.items.find((x) => x.id === 'npc-m').npcState.stock[0].qty],
+      ['eseguita', true, 500 - prezzo, 2], 'acquisto con i prezzi del master');
+    eq(cercaSegreti(c1.inviati), [], 'nessun segreto');
+  });
+
+  test('Online 3: boss rivelato e non, trasformazione leggendaria visibile al proprietario', async () => {
+    const st = partitaState();
+    const x1 = S().current(st).combat.combatants.find((x) => x.id === 'x1');
+    x1.legend = { theme: 'sole', rank: 2, transformations: [{ name: 'Avatar' }], form: { id: 'f', name: 'Avatar del sole', theme: 'sole' } };
+    await partita(async ({ ale, bice }) => {
+      const pa = ale.stato().vista.combattimento.pedine.find((p) => p.id === 'x1');
+      const pb = bice.stato().vista.combattimento.pedine.find((p) => p.id === 'x1');
+      eq([pa.tema, pa.proprie.leggenda.forma, pa.proprie.leggenda.trasformazioni], ['lg:sole', 'Avatar del sole', ['Avatar']], 'il proprietario vede forma e percorso');
+      eq([pb.tema, 'proprie' in pb], ['lg:sole', false], 'gli altri vedono solo la pedina trasformata (tema grafico)');
+    }, { st });
+  });
+
+  test('Online 3: richiesta di riposo breve con approvazione e dialogo con scelta del giocatore', async () => {
+    const st = statoMarcatori();
+    const riposi = [];
+    const dialoghi = [];
+    const { m, unisci } = rete3(st, { riposo: (id, tipo) => { riposi.push([id, tipo]); return { testo: 'Riposo breve avviato.' }; }, suDialogo: (d) => { dialoghi.push(d); return { testo: 'Bera: ecco le armi.' }; } });
+    const c1 = unisci('Ale', { suDialogo: (d) => dialoghi.push(['giocatore', d.chiuso ? 'chiuso' : d.testo]) });
+    await pausa();
+    let e = await c1.chiedi('richiediRiposo', { tipo: 'breve' });
+    eq(e.testo, 'Non puoi riposare durante un combattimento.');
+    S().current(st).combat = null;
+    m.aggiorna();
+    e = await c1.chiedi('richiediRiposo', { tipo: 'lungo' });
+    eq(e.stato, 'rifiutata', 'solo il riposo breve');
+    e = await c1.chiedi('richiediRiposo', { tipo: 'breve' });
+    eq(e.stato, 'attesa');
+    m.approva(m.coda()[0].id);
+    await pausa();
+    eq([riposi, c1.esiti.pop().testo], [[['pg1', 'breve']], 'Riposo breve avviato.'], 'approvato: lo avvia il master');
+    const did = m.mostraDialogo({ npc: 'Bera', testo: 'Cosa cerchi?', risposte: [{ id: 'r1', testo: 'Armi' }, { id: 'r2', testo: 'Niente' }], scelta: true });
+    await pausa();
+    eq([c1.g.stato().dialoghi.get(did).risposte.map((r) => r.testo), dialoghi[0]], [['Armi', 'Niente'], ['giocatore', 'Cosa cerchi?']], 'dialogo mostrato al giocatore');
+    e = await c1.chiedi('rispostaDialogo', { dialogoId: did, rispostaId: 'r9' });
+    eq(e.testo, 'Risposta non disponibile.', 'risposta non mandata');
+    e = await c1.chiedi('rispostaDialogo', { dialogoId: did, rispostaId: 'r1' });
+    eq([e.stato, e.testo, dialoghi.find((d) => d.rispostaId).rispostaId, c1.g.stato().dialoghi.size], ['eseguita', 'Bera: ecco le armi.', 'r1', 0], 'scelta convalidata e dialogo chiuso');
+    e = await c1.chiedi('rispostaDialogo', { dialogoId: did, rispostaId: 'r1' });
+    eq(e.testo, 'Risposta non disponibile.', 'una volta sola');
+  });
+
+  // Sei giocatori in combattimento (pg1…pg6) e un goblin.
+  function seiState() {
+    const st = DnD.dati.emptyState();
+    const se = S().current(st);
+    const cs = [];
+    for (let i = 1; i <= 6; i++) {
+      st.players.push(Object.assign(DnD.dati.normalizeCreature({ id: 'pg' + i, name: 'Eroe ' + i, classId: 'guerriero', maxHp: 20 }, true), { sessionId: se.id }));
+      cs.push({ id: 'x' + i, sourceId: 'pg' + i, name: 'Eroe ' + i, kind: 'player', faction: 'giocatori', hp: 20, maxHp: 20, initiative: 20 - i, pos: { x: i, y: 1 }, w: 1, h: 1 });
+    }
+    cs.push({ id: 'g1', name: 'Goblin', kind: 'npc', faction: 'nemici', hp: 7, maxHp: 7, initiative: 5, pos: { x: 3, y: 5 }, w: 1, h: 1 });
+    cs.push({ id: 'h1', name: 'Assassino', kind: 'npc', faction: 'nemici', hp: 9, maxHp: 9, hidden: true, initiative: 4, pos: { x: 9, y: 9 }, w: 1, h: 1 });
+    se.combat = DnD.dati.normalizeCombat({ id: 'c6', phase: 'attivo', round: 1, currentId: 'x1', combatants: cs, grid: { w: 12, h: 12 }, log: [] });
+    return st;
+  }
+  const sceltaSei = (r) => (r.nome.startsWith('Spett') ? r.accetta({ spettatore: true, come: r.nome === 'Spett-come' ? 'pg2' : null }) : r.accetta({ personaggioId: 'pg' + r.nome.slice(1) }));
+
+  test('Online 3: sei giocatori con viste diverse, spettatori (tavolo e «come»), barra dei partecipanti', async () => {
+    const st = seiState();
+    const errori = [];
+    const { m, unisci } = rete3(st, { suErrore: (t) => errori.push(t) }, sceltaSei);
+    const cl = [1, 2, 3, 4, 5, 6].map((i) => unisci('G' + i));
+    const tavolo = unisci('Spett-tavolo');
+    const come = unisci('Spett-come');
+    await pausa();
+    eq(cl.map((x) => x.g.stato().vista.io.personaggioId), ['pg1', 'pg2', 'pg3', 'pg4', 'pg5', 'pg6'], 'ognuno il proprio personaggio');
+    eq(cl.map((x) => x.g.stato().vista.combattimento.pedine.filter((p) => p.mia).map((p) => p.id)[0]), ['x1', 'x2', 'x3', 'x4', 'x5', 'x6'], 'viste filtrate per ciascuno');
+    ok(new Set(cl.map((x) => x.inviati.find((t) => t.includes('"tipo":"istantanea"')))).size === 6, 'istantanee diverse, non un broadcast identico');
+    eq([tavolo.g.stato().spettatore, tavolo.g.stato().vista.scheda, come.g.stato().vista.scheda.nome, come.g.stato().vista.combattimento.pedine.some((p) => p.proprie)], [true, null, 'Eroe 2', false], 'spettatori');
+    const e = await come.chiedi('finisciTurno', { combattenteId: 'x2' });
+    eq(e.testo, 'Gli spettatori non possono agire.');
+    const pres = cl[0].g.stato().presenza;
+    eq([pres.length, pres.find((p) => p.nome === 'G1').personaggio, pres.find((p) => p.nome === 'G1').turno, pres.find((p) => p.nome === 'Spett-tavolo').spettatore], [9, 'Eroe 1', true, true], 'partecipanti con personaggio e turno');
+    // Un settimo giocatore entra solo come spettatore.
+    const sett = unisci('G7');
+    await pausa();
+    eq([sett.g.stato().spettatore, errori.some((t) => t.includes('piena'))], [true, true], 'oltre 6: spettatore');
+    for (const x of cl.concat([tavolo, come, sett])) eq(cercaSegreti(x.inviati), [], 'nessun segreto');
+    eq([m.diagnostica().giocatori, m.diagnostica().spettatori], [6, 3]);
+  });
+
+  test('Online 3: coda di invio con priorità, client lento e accorpamento degli aggiornamenti', async () => {
+    // Unità: con il canale pieno i messaggi aspettano; poi prima lo stato, poi la chat, ultime le immagini.
+    let pieno = true;
+    let rilascia = null;
+    const usciti = [];
+    const finto = { connesso: () => true, inCoda: () => (pieno ? 1e9 : 0), svuotato: () => new Promise((r) => { rilascia = r; }), invia: (t) => usciti.push(JSON.parse(t).tipo) };
+    const q = NET().sessione.codaInvio(finto);
+    q.invia('immagine', {});
+    q.invia('chat', {});
+    q.invia('evento', {});
+    q.invia('esito', {});
+    eq([usciti, q.inAttesa(), q.inAttesa(2)], [[], 4, 1], 'canale pieno: tutto in coda');
+    pieno = false;
+    rilascia();
+    await pausa();
+    eq(usciti, ['evento', 'esito', 'chat', 'immagine'], 'priorità: stato di gioco, chat, immagini');
+    // Sessione: un client lento non blocca gli altri e riceve gli aggiornamenti accorpati.
+    const st = seiState();
+    const { m, unisci } = rete3(st, {}, sceltaSei);
+    const veloce = unisci('G1');
+    const lento = unisci('G2');
+    await pausa();
+    let tappo = false;
+    let apri = null;
+    lento.b.inCoda = () => (tappo ? 1e9 : 0);
+    lento.b.svuotato = () => new Promise((r) => { apri = r; });
+    tappo = true;
+    const c = S().current(st).combat;
+    const primaV = veloce.inviati.length;
+    const primaL = lento.inviati.length;
+    for (let i = 0; i < 5; i++) { c.combatants.find((x) => x.id === 'g1').pos = { x: 4 + i, y: 5 }; m.aggiorna(); }
+    await pausa();
+    const statoV = veloce.inviati.slice(primaV).filter((t) => /"tipo":"(evento|istantanea)"/.test(t)).length;
+    eq([statoV, lento.inviati.length - primaL], [5, 0], 'il veloce riceve tutto, il lento aspetta (canale pieno)');
+    ok(m.giocatori().find((g) => g.nome === 'G2').coda > 0, 'coda del client lento visibile al master');
+    tappo = false;
+    apri();
+    await pausa();
+    await pausa();
+    const statoL = lento.inviati.slice(primaL).filter((t) => /"tipo":"(evento|istantanea)"/.test(t)).length;
+    ok(statoL <= 3, 'aggiornamenti accorpati (' + statoL + ' invece di 5)');
+    eq(lento.g.stato().vista, m.vistaInviata(lento.g.stato().id), 'alla fine la stessa vista');
+    eq(lento.g.stato().vista.combattimento.pedine.find((p) => p.id === 'g1').pos, { x: 8, y: 5 });
+  });
+
+  test('Online 3: riconnessione col gettone, intenzioni in sospeso annullate, master che riprende la sessione', async () => {
+    const st = onlineState();
+    const errori = [];
+    const richieste = [];
+    const accetta = (r) => { richieste.push(r); r.accetta(r.rientro ? {} : { personaggioId: 'pg1' }); };
+    const mopts = { suErrore: (t) => errori.push(t) };
+    const r1 = rete3(st, mopts, accetta);
+    const perse = [];
+    const c1 = r1.unisci('Ale', { suPersa: (t) => perse.push(t) });
+    await pausa();
+    const id = c1.g.stato().id;
+    r1.m.impostaPermessi(null, { confermaManuale: true });
+    const iid = c1.g.intenzione('domanda', { testo: 'Ci sono trappole?' });
+    r1.m.richiediTiro(id, { caratteristica: 'DES', cd: 12 });
+    await pausa();
+    // Il collegamento cade: richieste annullate dal master, il giocatore vede «Connessione persa».
+    c1.a.chiudi();
+    await pausa();
+    eq([c1.g.stato().stato, perse.length, r1.m.giocatori()[0].stato], ['persa', 1, 'disconnesso'], 'connessione persa');
+    ok(errori.some((t) => t.includes('annullate')), 'richieste in sospeso annullate con avviso');
+    ok(c1.esiti.every((e) => e.id !== iid || e.stato !== 'attesa'), 'nessuna richiesta lasciata in attesa');
+    // Rientra: nuovo scambio, stesso gettone, stesso posto e personaggio.
+    const [a2, b2] = NET().trasporto.coppiaMemoria();
+    r1.m.collega(b2);
+    eq(c1.g.riconnetti(a2), true);
+    await pausa();
+    eq([c1.g.stato().stato, c1.g.stato().id, c1.g.stato().vista.io.personaggioId, richieste.pop().rientro.gettone], ['attivo', id, 'pg1', true], 'rientro con il gettone');
+    // Il master chiude e riapre: riprende con i gettoni salvati, i codici sono nuovi.
+    const gettoni = r1.m.esportaGettoni();
+    r1.m.termina('Il master ha chiuso l\'app.');
+    await pausa();
+    eq(c1.g.stato().stato, 'finito');
+    const r2 = rete3(st, { gettoni }, accetta);
+    const [a3, b3] = NET().trasporto.coppiaMemoria();
+    r2.m.collega(b3);
+    c1.g.riconnetti(a3);
+    await pausa();
+    eq([c1.g.stato().stato, c1.g.stato().id, c1.g.stato().vista.io.personaggioId], ['attivo', id, 'pg1'], 'sessione ripresa: personaggio ancora legato');
+  });
+
+  test('Online 3: carico simulato (6 client, 200 eventi), limiti, espulsione per frequenza, diagnostica e riepilogo', async () => {
+    const st = seiState();
+    const { m, unisci } = rete3(st, {}, sceltaSei);
+    const cl = [1, 2, 3, 4, 5, 6].map((i) => unisci('G' + i));
+    await pausa();
+    const c = S().current(st).combat;
+    const g1 = c.combatants.find((x) => x.id === 'g1');
+    // Tempo di calcolo del master (filtro, differenze, invio), senza le attese tra un gruppo e l'altro.
+    let durata = 0;
+    for (let i = 0; i < 200; i++) {
+      g1.pos = { x: i % 10, y: 5 + (i % 3) };
+      if (i % 10 === 0) DnD.dati.pushLog(c, 'sistema', 'Evento ' + i);
+      const t0 = performance.now();
+      m.aggiorna();
+      durata += performance.now() - t0;
+      if (i % 20 === 19) await pausa();
+    }
+    await pausa();
+    for (const x of cl) eq(x.g.stato().vista, m.vistaInviata(x.g.stato().id), 'vista coerente dopo il carico');
+    const max = Math.max(...cl.flatMap((x) => x.inviati.map((t) => t.length)));
+    ok(max < 64 * 1024, 'messaggio più grande ' + max + ' byte');
+    ok(durata < 8000, '200 eventi × 6 client in ' + Math.round(durata) + ' ms di calcolo');
+    const diag = m.diagnostica();
+    eq([diag.giocatori, diag.client.length, diag.client.every((x) => x.byte > 0 && x.messaggi > 200)], [6, 6, true], 'diagnostica per client');
+    // Limiti: messaggio troppo grande e raffica di richieste con espulsione automatica.
+    const r2 = rete3(seiState(), { espelliFrequenza: true, soglia: 3 }, sceltaSei);
+    const sp = r2.unisci('G1');
+    await pausa();
+    sp.a.invia('x'.repeat(NET().protocollo.LIMITI.daGiocatore + 10));
+    for (let i = 0; i < 60; i++) sp.g.intenzione('ping', { x: 1, y: 1 });
+    await pausa();
+    await pausa();
+    eq(sp.g.stato().stato, 'espulso', 'espulso oltre la soglia');
+    ok(r2.m.diagnostica().errori.length > 0, 'ultimi errori nella diagnostica');
+    // Riepilogo di fine partita (giocatore) e log completo (master).
+    m.chat('Fine della serata');
+    await pausa();
+    const testo = cl[0].g.riepilogo();
+    ok(testo.includes('Fine della serata') && testo.includes('— Combattimento —') && testo.includes('Evento 190') && !testo.includes('Assassino'), 'riepilogo filtrato');
+    ok(m.registroCompleto().some((r) => r.includes('Fine della serata')), 'log del master');
+  });
+
+  // solo: facoltativo, esegue solo i test il cui nome contiene questo testo.
+  async function runTests(solo) {
     const results = [];
     for (const { name, fn } of tests) {
+      if (solo && !name.includes(solo)) continue;
+      DnD.testInCorso = name; // per capire quale test si blocca
       try {
         await fn();
         results.push({ name, ok: true });

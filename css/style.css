@@ -1468,6 +1468,23 @@ input.short { max-width: 8rem; }
 .online-request input { flex: 1 1 8rem; min-width: 0; }
 .online-log { margin: 0.3rem 0 0; padding-left: 1rem; max-height: 160px; overflow-y: auto; }
 .online-log li.grave { color: var(--danger-text); }
+/* Gioco online, tappa 3: partecipanti, banner di lavoro e di connessione persa, Mondo, Vedi come, diagnostica. */
+.online-who { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.4rem; border: 1px solid var(--border); border-radius: 999px; }
+.online-who.turn { border-color: var(--accent); font-weight: 700; }
+.online-working { border-style: dashed; font-weight: 600; }
+.online-lost { border-color: var(--danger-border); color: var(--danger-text); display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.online-lost[hidden] { display: none; }
+.online-mondo[hidden], .online-esplora[hidden] { display: none; }
+.online-mondo details, .online-esplora .log { margin: 0.3rem 0; }
+.online-mondo summary { cursor: pointer; font-weight: 600; }
+.online-answers { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.online-shop td { padding: 0.15rem 0.4rem; }
+.online-manca li { color: var(--danger-text); }
+.online-seeas h3 { font-size: 0.95rem; margin: 0.6rem 0 0.2rem; }
+.online-seeas pre { max-height: 240px; overflow: auto; }
+.online-world h3 { font-size: 0.95rem; margin: 0.6rem 0 0.2rem; }
+.online-diag { border-collapse: collapse; font-size: 0.85rem; margin: 0.3rem 0; }
+.online-diag th, .online-diag td { padding: 0.15rem 0.45rem; border-bottom: 1px solid var(--border); text-align: left; }
 .online-perms { display: flex; flex-direction: column; gap: 0.35rem; }
 .online-reveal img { max-width: 100%; max-height: 60vh; display: block; margin: 0 auto 0.5rem; border-radius: 6px; }
 .online-reveal-text { white-space: pre-wrap; }

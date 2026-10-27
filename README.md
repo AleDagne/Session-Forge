@@ -1288,8 +1288,9 @@ nessuna sorgente.
 
 ## Gioco online
 
-Gioco online peer-to-peer in due tappe: **collegamento e vista condivisa** (tappa 1) e **giocatore attivo con la
-convalida del master** (tappa 2). Il master ospita, fino a 4 giocatori giocano il proprio personaggio dal proprio
+Gioco online peer-to-peer in tre tappe: **collegamento e vista condivisa** (tappa 1), **giocatore attivo con la
+convalida del master** (tappa 2) e **filtro completo, esplorazione e partita con più giocatori** (tappa 3, vedi
+sotto). Il master ospita, fino a 6 giocatori (più gli spettatori) giocano il proprio personaggio dal proprio
 browser: chiedono le azioni, il master le verifica con le regole di sempre e tira i dadi. Nessuna
 libreria, nessun server, nessun account: il collegamento è diretto tra i browser (WebRTC DataChannel) e l'unica
 chiamata di rete in più sono i server STUN pubblici di Google, che servono solo a scoprire l'indirizzo pubblico
@@ -1328,7 +1329,8 @@ terra* (i PF numerici solo per il party, o anche per i nemici con l'opzione del 
 iniziativa, round e turno, boss **rivelati** e la nebbia di guerra dei giocatori (celle sconosciute coperte,
 esplorate velate).
 
-**Il filtro è sul master** (`js/rete/filtro.js`): ciò che non deve vedersi **non viene mai inviato**. Mai inviati:
+**Il filtro è sul master** (`js/rete/filtro.js`, un solo punto: vedi la tappa 3): ciò che non deve vedersi **non
+viene mai inviato**. Mai inviati:
 note del master e degli oggetti, combattenti nascosti o non visti, oggetti ed eventi nascosti, trappole, serrature e
 contenuti dei forzieri, boss non rivelati (né titolo né fasi), righe del log dell'IA (piano e «Perché?») e delle
 modifiche a mano, «Nota del master» delle fasi, righe che nominano combattenti nascosti, PF esatti dei nemici (anche
@@ -1452,6 +1454,91 @@ Il **registro di sicurezza** del pannello raccoglie richieste rifiutate, tentati
 malformati, per giocatore; dopo un numero di violazioni gravi (10 di base, modificabile) il giocatore è espulso. Né i
 rifiuti né i messaggi di errore contengono dati nascosti.
 
+### Tappa 3: filtro completo, esplorazione e più giocatori
+
+**Un solo punto per il filtro.** Tutto ciò che parte verso un client passa da `DnD.rete.filtro.statoPerGiocatore(stato,
+giocatoreId, opzioni)` (istantanea) ed `eventoPerGiocatore(evento, giocatoreId)` (eventi incrementali); le sezioni non
+filtrano da sole. Il filtro lavora per **lista di campi ammessi** (whitelist, `filtro.SCHEMA` e gli schemi delle
+operazioni): un campo nuovo non parte finché non viene ammesso lì; un campo sconosciuto si scarta con un avviso in
+console (solo sul master, una volta per campo); le chiavi private note (note, nascosto, trappola, serratura,
+contenuto, PF interni, piano…) si scartano in silenzio. Dentro il filtro passano anche `statoNpcPerGiocatore()`,
+`statoScenaPerGiocatore()` e `visioneGiocatore()`.
+
+**Mai inviati** (verificato da un test che scorre ricorsivamente ogni messaggio reale cercando chiavi e valori
+marcatori): note del master e pagine; scene non rivelate e il loro testo; eventi, oggetti e creature nascosti; boss non
+rivelati, fasi, soglie e azioni di tana; PF esatti dei nemici (salvo l'opzione); tabelle di incontri e tiri segreti;
+contenuto di forzieri, trappole e serrature; merce dei negozi non aperti; atteggiamenti, ruoli nascosti, reputazioni
+non rivelate e dialoghi degli NPC; quest non offerte o non accettate; fazioni sconosciute al party; celle e pedine fuori
+vista con la nebbia; sorgenti di luce piazzate dal master; il piano dell'IA; le schede di creature e NPC.
+
+**Cosa vede il giocatore**, sezione per sezione:
+- **Combattimento**: come la tappa 2, più concentrazione e condizioni; boss **rivelato** con titolo, fase, azioni
+  leggendarie (solo nomi e punti rimasti) e la chiave del tema: vignettatura, barra e aureola le calcola il client.
+- **Esplorazione** (quando non c'è un combattimento attivo): solo le celle scoperte della mappa dell'esplorazione
+  (la nebbia di scoperta, calcolata sul master), i gruppi, giorno e ora, meteo, bioma corrente ed eventi già
+  scattati. **Doppio clic** su una cella scoperta propone lo spostamento del gruppo: il master lo approva (permesso
+  *Muovere il gruppo*: con approvazione, sempre o mai) e costo e ore li calcola l'esplorazione come sempre.
+- **Nebbia**: maschera di celle (0 coperta, 1 esplorata, 2 visibile); dopo la prima istantanea viaggiano solo le
+  **celle cambiate** (`celle` / `celleEsp`), non la maschera intera (anche su mappe 100×100).
+- **Scene**: *🎬 Scena…* segna la scena come rivelata e manda subito titolo e testo da leggere (finestra chiudibile);
+  le scene rivelate restano nell'elenco del giocatore. Handout e immagini con *📜 Rivela…*, mandati solo in quel momento.
+- **Mondo**: città visitate (spuntate dal master o quella della mappa dell'esplorazione), **NPC incontrati** (quelli
+  sulla mappa in vista, poi ricordati; nome solo se rivelato, ruolo solo se rivelato e non nascosto), **diario delle
+  quest** (solo offerte e accettate), fazioni conosciute, reputazioni solo con *Reputazioni* acceso. *🌍 Mondo…*
+  sceglie città, NPC incontrati, negozi aperti e fazioni conosciute.
+- **Mercanti**: con il negozio aperto il giocatore vede la merce sbloccata con i prezzi calcolati dal master e
+  compra dalla finestra *🛒 Negozio*; il master verifica e applica con gli stessi calcoli del Mondo (`npc.quote` /
+  `checkout`). Un mercante inesistente, nascosto o chiuso dà sempre lo stesso rifiuto («Mercante non disponibile»).
+- **Dialoghi**: *🗨 Dialogo…* mostra il testo di un nodo dell'NPC e le risposte; con *Il giocatore sceglie* il
+  giocatore risponde (convalidato: solo le risposte mandate, una volta), altrimenti sceglie il master.
+- **Leggendari**: percorso e trasformazione (forma, rango, trasformazioni) solo al proprietario; gli altri vedono la
+  pedina trasformata (tema grafico).
+- **Riposi**: il master li avvia come sempre; il giocatore può **chiedere un riposo breve** (fuori dal
+  combattimento), sempre con l'approvazione: approvato, al master si apre la finestra del riposo.
+
+**Più giocatori e spettatori.** Fino a **6 giocatori** più **10 spettatori** (`maxGiocatori`, `maxSpettatori`).
+Topologia a stella: ogni client riceve la propria vista filtrata, mai un broadcast identico. Lo **spettatore** ha
+sola vista (chat e domande sì, azioni no) e vede **come il tavolo** (ciò che sa tutto il party) o **come un
+personaggio** scelto; si sceglie nell'approvazione o dopo, nel menù del giocatore. Con 6 giocatori un nuovo ingresso
+entra come spettatore. **Coda di invio per client** con priorità (stato di gioco, poi chat, dadi, presenza e battito,
+ultime le immagini con metà della soglia del canale, così non bloccano il gioco); un client lento non rallenta gli
+altri e i suoi aggiornamenti si **accorpano** (un solo calcolo quando la sua coda si svuota). Nel pannello: latenza,
+messaggi in coda e «⬇ sta scaricando la mappa» per ogni connessione. **Barra dei partecipanti** del giocatore con
+colore, nome, personaggio, stato (connesso, assente, spettatore) e ⭐ su chi ha il turno.
+
+**Riconnessione e continuità.** Le brevi cadute della rete le recupera WebRTC da solo. Se il canale si chiude il
+giocatore vede «⚠ Connessione persa» con **🔑 Rientra**: nuovo scambio di codici, lo stesso gettone ripristina posto e
+personaggio. Il master non perde nulla dei turni: le richieste in sospeso di chi cade (conferme, offerte, tiri chiesti)
+sono **annullate con avviso** su entrambi i lati. Se il master **chiude l'app** i giocatori ricevono un messaggio
+chiaro; i gettoni restano salvati nel browser del master (`dnd-battaglie:online-ripresa`, per la sessione corrente) e
+alla riapertura *🌐 Online › ↻ Riprendi la sessione online* rinvita i giocatori con codici nuovi: rientrando con il
+gettone ritrovano il personaggio. Lo stato di gioco è quello della sessione del master, salvato come sempre. Il
+giocatore scarica il **riepilogo** della partita (solo ciò che ha ricevuto: chat, dadi, esiti, rivelazioni, dialoghi,
+log) con *⬇ Riepilogo*; il master il **log completo** con *⬇ Log completo*.
+
+**Pannello Online unificato** (master): invito, partecipanti con personaggio o spettatore, permessi, richieste in
+attesa, registro di sicurezza, visibilità (*PF dei nemici*, *Schede degli altri*, *Reputazioni*), *🚪 Chiudi nuovi
+ingressi* (entra solo chi ha il gettone), *⏸ Pausa*, *🛠 Sto preparando* (i giocatori vedono «Il master sta preparando
+la scena…»), *👁 Vedi come…* (per ogni giocatore o per il tavolo: ciò che riceve, costruito dagli stessi dati inviati,
+e ciò che **non** riceve evidenziato in rosso), *🎬 Scena…*, *🌍 Mondo…*, *🗨 Dialogo…*, *Espelli*. Suoni: turno, chat,
+richiesta approvata o rifiutata, rivelazione (nessun audio viaggia in rete).
+
+**Sicurezza.** Le intenzioni nuove (`muoviGruppo`, `scambio`, `rispostaDialogo`, `richiediRiposo`) hanno schemi con i
+soli campi previsti e limiti; i rifiuti non dicono se un elemento nascosto esiste. Limiti di dimensione dei messaggi e
+dei testi, di frequenza delle richieste ed espulsione automatica alla soglia (anche per la frequenza, con
+`espelliFrequenza`).
+
+### Ospitare con più giocatori
+
+1. Servite la cartella (`python -m http.server 5617`) o pubblicatela su un sito statico gratuito (GitHub Pages,
+   Netlify, Cloudflare Pages: basta caricare i file, non serve nessun server).
+2. Il master preme *🌐 Online › Ospita* e, per ogni giocatore, *➕ Invita un giocatore*: un codice per persona.
+3. **Provare con due browser**: aprite la pagina in due finestre (o in Chrome ed Edge) e fate lo scambio dei codici;
+   per più giocatori aprite altre finestre e ripetete l'invito.
+4. **Se qualcuno non riesce a collegarsi**: *🩺 Test connessione* (requisiti, candidati di rete, eco); provate
+   un'altra rete (hotspot del telefono); il ripiego è la condivisione dello schermo. *📋 Copia diagnostica* copia
+   collegati, latenze, traffico per client e ultimi errori da incollare in una segnalazione.
+
 ### Test connessione
 
 *Impostazioni › Online › 🩺 Test connessione* (anche dal pannello Online e dalla schermata del giocatore) mostra:
@@ -1474,10 +1561,13 @@ Nessun cambio al modello dati (resta la versione 18): permessi, economia del tur
 e registro di sicurezza restano nella memoria del master per la durata della sessione. Il giocatore non salva nulla
 della sessione del master tranne la cache delle immagini e non può esportarla (non è mai nel suo archivio). Restano
 nel browser solo le preferenze `dnd-battaglie:online-profilo` (nome, colore, compressione), `dnd-battaglie:online-stun`,
-il gettone `dnd-battaglie:online-gettone` e le note personali `dnd-battaglie:online-note:<personaggio>`.
+il gettone `dnd-battaglie:online-gettone` e le note personali `dnd-battaglie:online-note:<personaggio>`. Il master
+tiene `dnd-battaglie:online-ripresa` (gettoni per riprendere la sessione) e, solo in memoria, NPC incontrati, Mondo
+rivelato e dialoghi mostrati.
 
-Il **protocollo** è alla versione 2: i client della tappa 1 vengono rifiutati con «Versione incompatibile» e
-l'invito ad aggiornare la pagina.
+Il **protocollo** è alla versione 3 (tappa 3: dialoghi, «sto preparando», spettatori, presenza con personaggio e
+turno): i client delle tappe precedenti vengono rifiutati con «Versione incompatibile» e l'invito ad aggiornare la
+pagina. L'app offline non cambia e il modello dati resta alla versione 18.
 
 ## Dadi animati
 
@@ -1779,6 +1869,17 @@ privati; permessi, pausa e conferma manuale (approva, modifica, rifiuta, annulla
 e conflitti; scambio di oggetti con la conferma; gettone di rientro, revoca e personaggio assente con i turni
 saltati; idempotenza, campi extra e messaggi malformati con l'espulsione alla soglia; nessun dato nascosto nelle
 risposte, ping, domanda e rivelazione; client della tappa 1 rifiutato; due client che giocano un turno completo.
+Per la **tappa 3**: whitelist con uno stato di prova pieno di valori marcatori in ogni sezione (combattimento, boss
+con fasi e tana, log dell'IA, Mondo con fazione e città segrete, mercante e spia, quest non offerta, scene) e
+scansione ricorsiva di chiavi e valori di tutti i messaggi; campo sconosciuto scartato con avviso ed eventi filtrati
+per operazione; «Vedi come giocatore» (stessi dati inviati e ciò che manca); esplorazione con nebbia, celle non
+scoperte rifiutate, gruppo mosso con approvazione e solo le celle cambiate (anche su 100×100); scambio col mercante
+(chiuso, inesistente, ruolo nascosto, riga bloccata, quantità, acquisto con i prezzi del master); boss rivelato e non,
+trasformazione leggendaria per il proprietario e per gli altri; richiesta di riposo e dialogo con scelta; sei client
+con viste diverse, spettatori del tavolo e «come», barra dei partecipanti e settimo giocatore spettatore; coda con
+priorità, client lento e accorpamento; riconnessione col gettone, richieste in sospeso annullate, master che riprende
+la sessione; carico simulato (6 client, 200 eventi), messaggi oltre i limiti, espulsione per frequenza, diagnostica e
+riepilogo. `DnD.runTests('testo')` esegue solo i test il cui nome contiene il testo (utile per isolarne uno).
 
 ## Struttura
 
@@ -1875,11 +1976,12 @@ js/rete/protocollo.js gioco online: messaggi con versione, validazione e schemi,
 js/rete/trasporto.js  trasporto astratto (invia, ricevi, stato, coda) con frammentazione; WebRTC DataChannel e coppia in memoria
 js/rete/codici.js     codici di invito e risposta: compressione con ripiego, base64url, scadenza e uso singolo
 js/rete/segnalazione.js  segnalazione manuale e WebRTC (STUN modificabili), candidati di rete e requisiti del Test connessione
-js/rete/filtro.js     filtro sul master: vista del giocatore (istantanea), differenze (eventi incrementali) e applicazione
+js/rete/filtro.js     punto unico del filtro sul master: statoPerGiocatore / eventoPerGiocatore con whitelist dei campi, sezioni (combattimento, esplorazione, scene, Mondo), Vedi come giocatore, differenze con le celle cambiate e applicazione
 js/rete/immagini.js   immagini a pezzi da 16 KB con impronta e limiti
-js/rete/intenzioni.js intenzioni del giocatore: schemi, permessi, economia del turno, verifiche di movimento, attacco e incantesimo, delta della scheda, scambi, registro
-js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, intenzioni convalidate, conferma manuale, permessi, gettoni, eventi, chat, dadi, immagini, battito) e giocatore
-js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master (permessi, richieste, rivelazioni, registro), schermata del giocatore (azioni, scheda, ping), Test connessione
+js/rete/intenzioni.js intenzioni del giocatore: schemi, permessi, economia del turno, verifiche di movimento, attacco e incantesimo, delta della scheda, scambi, esplorazione, mercanti, dialoghi, riposo, registro
+js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, spettatori, coda di invio con priorità e accorpamento, intenzioni convalidate, conferma manuale, permessi, gettoni e ripresa, dialoghi, diagnostica, eventi, chat, dadi, immagini, battito) e giocatore (riconnessione, riepilogo)
+js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master (permessi, richieste, rivelazioni, registro, visibilità, Vedi come, Mondo, dialoghi, scene, ripresa), schermata del giocatore (azioni, scheda, ping, esplorazione, Mondo e mercanti, dialoghi, Rientra), Test connessione con diagnostica
+
 js/ui-*.js            interfaccia delle altre sezioni
 js/app.js             avvio, menù e navigazione
 js/test.js            test della logica

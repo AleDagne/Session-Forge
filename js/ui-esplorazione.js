@@ -200,6 +200,14 @@
     else if (r) DnD.audio.suona('passo');
     afterAction();
   }
+  // Gioco online: il gruppo attivo va verso una cella chiesta da un giocatore (approvata dal master); costo e ore li
+  // calcola l'esplorazione come per il master.
+  function muoviOnline(to) {
+    const r = mutate((w) => X.moveTo(w, to));
+    afterAction();
+    if (!r) return { ok: false, testo: 'Nessuna esplorazione in corso.' };
+    return r.ok ? { testo: 'Il gruppo si sposta.' } : { ok: false, testo: 'Il gruppo si ferma: ' + r.reason + (r.steps ? ' (dopo ' + r.steps + ' passi)' : '') + '.' };
+  }
   function stepBy(dx, dy) {
     const e = ex();
     if (!e) return;
@@ -681,5 +689,5 @@
 
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.esplorazione = { title: 'Esplorazione', render, reset: () => { if (tools) tools.reset(); snoozed = false; } };
-  DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo, restDialog };
+  DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo, restDialog, muoviOnline };
 })(globalThis.DnD = globalThis.DnD || {});
