@@ -1288,8 +1288,9 @@ nessuna sorgente.
 
 ## Gioco online
 
-Prima tappa del gioco online peer-to-peer: **collegamento minimo e vista condivisa**. Il master ospita, fino a 4
-giocatori seguono il combattimento **in sola vista** dal proprio browser, con chat e dadi condivisi. Nessuna
+Gioco online peer-to-peer in due tappe: **collegamento e vista condivisa** (tappa 1) e **giocatore attivo con la
+convalida del master** (tappa 2). Il master ospita, fino a 4 giocatori giocano il proprio personaggio dal proprio
+browser: chiedono le azioni, il master le verifica con le regole di sempre e tira i dadi. Nessuna
 libreria, nessun server, nessun account: il collegamento è diretto tra i browser (WebRTC DataChannel) e l'unica
 chiamata di rete in più sono i server STUN pubblici di Google, che servono solo a scoprire l'indirizzo pubblico
 (modificabili in *Test connessione › Server STUN*). L'app offline funziona come prima: la rete parte solo quando si
@@ -1307,7 +1308,7 @@ finestra *Gioco online* (restano come preferenza del browser).
 2. Il **giocatore** preme *🌐 Online › Unisciti*, incolla l'invito e preme *Crea la risposta*: ottiene un **codice di
    risposta** e lo manda al master.
 3. Il master lo incolla e preme *Collega*. Arriva la richiesta «*X vuole entrare*»: **Accetta** (scegliendo il
-   personaggio, di cui il giocatore vedrà la scheda in sola lettura, o nessuno per uno spettatore) o **Rifiuta**.
+   personaggio, l'unico con cui il giocatore potrà agire, o nessuno per uno spettatore) o **Rifiuta**.
 
 I codici sono compressi (CompressionStream; per i browser che non sanno decomprimere spunta *Codici senza
 compressione*: più lunghi, funzionano lo stesso), valgono **5 minuti** e **una volta sola**. Per un altro giocatore
@@ -1319,12 +1320,13 @@ nell'altra ti unisci. Sulla stessa macchina o nella stessa rete funziona anche s
 
 ### Cosa vede il giocatore
 
-La stessa schermata del Combattimento, senza strumenti di modifica né accesso alle altre sezioni: griglia (zoom,
-spostamento della vista, misuratore), pedine **non nascoste** con nome, icona, dimensione, condizioni e salute
-*illeso / ferito / grave / a terra* (i PF numerici solo per il party, o anche per i nemici con l'opzione del master
-*Mostra i PF dei nemici*), ordine di iniziativa, round e turno, boss **rivelati**, log filtrato, la propria scheda in
-sola lettura (CA, PF, iniziativa, velocità, caratteristiche e tiri salvezza, percezione passiva, dadi vita,
-condizioni), la nebbia di guerra dei giocatori (celle sconosciute coperte, esplorate velate).
+La stessa schermata a tre colonne del Combattimento, senza gli strumenti del master né accesso alle altre sezioni:
+a sinistra **le proprie azioni e la propria scheda**, al centro la griglia (zoom, spostamento della vista,
+misuratore, la propria pedina da trascinare), a destra turni, log filtrato, chat e le schede limitate dei compagni.
+Si vedono le pedine **non nascoste** con nome, icona, dimensione, condizioni e salute *illeso / ferito / grave / a
+terra* (i PF numerici solo per il party, o anche per i nemici con l'opzione del master *PF dei nemici*), ordine di
+iniziativa, round e turno, boss **rivelati** e la nebbia di guerra dei giocatori (celle sconosciute coperte,
+esplorate velate).
 
 **Il filtro è sul master** (`js/rete/filtro.js`): ciò che non deve vedersi **non viene mai inviato**. Mai inviati:
 note del master e degli oggetti, combattenti nascosti o non visti, oggetti ed eventi nascosti, trappole, serrature e
@@ -1345,9 +1347,10 @@ oltre, rifiuto con avviso. Il giocatore può chiedere solo le immagini della pro
 
 - **Chat** a tutti o privata (giocatore → master, master → un giocatore), con presenza (chi è collegato) e testo
   ripulito (niente caratteri di controllo o invisibili, al massimo 500 caratteri, sempre mostrato come testo).
-- **Dadi condivisi**: il giocatore tira dal menù Dadi (🎲); il risultato è deciso dal suo browser e mandato al
-  master, che lo mostra nel log del combattimento («🎲 Ale (online): 1d20 = 17 [17]») e agli altri giocatori, con la
-  stessa animazione (`mostraTiro`). In questa tappa si accetta la fiducia: la convalida arriva più avanti.
+- **Dadi**: vedi «Tiri» nella tappa 2 qui sotto. Il risultato compare nel log del combattimento («🎲 Ale (online): 1d20 =
+  17 [17]») e a tutti con la stessa animazione (`mostraTiro`).
+- Comandi rapidi in chat: `/tira 2d6+3` (tiro del master, a tutti) e `/tirap 1d20` (privato al master); indicatore
+  «*X sta scrivendo…*».
 
 ### Robustezza
 
@@ -1355,11 +1358,99 @@ oltre, rifiuto con avviso. Il giocatore può chiedere solo le immagini della pro
   🔴 nessuna risposta da più di 15 s); *📡 Eco* misura l'andata e ritorno.
 - Se il master si disconnette o termina, il giocatore vede «La sessione è terminata» e può **esportare il log**
   (combattimento, chat e dadi in un file di testo).
-- **Rientro**: chi cade rientra con un nuovo scambio di codici; il master vede «Rientro» e gli riassegna lo stesso
-  nome, colore e personaggio. Il master può **espellere** un giocatore.
+- **Rientro**: chi cade rientra con un nuovo scambio di codici. Con il **gettone di rientro** (vedi sotto) riprende
+  lo stesso posto e lo stesso personaggio anche con un altro nome; senza, il master lo riconosce dal nome. Il master
+  può **espellere** un giocatore.
 - Ogni messaggio ricevuto è validato (versione, tipo e direzione, schema, lunghezza dei testi, dimensione), c'è un
   **limite di frequenza** (e uno più stretto per la chat) e nessun codice ricevuto viene eseguito. Versione del
   protocollo diversa: rifiuto con un messaggio chiaro.
+
+### Giocatore attivo: intenzioni convalidate dal master (tappa 2)
+
+**Intenzioni, non risultati.** Il giocatore manda solo richieste (`muovi`, `movimento`, `attacca`, `lancia`,
+`usaAzione`, `tira`, `salvezza`, `finisciTurno`, `modificaScheda`, `dai`, `ping`, `domanda`), mai esiti, danni o
+posizioni già decisi. Il master controlla permessi, turno, distanza, risorse, collisioni e condizioni con le funzioni
+di sempre (`movimento`, `griglia`, `visione`, `magie`, `condizioni`), **tira i dadi lui** ed esegue con le stesse
+funzioni dei suoi pulsanti del Combattimento (`DnD.uiCombattimento.online`). Risponde con l'esito o con un **rifiuto
+spiegato** («Non è il tuo turno», «Non puoi andare lì», «Movimento residuo insufficiente: 2 celle», «Orco è fuori
+portata: 7 celle (portata 1 cella)»). Ogni richiesta ha id e sequenza: il giocatore la vede «in attesa» con
+*Annulla*, e se non arriva risposta entro 20 secondi scade con un avviso.
+
+**Legame con il personaggio.** Ogni giocatore agisce **solo** con il personaggio assegnato dal master
+nell'approvazione (o dopo, nel pannello): ogni richiesta su un altro combattente è rifiutata e annotata nel registro di
+sicurezza. **Gettone di rientro**: stringa casuale data dal master all'ingresso e salvata nel browser del giocatore;
+rientrando con lo stesso gettone (anche con un nuovo scambio di codici) il master vede «🔑 Rientro con il gettone» e
+il giocatore riprende lo stesso personaggio. Il master può **revocarlo** (🔑 nel pannello). Nessuna password. Chi si
+disconnette lascia il personaggio **assente**: il master sceglie se muoverlo lui, metterlo sotto **controllo
+automatico** (l'IA dei nemici estesa agli alleati) o **saltarne i turni**.
+
+**Permessi** (*🔐 Permessi…* nel pannello Online, per tutti o per un giocatore, con un profilo predefinito):
+
+| Permesso | Di base |
+|---|---|
+| Spostare la propria pedina | solo nel proprio turno (o sempre, o mai) |
+| Attaccare, lanciare incantesimi, altre azioni, azione bonus e reazione | sì |
+| Tirare dadi e prove; tiri privati al master | sì |
+| Modificare PF, slot, inventario e monete | sì |
+| Modificare caratteristiche e livello | no |
+| Ping e chat (con le domande al master) | sì |
+| Conferma manuale di attacchi e magie | no (il master convalida in automatico ciò che rispetta le regole) |
+| Conferma manuale delle magie ad area | sì |
+
+Con la conferma manuale ogni attacco o magia compare al master nelle **richieste in attesa** con l'anteprima
+(«Mira attacca Goblin con Spada») e i pulsanti *✔ Approva*, *✎ Modifica…* (tiro normale, con vantaggio o con
+svantaggio, bersaglio, slot) e *✖ Rifiuta* (con un motivo facoltativo). Le **reazioni** passano sempre dal master.
+**⏸ Pausa** blocca tutte le richieste (utile per discutere).
+
+**Movimento.** Il giocatore trascina la propria pedina: il client mostra l'anteprima del percorso e delle celle
+raggiungibili con i dati che ha (residuo, pedine e strutture che vede), ma decide il master, che verifica il percorso
+**cella per cella** (`movimento.walk`: passi adiacenti, celle passabili, niente angoli tagliati accanto a muri o
+nemici, terreno difficile, strisciare, diagonali e residuo) e si ferma all'ultima cella valida con un avviso. Dal
+client parte solo il percorso finale. Gli altri vedono la pedina scivolare con una breve animazione (niente con
+*Riduci animazioni*). *Scatto*, *Disimpegno*, *Rialzati* e *Annulla spostamento* seguono le regole del movimento già
+esistenti. Il giocatore non riceve celle bloccate, nemici o trappole che non vede: il rifiuto non dice perché.
+
+**Azioni di combattimento.** Pulsanti evidenziati nel proprio turno e disattivati fuori turno, con il motivo nel
+suggerimento («Non è il tuo turno», «Hai già usato l'azione»). Il master tiene in memoria l'**economia del turno**
+(azione, con gli attacchi dell'*Attacco extra* per classe e livello, azione bonus e reazione):
+- **Attacca**: arma e bersaglio (dalla lista o cliccando la pedina), solo tra quelli che si vedono; il master verifica
+  portata (2 celle con la proprietà *portata*) o gittata del catalogo, linea di vista, condizioni (vantaggio,
+  svantaggio, critico automatico) e risolve con l'attacco di sempre. Si può chiedere anche come reazione.
+- **Incantesimo**: incantesimo, slot e bersagli; verifica di slot (o usi innati), gittata dal testo («18 metri»,
+  «Contatto», «Sé»), tempo di lancio (azione, bonus, reazione) e concentrazione; risoluzione sul master (attacco con
+  incantesimo o tiri salvezza dei bersagli), con lo slot speso anche nella scheda.
+- **Altre azioni**: Schivare, Aiutare, Nascondersi, Usa un oggetto, Altra azione (azione o azione bonus) e le azioni
+  «da creatura» dei personaggi che le hanno: convalidate e scritte nel log; gli effetti (cure, oggetti) li applica il
+  master.
+- **Tiri salvezza richiesti dal master** (*🎯 Salvezza…*): il giocatore riceve «Tiro salvezza su Destrezza (CD 14)» con
+  *🎲 Tira*; tira il master, con vantaggio e svantaggio dalle condizioni.
+- **Finisci turno**: lo conferma il master se ci sono richieste in sospeso, altrimenti è automatico. All'inizio del
+  proprio turno: suono, avviso «⭐ Tocca a te!» e pagina evidenziata; il master può anche richiamare un giocatore (📣).
+- A 0 PF il giocatore vede i propri tiri contro la morte (tirati dal master) nella scheda e nel log.
+
+**Scheda online.** Il giocatore vede la propria scheda completa (PF e temporanei, CA, iniziativa, velocità,
+caratteristiche e tiri salvezza, slot, monete, inventario, condizioni) e modifica solo i campi permessi: ogni modifica
+è una **richiesta con delta** (campo, nuovo valore e valore che vedeva). Il master controlla i limiti (PF non oltre il
+massimo, slot non oltre il totale…) e, se il valore nel frattempo è cambiato, **vince il master** con un avviso. Gli
+altri giocatori si vedono in sola lettura limitata (nome, classe, livello, salute, CA, condizioni). **Dai a…** offre
+un oggetto a un compagno, che accetta o rifiuta (o il master, se non è collegato). Le **note personali** restano solo
+nel browser del giocatore (mai inviate).
+
+**Tiri.** Con **Tiri convalidati** (acceso di base) i tiri liberi (menù Dadi, `/tira`) li genera il master e arrivano
+uguali a tutti; i tiri privati li vedono solo il master e chi tira. Spento: si accetta il tiro del giocatore, segnato
+«non verificato» nel log e in chat.
+
+**Altre funzioni di tavolo**: **ping** con un clic prolungato sulla griglia (segnale colorato con il nome, a tutti,
+per qualche secondo, anche sulla griglia del master); **❓ Chiedi al master…** (le domande arrivano nel pannello con
+la risposta privata); **📜 Rivela…** mostra un testo e un'immagine (handout, testo di scena) a tutti o a un giocatore,
+mandati solo in quel momento.
+
+**Sicurezza e coerenza.** Ogni richiesta è validata e ripulita (tipo, schema con i soli campi previsti, id, limiti
+numerici, lunghezza dei testi, frequenza); le richieste ripetute con lo stesso id (per esempio dopo un rientro) non si
+applicano due volte; ogni cambio di stato lo decide il master e poi lo diffonde (anche *Annulla/Ripeti* del master).
+Il **registro di sicurezza** del pannello raccoglie richieste rifiutate, tentativi su pedine altrui e messaggi
+malformati, per giocatore; dopo un numero di violazioni gravi (10 di base, modificabile) il giocatore è espulso. Né i
+rifiuti né i messaggi di errore contengono dati nascosti.
 
 ### Test connessione
 
@@ -1379,9 +1470,14 @@ tra master e giocatore; i **problemi tipici** con il ripiego consigliato:
 
 ### Dati e compatibilità
 
-Nessun cambio al modello dati (resta la versione 18). Il giocatore non salva nulla della sessione del master
-tranne la cache delle immagini e non può esportarla (non è mai nel suo archivio). Restano nel browser solo le
-preferenze `dnd-battaglie:online-profilo` (nome, colore, compressione) e `dnd-battaglie:online-stun`.
+Nessun cambio al modello dati (resta la versione 18): permessi, economia del turno, gettoni, coda delle richieste
+e registro di sicurezza restano nella memoria del master per la durata della sessione. Il giocatore non salva nulla
+della sessione del master tranne la cache delle immagini e non può esportarla (non è mai nel suo archivio). Restano
+nel browser solo le preferenze `dnd-battaglie:online-profilo` (nome, colore, compressione), `dnd-battaglie:online-stun`,
+il gettone `dnd-battaglie:online-gettone` e le note personali `dnd-battaglie:online-note:<personaggio>`.
+
+Il **protocollo** è alla versione 2: i client della tappa 1 vengono rifiutati con «Versione incompatibile» e
+l'invito ad aggiornare la pagina.
 
 ## Dadi animati
 
@@ -1673,7 +1769,16 @@ messaggi malformati, troppo grandi, troppo frequenti e di un'altra versione; cod
 danneggiati, scaduti, del tipo sbagliato e già usati, candidati di rete; chat sanificata e privata; dado condiviso
 con lo stesso risultato sui due lati; immagini a pezzi in qualsiasi ordine, impronta, limite, cache e richieste non
 permesse; rientro con lo stesso nome, espulsione, rifiuto e fine sessione; battito, latenza e master in silenzio;
-due giocatori che seguono un turno completo.
+due giocatori che seguono un turno completo. Per la **tappa 2** (con l'esecutore vero del Combattimento su un
+archivio di prova e dadi deterministici): movimento valido e non valido (fuori turno, pedina altrui, salto, angolo
+tagliato, muro, oltre il residuo, pedina nascosta sul percorso, velocità 0 da afferrato) e percorso cella per cella
+con il terreno difficile; attacco con portata, gittata, linea di vista, vantaggio da prono, critico e Attacco extra;
+incantesimi con slot (anche nella scheda), gittata «Contatto» e «Sé», concentrazione e tiro salvezza dei bersagli;
+tiro salvezza richiesto dal master con lo svantaggio delle condizioni; tiri del master identici sui due lati e tiri
+privati; permessi, pausa e conferma manuale (approva, modifica, rifiuta, annulla); scheda con delta, limiti, permessi
+e conflitti; scambio di oggetti con la conferma; gettone di rientro, revoca e personaggio assente con i turni
+saltati; idempotenza, campi extra e messaggi malformati con l'espulsione alla soglia; nessun dato nascosto nelle
+risposte, ping, domanda e rivelazione; client della tappa 1 rifiutato; due client che giocano un turno completo.
 
 ## Struttura
 
@@ -1699,7 +1804,7 @@ js/difficolta.js      difficoltà degli incontri (logica pura): soglie, PE, molt
 js/riposi-dati.js     riposi (dati): durate, varianti gritty, regola delle 24 ore, regole di ripristino
 js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combattente), risorse, dadi vita, riposo breve e lungo
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
-js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo
+js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo, verifica di un percorso proposto (walk)
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
 js/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
@@ -1772,8 +1877,9 @@ js/rete/codici.js     codici di invito e risposta: compressione con ripiego, bas
 js/rete/segnalazione.js  segnalazione manuale e WebRTC (STUN modificabili), candidati di rete e requisiti del Test connessione
 js/rete/filtro.js     filtro sul master: vista del giocatore (istantanea), differenze (eventi incrementali) e applicazione
 js/rete/immagini.js   immagini a pezzi da 16 KB con impronta e limiti
-js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, espulsione, eventi, chat, dadi, immagini, battito) e giocatore
-js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master, schermata del giocatore, Test connessione
+js/rete/intenzioni.js intenzioni del giocatore: schemi, permessi, economia del turno, verifiche di movimento, attacco e incantesimo, delta della scheda, scambi, registro
+js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, intenzioni convalidate, conferma manuale, permessi, gettoni, eventi, chat, dadi, immagini, battito) e giocatore
+js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master (permessi, richieste, rivelazioni, registro), schermata del giocatore (azioni, scheda, ping), Test connessione
 js/ui-*.js            interfaccia delle altre sezioni
 js/app.js             avvio, menù e navigazione
 js/test.js            test della logica

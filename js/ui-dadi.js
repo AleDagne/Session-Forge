@@ -237,6 +237,12 @@
       renderHistory();
     }
 
+    // Gioco online con «Tiri convalidati»: il tiro lo fa il master (DnD.uiDadi.remoto restituisce true se l'ha mandato).
+    const remoto = (spec, label) => {
+      if (!DnD.uiDadi.remoto || !DnD.uiDadi.remoto(spec)) return false;
+      clear(result).append(el('span', { class: 'muted', text: '🎲 ' + label + ': tiro inviato al master…' }));
+      return true;
+    };
     function rollDie(sides) {
       const n = readNumber(count);
       const m = mod.value.trim() === '' ? 0 : readNumber(mod);
@@ -248,6 +254,7 @@
         toast('Il modificatore deve essere un intero tra -1000 e 1000.', 'error');
         return;
       }
+      if (remoto({ tipo: 'espr', espr: D.formatExpr(n, sides, m) }, D.formatExpr(n, sides, m))) return;
       const rec = D.registratore();
       D.roll(n, sides, m, rec.rng);
       show(rec, D.formatExpr(n, sides, m));
@@ -255,11 +262,13 @@
     // d20 con vantaggio o svantaggio: due d20, quello scartato attenuato.
     function rollD20(mode) {
       const m = mod.value.trim() === '' ? 0 : readNumber(mod) || 0;
+      if (remoto({ tipo: 'd20', modo: mode, bonus: m }, 'd20 con ' + mode)) return;
       const rec = D.registratore();
       const r = DnD.regole.rollSave({ bonus: m, mode, dc: null }, rec.rng);
       show(rec, 'd20 ' + (mode === 'vantaggio' ? 'con vantaggio' : 'con svantaggio') + (m ? DnD.regole.formatModifier(m) : ''), r.total);
     }
     function roll4d6() {
+      if (remoto({ tipo: '4d6' }, '4d6, scarta il più basso')) return;
       const rec = D.registratore();
       DnD.regole.roll4d6DropLowest(rec.rng);
       show(rec, '4d6, scarta il più basso');
@@ -272,6 +281,7 @@
         toast('Espressione non valida. Usa il formato NdM+X, ad esempio 3d6+2.', 'error');
         return;
       }
+      if (remoto({ tipo: 'espr', espr: D.formatExpr(p.count, p.sides, p.modifier) }, D.formatExpr(p.count, p.sides, p.modifier))) return;
       const rec = D.registratore();
       D.roll(p.count, p.sides, p.modifier, rec.rng);
       show(rec, D.formatExpr(p.count, p.sides, p.modifier));
@@ -321,5 +331,5 @@
 
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.dadi = { title: 'Dadi', render };
-  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue, suTiro: null };
+  DnD.uiDadi = { mount, openPanel, mostraTiro, animate, enabled, queue, suTiro: null, remoto: null };
 })(globalThis.DnD = globalThis.DnD || {});

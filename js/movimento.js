@@ -213,14 +213,14 @@
   // terreno vengono dal combattente (strisciare, modalità senza velocità; volando il terreno difficile non conta).
   // Pedine ostili bloccano, le altre si attraversano ma non ci si ferma sopra.
   // Restituisce { dist: Map(chiave cella → costo minimo), path(chiave), canEnd(x, y), passable, aborted, start, dims }.
-  function reach(map, state, mover, opts) {
+  // Regole di un passo, comuni a reach e walk: passabilità con l'ingombro, celle dove fermarsi, terreno, extra.
+  function stepRules(map, state, mover, opts) {
     const o = opts || {};
     const rules = normalizeRules(o.rules);
     const fpc = state.grid && state.grid.feetPerCell;
     const st = speedState(mover, rules, fpc);
     const extra = o.extra === undefined ? st.extra : o.extra;
     const ignoreTerrain = o.ignoreTerrain === undefined ? st.mode === 'volare' : o.ignoreTerrain;
-    const alt = rules.diagonals === 'alternata';
     const hostile = o.hostile || ((a, b) => DnD.fazioni.ostili(a, b, state.relations));
     const d = G().tokenDims(mover);
     const hostileCells = new Set();
@@ -244,6 +244,44 @@
       for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) c = Math.max(c, map.cost.get(G().key(x + i, y + j)) || 1);
       return c;
     };
+    return { o, alt: rules.diagonals === 'alternata', extra, d, passable, canEnd, terrain };
+  }
+
+  // Percorso proposto (gioco online: le celle trascinate dal giocatore) verificato cella per cella con le stesse
+  // regole di reach: passi adiacenti, celle passabili, niente angoli tagliati, terreno, diagonali e limite. Si ferma
+  // sull'ultima cella valida dove si può stare. { path, cost, end, stopped, reason: '' | 'percorso' | 'bloccato' | 'residuo' }.
+  function walk(map, state, mover, cells, limit, opts) {
+    const { alt, extra, passable, canEnd, terrain } = stepRules(map, state, mover, opts);
+    let x = mover.pos.x;
+    let y = mover.pos.y;
+    let par = 0;
+    let cost = 0;
+    let reason = '';
+    const kept = [{ x, y, cost: 0 }];
+    for (const c of cells || []) {
+      if (!c || !Number.isInteger(c.x) || !Number.isInteger(c.y)) { reason = 'percorso'; break; }
+      if (c.x === x && c.y === y) continue;
+      const dx = c.x - x;
+      const dy = c.y - y;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { reason = 'percorso'; break; }
+      const diag = Boolean(dx && dy);
+      if (!passable(c.x, c.y) || (diag && (!passable(x + dx, y) || !passable(x, y + dy)))) { reason = 'bloccato'; break; }
+      const nc = cost + (diag && alt && par ? 2 : 1) * (terrain(c.x, c.y) + extra);
+      if (limit !== undefined && nc > limit) { reason = 'residuo'; break; }
+      if (diag && alt) par = 1 - par;
+      x = c.x;
+      y = c.y;
+      cost = nc;
+      kept.push({ x, y, cost });
+    }
+    let best = 0;
+    for (let i = 1; i < kept.length; i++) if (canEnd(kept[i].x, kept[i].y)) best = i;
+    const path = kept.slice(0, best + 1).map((p) => ({ x: p.x, y: p.y }));
+    return { path, cost: kept[best].cost, end: path[path.length - 1], stopped: best < kept.length - 1 || Boolean(reason), reason };
+  }
+
+  function reach(map, state, mover, opts) {
+    const { o, alt, extra, d, passable, canEnd, terrain } = stepRules(map, state, mover, opts);
     const start = G().key(mover.pos.x, mover.pos.y);
     // Stati: cella × parità delle diagonali (conta solo con la regola alternata).
     const s0 = start * 2;
@@ -350,6 +388,6 @@
     conditions, feetFromMeters, metersFromFeet, cellsOf, formatFeet, normalizeRules,
     normalizeSpeeds, speedsFromRace, speedsFromCreature, addFeet, baseSpeeds, normalizeOverride, modeOf, feetIn,
     speedState, speedCells, normalizeMovement, movementOf, budget, left, resetTurn, recordMove, dash, disengage, standUp, undoMoves,
-    distance, reach, routeTo, reachable, moveText,
+    distance, reach, walk, routeTo, reachable, moveText,
   };
 })(globalThis.DnD = globalThis.DnD || {});

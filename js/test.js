@@ -5936,16 +5936,16 @@
     eq(p1.ricevuti.chat[2].testo, 'Benvenuti');
   });
 
-  test('Online: dado condiviso con lo stesso risultato sui due lati', async () => {
+  test('Online: dado libero del giocatore (tiri convalidati spenti, segnato come non verificato)', async () => {
     const st = onlineState();
-    const { g, ricevuti } = await onlinePair(st);
+    const { g, ricevuti } = await onlinePair(st, { master: { convalidati: false } });
     const rec = D().registratore(seq(17, 3));
     R().rollSave({ bonus: 2, mode: 'vantaggio', dc: null }, rec.rng);
     const tiro = rec.tiro('d20 con vantaggio', 'menu', { totale: 19 });
     g.dado(tiro);
     await pausa();
     eq(ricevuti.dadi.length, 1);
-    eq([ricevuti.dadi[0].da, ricevuti.dadi[0].tiro], ['Ale', D().normalizeTiro(tiro)], 'stessi dadi e stesso totale');
+    eq([ricevuti.dadi[0].da, ricevuti.dadi[0].tiro, ricevuti.dadi[0].verificato], ['Ale', D().normalizeTiro(tiro), false], 'stessi dadi e stesso totale, non verificato');
   });
 
   test('Online: immagini a pezzi con impronta e cache', async () => {
@@ -6062,6 +6062,400 @@
       eq([v.pedine[0].pos, v.pedine[1].salute, v.turno, v.log[v.log.length - 1].testo, g.stato().n], [{ x: 2, y: 1 }, 'a terra', 'b1', 'Goblin è a terra!', 4]);
     }
     eq(chat.map((x) => x.da + ': ' + x.testo), ['Ale: Fatto!'], 'la chat arriva all\'altro giocatore');
+  });
+
+  // ---------- Gioco online, tappa 2: intenzioni convalidate dal master ----------
+  // Partita di prova: Mira (Ale, guerriera di 5° livello, spada, arco e due incantesimi) e Bea (Bice) nel party,
+  // un goblin accanto a Mira, un orco lontano, un'ombra nascosta e un muro. Il master usa l'esecutore vero del
+  // Combattimento (DnD.uiCombattimento.online) su un archivio di prova; i dadi del master sono deterministici.
+  const SP = (o) => DnD.dati.normalizeSpell(Object.assign({ level: 1, school: 'invocazione', castingTime: '1 azione', range: '18 metri', duration: 'Istantanea' }, o));
+  function partitaState() {
+    const st = DnD.dati.emptyState();
+    const se = S().current(st);
+    const pg = (id, name, extra) => Object.assign(DnD.dati.normalizeCreature(Object.assign({ id, name, classId: 'guerriero', level: 1, maxHp: 30 }, extra), true), { sessionId: se.id });
+    st.players.push(pg('pg1', 'Mira', { level: 5 }), pg('pg2', 'Bea'));
+    st.players[0].inventory = [{ id: 'i1', equipmentId: st.equipment[0].id, qty: 3 }];
+    const arco = st.equipment.find((e) => e.weapon && e.weapon.kind === 'distanza' && e.weapon.rangeLong);
+    const c = (x) => Object.assign({ kind: 'npc', faction: 'nemici', hp: 10, maxHp: 10, ac: 12, initiative: 10, w: 1, h: 1 }, x);
+    se.combat = DnD.dati.normalizeCombat({
+      id: 'cmb', phase: 'attivo', round: 1, currentId: 'x1',
+      combatants: [
+        c({ id: 'x1', sourceId: 'pg1', name: 'Mira', kind: 'player', faction: 'giocatori', hp: 30, maxHp: 30, initiative: 20, pos: { x: 1, y: 1 },
+          weapons: [{ id: 'spada', name: 'Spada', toHit: 5, damageDice: '1d8', damageBonus: 3, damageType: 'tagliente' }, { id: 'arco', name: 'Arco', toHit: 5, damageDice: '1d6', equipmentId: arco.id }],
+          spellcasting: { attack: 5, dc: 13, slotsTotal: [2, 0, 0, 0, 0, 0, 0, 0, 0], slotsUsed: [0, 0, 0, 0, 0, 0, 0, 0, 0], spells: [
+            SP({ id: 'sp-fuoco', name: 'Vampata', effect: { type: 'salvezza', dice: '2d6', damageType: 'fuoco', saveAbility: 'DES', halfOnSave: true } }),
+            SP({ id: 'sp-scudo', name: 'Scudo arcano', range: 'Sé', concentration: true, effect: { type: 'nessuno' } }),
+            SP({ id: 'sp-vicino', name: 'Tocco gelido', level: 0, range: 'Contatto', effect: { type: 'attacco', dice: '1d8', damageType: 'necrotico' } })] } }),
+        c({ id: 'x2', sourceId: 'pg2', name: 'Bea', kind: 'player', faction: 'giocatori', hp: 20, maxHp: 20, initiative: 15, pos: { x: 1, y: 3 },
+          weapons: [{ id: 'mazza', name: 'Mazza', toHit: 4, damageDice: '1d6', damageBonus: 2 }] }),
+        c({ id: 'g1', name: 'Goblin', initiative: 12, pos: { x: 2, y: 1 } }),
+        c({ id: 'g2', name: 'Orco', initiative: 5, pos: { x: 8, y: 1 } }),
+        c({ id: 'h1', name: 'Ombra', hidden: true, initiative: 4, pos: { x: 1, y: 6 } }),
+      ],
+      grid: { w: 12, h: 10, structures: [vWall('muro', 4, 3, 1, 7)] },
+      log: [],
+    });
+    return st;
+  }
+  // Archivio di prova (al posto di IndexedDB): update applica e avvisa la sessione online, come l'app.
+  const archivioProva = (st) => ({ state: st, onChange: null, update(fn) { fn(this.state); if (this.onChange) this.onChange(); return Promise.resolve({ ok: true }); }, save() { return Promise.resolve({ ok: true }); } });
+  // Master e giocatori collegati in memoria: Ale gioca Mira, Bice gioca Bea. fn riceve la partita; l'archivio
+  // dell'app e i dadi dell'esecutore tornano come prima alla fine.
+  async function partita(fn, opts) {
+    const o = opts || {};
+    const st = o.st || partitaState();
+    const prevStore = DnD.store;
+    const E = DnD.uiCombattimento.online;
+    DnD.store = archivioProva(st);
+    const esiti = [];
+    const dadi = { master: [], Ale: [], Bice: [] };
+    const extra = { ping: [], rivela: [], offerte: [], richieste: [], gettoni: [], fine: [], errori: [], violazioni: [], domande: [] };
+    const m = NET().sessione.master(Object.assign({
+      nome: 'Dario', stato: () => DnD.store.state, aggiornaStato: (f) => DnD.store.update(f), esecutore: E, regole: () => RULES1,
+      suRichiesta: (r) => r.accetta({ personaggioId: r.nome === 'Ale' ? 'pg1' : 'pg2' }),
+      suDado: (x) => dadi.master.push(x), suViolazione: (v) => extra.violazioni.push(v), suDomanda: (d) => extra.domande.push(d),
+    }, o.master));
+    DnD.store.onChange = () => m.aggiorna();
+    const inviati = [];
+    const unisci = (nome, gopts) => {
+      const [a, b] = NET().trasporto.coppiaMemoria();
+      const inv = b.invia;
+      b.invia = (t) => { inviati.push({ a: nome, t }); return inv(t); };
+      m.collega(b);
+      const g = NET().sessione.giocatore(Object.assign({
+        nome, colore: '#aa3355', trasporto: a, suEsito: (e) => esiti.push(Object.assign({ chi: nome }, e)), suDado: (x) => dadi[nome] && dadi[nome].push(x),
+        suPing: (p) => extra.ping.push([nome, p]), suRivela: (r) => extra.rivela.push([nome, r]), suOfferta: (f) => extra.offerte.push([nome, f]),
+        suRichiestaTiro: (r) => extra.richieste.push([nome, r]), suGettone: (t) => extra.gettoni.push([nome, t]), suFine: (t) => extra.fine.push([nome, t]), suErrore: (t) => extra.errori.push([nome, t]),
+      }, gopts));
+      g.a = a;
+      return g;
+    };
+    const ale = unisci('Ale');
+    const bice = o.soloAle ? null : unisci('Bice');
+    await pausa();
+    // Chiede e aspetta l'esito (eseguita, rifiutata o attesa).
+    const chiedi = async (g, tipo, dati) => { const id = g.intenzione(tipo, dati); await pausa(); return esiti.filter((e) => e.id === id).pop() || null; };
+    try {
+      await fn({ st, m, E, ale, bice, esiti, dadi, extra, inviati, chiedi, unisci, c: () => S().current(DnD.store.state).combat, x: (id) => S().current(DnD.store.state).combat.combatants.find((y) => y.id === id) });
+    } finally {
+      E.dadiDiProva(null);
+      DnD.store = prevStore;
+    }
+  }
+
+  test('Online 2: intenzioni di movimento valide e non valide, cella per cella', async () => {
+    await partita(async ({ ale, bice, chiedi, x, extra, m }) => {
+      let e = await chiedi(bice, 'muovi', { combattenteId: 'x2', celle: [{ x: 1, y: 4 }] });
+      eq([e.stato, e.testo], ['rifiutata', 'Non è il tuo turno.'], 'fuori turno');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x2', celle: [{ x: 1, y: 4 }] });
+      eq(e.testo, 'Puoi agire solo con il tuo personaggio.', 'pedina altrui');
+      ok(m.registro().some((v) => v.tipo === 'altrui' && v.grave && v.nome === 'Ale'), 'registrato come violazione');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 1, y: 2 }, { x: 3, y: 3 }] });
+      eq(e.testo, 'Non puoi andare lì.', 'salto di due celle: percorso non continuo');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 2, y: 2 }] });
+      eq(e.testo, 'Non puoi andare lì.', 'diagonale che taglia l\'angolo accanto al goblin');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }] });
+      eq([e.stato, x('x1').pos, DnD.movimento.left(x('x1'), RULES1, 5)], ['eseguita', { x: 3, y: 2 }, 3], 'percorso valido: 3 celle');
+      eq(bice.stato().vista.combattimento.pedine.find((p) => p.id === 'x1').pos, { x: 3, y: 2 }, 'l\'altro giocatore vede lo spostamento');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 4, y: 3 }] });
+      eq([e.stato, e.testo, x('x1').pos], ['rifiutata', 'Non puoi andare lì.', { x: 3, y: 2 }], 'cella bloccata dal muro');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 3, y: 3 }, { x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }, { x: 3, y: 7 }, { x: 3, y: 8 }] });
+      eq([e.stato, e.avviso, x('x1').pos], ['eseguita', 'Movimento esaurito: ti fermi dopo 3 celle.', { x: 3, y: 5 }], 'oltre il residuo: si ferma all\'ultima cella valida');
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 3, y: 6 }] });
+      eq(e.testo, 'Movimento residuo insufficiente: 0 celle.');
+      // Pedina nascosta sul percorso: rifiuto senza rivelare nulla.
+      x('x1').movement = null;
+      x('x1').pos = { x: 1, y: 4 };
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 1, y: 5 }, { x: 1, y: 6 }, { x: 1, y: 7 }] });
+      eq([e.avviso, x('x1').pos], ['Non puoi andare oltre: ti fermi prima.', { x: 1, y: 5 }], 'si ferma prima dell\'ombra');
+      ok(!JSON.stringify(e).includes('Ombra'), 'nessun nome nascosto nella risposta');
+      // Condizione che azzera la velocità.
+      DnD.condizioni.apply(x('x1'), { type: 'afferrato' });
+      e = await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 2, y: 5 }] });
+      ok(e.testo.startsWith('Non puoi muoverti: afferrato'), e.testo);
+      eq(extra.errori, []);
+    });
+  });
+
+  test('Online 2: percorso verificato cella per cella (terreno difficile, angoli, salti)', () => {
+    const m = mkC({ id: 'm', pos: { x: 0, y: 0 } });
+    const st = aiState([m]);
+    const mud = openMap(20, 20, Array.from({ length: 20 }, (_, y) => [G().key(2, y), 2]));
+    const r = MV().walk(mud, st, m, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }], 6, { rules: RULES1 });
+    eq([r.end, r.cost, r.stopped], [{ x: 3, y: 0 }, 4, false], 'il fango costa 2');
+    const r2 = MV().walk(mud, st, m, [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }], 2, { rules: RULES1 });
+    eq([r2.end, r2.reason], [{ x: 1, y: 0 }, 'residuo'], 'il fango supera il residuo');
+    const muro = openMap(20, 20, [], [G().key(1, 0)]);
+    eq(MV().walk(muro, st, m, [{ x: 1, y: 1 }, { x: 2, y: 0 }], 6, { rules: RULES1 }).reason, 'bloccato', 'angolo tagliato vicino al muro');
+    eq(MV().walk(openMap(20, 20), st, m, [{ x: 5, y: 5 }], 6, { rules: RULES1 }).reason, 'percorso', 'salto');
+  });
+
+  test('Online 2: attacco con portata, gittata, linea di vista, vantaggio per condizioni, critico e Attacco extra', async () => {
+    await partita(async ({ ale, chiedi, x, c, E, dadi, inviati }) => {
+      let e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g2', armaId: 'spada' });
+      eq(e.testo, 'Orco è fuori portata: 7 celle (portata 1 cella).');
+      e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'h1', armaId: 'arco' });
+      eq(e.testo, 'Bersaglio non valido.', 'pedina nascosta: rifiuto senza nome');
+      // Goblin prono e attacco in mischia: vantaggio; 17 con il vantaggio, 6 + 3 danni.
+      DnD.condizioni.apply(x('g1'), { type: 'prono' });
+      E.dadiDiProva(seq(4, 17, 6));
+      e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
+      eq([e.stato, x('g1').hp], ['eseguita', 1]);
+      const riga = c().log.find((r) => r.text.includes('attacca Goblin'));
+      ok(riga.text.includes('vantaggio') && riga.text.includes('[4, 17]'), riga.text);
+      eq([dadi.Ale.length, dadi.Bice.length, dadi.Ale[0].tiro.gruppi.map((g) => g.values)], [1, 1, [[4, 17], [6]]], 'stessi dadi del master sui due lati');
+      eq(dadi.Ale[0].tiro, dadi.Bice[0].tiro);
+      // Secondo attacco (Attacco extra del guerriero di 5° livello): critico con il 20 naturale.
+      E.dadiDiProva(seq(20, 3, 5));
+      e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g2', armaId: 'arco' });
+      ok(e.stato === 'eseguita' && c().log.some((r) => r.text.includes('CRITICO')), 'critico a distanza');
+      eq(x('g2').hp, 10 - (3 + 5), 'dadi raddoppiati');
+      e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g2', armaId: 'arco' });
+      eq(e.testo, 'Hai già usato l\'azione in questo turno.', 'due attacchi per azione, non tre');
+      ok(!inviati.some((m) => m.t.includes('"hp"')), 'i PF esatti dei nemici non partono');
+    });
+    // Linea di vista (verifica pura): muro tra chi attacca e il bersaglio.
+    const g = vGrid({ w: 12, h: 10, structures: [vWall('m', 4, 0, 1, 10)] });
+    const a = vC({ id: 'a', pos: { x: 1, y: 1 }, weapons: [{ id: 'arco', name: 'Arco', toHit: 5, damageDice: '1d6' }] });
+    const t = vC({ id: 't', name: 'Lupo', kind: 'npc', faction: 'nemici', pos: { x: 8, y: 1 } });
+    const ctx = { c: { combatants: [a, t] }, x: a, visti: new Set(['t']), catalogo: [], distanza: () => true, vista: V().context(g, [a, t]) };
+    eq(DnD.rete.intenzioni.verificaAttacco(ctx, { armaId: 'arco', bersaglioId: 't', modo: 'normale' }).testo, 'Non hai linea di vista su Lupo.');
+  });
+
+  test('Online 2: incantesimi con slot, concentrazione, gittata e tiro salvezza dei bersagli', async () => {
+    await partita(async ({ ale, chiedi, x, c, E, st }) => {
+      let e = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-vicino', slot: 0, bersagli: ['g2'] });
+      eq(e.testo, 'Orco è fuori gittata: 7 celle (massimo 1 cella).', 'gittata «Contatto»');
+      e = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-fuoco', slot: 2, bersagli: ['g1'] });
+      eq(e.testo, 'Nessuno slot di 2° livello disponibile.');
+      // Vampata: 2d6 = 7, salvezza del goblin 2 + 0 contro CD 13 → fallita, 7 danni.
+      E.dadiDiProva(seq(3, 4, 2));
+      e = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-fuoco', slot: 1, bersagli: ['g1'] });
+      eq([e.stato, x('g1').hp, x('x1').spellcasting.slotsUsed[0], st.players[0].spellcasting.slotsUsed[0]], ['eseguita', 3, 1, 1], 'slot speso anche nella scheda');
+      ok(c().log.some((r) => r.text.includes('salvezza DES') && r.text.includes('fallisce')), 'tiro salvezza del bersaglio');
+      e = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-scudo', slot: 1, bersagli: [] });
+      eq(e.testo, 'Hai già usato l\'azione in questo turno.');
+    });
+    await partita(async ({ ale, chiedi, x }) => {
+      const e = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-scudo', slot: 1, bersagli: ['x2'] });
+      eq(e.testo, 'Scudo arcano ha gittata personale.');
+      const e2 = await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-scudo', slot: 1, bersagli: [] });
+      eq([e2.stato, x('x1').concentration && x('x1').concentration.name], ['eseguita', 'Scudo arcano'], 'concentrazione iniziata');
+    }, { soloAle: true });
+  });
+
+  test('Online 2: tiro salvezza richiesto dal master, con svantaggio dalle condizioni', async () => {
+    await partita(async ({ ale, m, chiedi, x, c, E, extra }) => {
+      DnD.condizioni.apply(x('x1'), { type: 'trattenuto' });
+      const rid = m.richiediTiro(ale.stato().id, { caratteristica: 'DES', cd: 14, testo: 'Trappola a dardi' });
+      await pausa();
+      eq([extra.richieste.length, extra.richieste[0][1].caratteristica, extra.richieste[0][1].cd], [1, 'DES', 14]);
+      E.dadiDiProva(seq(15, 3));
+      const e = await chiedi(ale, 'salvezza', { richiestaId: rid });
+      ok(e.stato === 'eseguita' && e.testo.includes('fallito'), e.testo);
+      ok(c().log.some((r) => r.text.includes('svantaggio') && r.text.includes('[15, 3]')), 'svantaggio da trattenuto, tirato dal master');
+      const e2 = await chiedi(ale, 'salvezza', { richiestaId: rid });
+      eq(e2.testo, 'Richiesta di tiro non trovata o già usata.');
+    }, { soloAle: true });
+  });
+
+  test('Online 2: tiri liberi generati dal master e identici sui due lati; tiri privati', async () => {
+    await partita(async ({ ale, chiedi, dadi }) => {
+      const e = await chiedi(ale, 'tira', { tipo: 'espr', espr: '2d6+3' });
+      eq(e.stato, 'eseguita');
+      eq([dadi.master.length, dadi.Ale.length, dadi.Bice.length], [1, 1, 1]);
+      eq(dadi.Ale[0].tiro, dadi.master[0].tiro, 'stesso tiro sul master');
+      eq(dadi.Bice[0].tiro, dadi.master[0].tiro, 'e sull\'altro giocatore');
+      ok(dadi.Ale[0].verificato && dadi.Ale[0].tiro.gruppi[0].values.length === 2);
+      await chiedi(ale, 'tira', { tipo: 'd20', modo: 'vantaggio', bonus: 2, privato: true });
+      eq([dadi.master.length, dadi.Ale.length, dadi.Bice.length], [2, 2, 1], 'privato: solo il master e chi tira');
+      const bad = await chiedi(ale, 'tira', { tipo: 'espr', espr: 'tanti dadi' });
+      ok(bad.testo.startsWith('Richiesta non valida'), bad.testo);
+      // Con i tiri convalidati il dado deciso dal client non passa.
+      ale.dado(D().tiroDaRoll(D().roll(1, 20, 0, seq(20)), 'd20', 'menu'));
+      await pausa();
+      eq(dadi.master.length, 2);
+    });
+  });
+
+  test('Online 2: permessi, pausa e conferma manuale (approva, rifiuta, modifica, annulla)', async () => {
+    await partita(async ({ ale, m, chiedi, c, E }) => {
+      m.impostaPermessi(ale.stato().id, { attaccare: false });
+      await pausa();
+      eq(ale.stato().permessi.attaccare, false, 'il giocatore riceve i suoi permessi');
+      let e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
+      eq(e.testo, 'Il master non ti permette questa azione.');
+      m.impostaPermessi(ale.stato().id, null);
+      m.impostaPausa(true);
+      e = await chiedi(ale, 'movimento', { combattenteId: 'x1', tipo: 'scatto' });
+      eq(e.testo, 'Il master ha messo in pausa il gioco.');
+      m.impostaPausa(false);
+      m.impostaPermessi(null, { confermaManuale: true });
+      e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
+      eq([e.stato, m.coda().length, m.coda()[0].descrizione], ['attesa', 1, 'Mira attacca Goblin con Spada'], 'in coda con l\'anteprima');
+      E.dadiDiProva(seq(18, 2, 2));
+      m.approva(m.coda()[0].id, { modo: 'svantaggio' });
+      await pausa();
+      ok(c().log.some((r) => r.text.includes('svantaggio')), 'approvata con la modifica del master');
+      const id2 = ale.intenzione('attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
+      await pausa();
+      m.rifiuta(m.coda()[0].id, 'non adesso');
+      await pausa();
+      eq(ale.stato().inSospeso.has(id2), false);
+      const id3 = ale.intenzione('usaAzione', { combattenteId: 'x1', azione: 'reazione', testo: 'Attacco di opportunità' });
+      await pausa();
+      eq(m.coda().length, 1, 'le reazioni passano sempre dal master');
+      ale.annulla(id3);
+      await pausa();
+      eq(m.coda().length, 0, 'annullata dal giocatore');
+    }, { soloAle: true });
+  });
+
+  test('Online 2: scheda con delta, limiti, permessi e conflitti', async () => {
+    await partita(async ({ ale, m, chiedi, x, st }) => {
+      let e = await chiedi(ale, 'modificaScheda', { campo: 'pf', valore: 25, prima: 30 });
+      eq([e.stato, x('x1').hp], ['eseguita', 25]);
+      await pausa();
+      eq(ale.stato().vista.scheda.pf, 25, 'lo stato torna al giocatore');
+      e = await chiedi(ale, 'modificaScheda', { campo: 'pf', valore: 99, prima: 25 });
+      eq(e.testo, 'Valore fuori dai limiti (da 0 a 30).');
+      e = await chiedi(ale, 'modificaScheda', { campo: 'pf', valore: 20, prima: 30 });
+      eq(e.testo, 'Il valore è cambiato nel frattempo (ora 25): la tua modifica non è stata applicata.', 'conflitto: vince il master');
+      e = await chiedi(ale, 'modificaScheda', { campo: 'caratteristica', chiave: 'FOR', valore: 18, prima: null });
+      eq(e.testo, 'Il master non ti permette questa azione.', 'caratteristiche spente di base');
+      m.impostaPermessi(null, { schedaBase: true });
+      e = await chiedi(ale, 'modificaScheda', { campo: 'caratteristica', chiave: 'FOR', valore: 18, prima: null });
+      eq([e.stato, st.players[0].abilities.FOR], ['eseguita', 18]);
+      e = await chiedi(ale, 'modificaScheda', { campo: 'slot', livello: 1, valore: 2, prima: 0 });
+      eq([e.stato, x('x1').spellcasting.slotsUsed[0]], ['eseguita', 2]);
+      e = await chiedi(ale, 'modificaScheda', { campo: 'monete', chiave: 'mo', valore: 50, prima: null });
+      eq(st.players[0].coins.mo, 50);
+    }, { soloAle: true });
+  });
+
+  test('Online 2: scambio di oggetti con la conferma del destinatario', async () => {
+    await partita(async ({ ale, bice, chiedi, extra, st, esiti }) => {
+      const e = await chiedi(ale, 'dai', { indice: 0, qty: 5, a: 'pg2' });
+      eq(e.testo, 'Ne hai solo 3.');
+      const id = ale.intenzione('dai', { indice: 0, qty: 2, a: 'pg2' });
+      await pausa();
+      eq([extra.offerte.length, extra.offerte[0][0], extra.offerte[0][1].qty], [1, 'Bice', 2], 'offerta al destinatario');
+      await chiedi(bice, 'rispostaOfferta', { offertaId: extra.offerte[0][1].id, accetta: true });
+      eq([st.players[0].inventory[0].qty, st.players[1].inventory[0].qty], [1, 2]);
+      eq(esiti.filter((x) => x.id === id).pop().stato, 'eseguita', 'esito anche a chi ha dato');
+      ale.intenzione('dai', { indice: 0, qty: 1, a: 'pg2' });
+      await pausa();
+      await chiedi(bice, 'rispostaOfferta', { offertaId: extra.offerte[1][1].id, accetta: false });
+      eq(st.players[0].inventory[0].qty, 1, 'rifiutata: nulla cambia');
+    });
+  });
+
+  test('Online 2: gettone di rientro, revoca e personaggio assente', async () => {
+    let richiesta = null;
+    await partita(async ({ ale, m, extra, unisci, c }) => {
+      eq(extra.gettoni.length, 1);
+      const gettone = extra.gettoni[0][1];
+      const id = ale.stato().id;
+      ale.a.chiudi();
+      await pausa();
+      eq([m.giocatori()[0].stato, m.giocatori()[0].assente], ['disconnesso', true], 'personaggio assente');
+      // Assente da saltare: al suo turno il master passa oltre.
+      m.assente('pg1', 'salta');
+      await pausa(5);
+      ok(c().currentId !== 'x1', 'turno saltato');
+      ok(c().log.some((r) => r.text.includes('Mira salta il turno')));
+      // Rientro con il gettone (anche con un altro nome): stesso id e stesso personaggio.
+      const a2 = unisci('Alessia', { gettone });
+      await pausa();
+      eq([richiesta.rientro.gettone, richiesta.rientro.personaggioId], [true, 'pg1']);
+      richiesta.accetta({});
+      await pausa();
+      eq([a2.stato().id, a2.stato().vista.scheda.nome, m.giocatori().find((g) => g.id === id).personaggioId], [id, 'Mira', 'pg1']);
+      // Revoca: chi rientra con quel gettone è un giocatore nuovo.
+      m.revocaGettone(id);
+      a2.a.chiudi();
+      await pausa();
+      richiesta = null;
+      unisci('Zed', { gettone });
+      await pausa();
+      eq(richiesta.rientro, null, 'gettone revocato');
+    }, { soloAle: true, master: { suRichiesta: (r) => { if (!richiesta && r.nome === 'Ale') r.accetta({ personaggioId: 'pg1' }); else richiesta = r; } } });
+  });
+
+  test('Online 2: intenzioni duplicate (idempotenza), campi extra e messaggi malformati', async () => {
+    await partita(async ({ ale, m, x, c, esiti, E }) => {
+      const P = NET().protocollo;
+      const raw = (msg, seqN) => ale.a.invia(P.codifica(P.crea('intenzione', msg, seqN)));
+      E.dadiDiProva(seq(15, 4, 15, 4));
+      raw({ id: 'doppia-1', tipo: 'attacca', dati: { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada', pf: 999, extra: { a: 1 } } }, 900);
+      raw({ id: 'doppia-1', tipo: 'attacca', dati: { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' } }, 901);
+      await pausa();
+      eq(c().log.filter((r) => r.text.includes('attacca Goblin')).length, 1, 'eseguita una volta sola');
+      eq(esiti.filter((e) => e.id === 'doppia-1').map((e) => e.stato), ['eseguita', 'eseguita'], 'stesso esito ripetuto');
+      eq(x('g1').hp, 10 - 7, 'campi extra ignorati (pf)');
+      m.impostaSoglia(3);
+      raw({ id: 'x-1', tipo: 'teletrasporto', dati: {} }, 902);
+      raw({ id: 'x-2', tipo: 'muovi', dati: { combattenteId: 'x1', celle: 'tutte' } }, 903);
+      await pausa();
+      ok(esiti.some((e) => e.id === 'x-1' && e.testo.startsWith('Richiesta non valida')), 'tipo sconosciuto');
+      eq(m.registro().filter((v) => v.grave).length, 2);
+      ale.a.invia('{rotto');
+      await pausa();
+      eq([ale.stato().stato, m.giocatori().length], ['espulso', 0], 'espulso alla soglia delle violazioni');
+    }, { soloAle: true });
+  });
+
+  test('Online 2: nessun dato nascosto nelle risposte, ping, domanda e rivelazione di un handout', async () => {
+    await partita(async ({ ale, bice, m, chiedi, extra, inviati }) => {
+      await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'h1', armaId: 'arco' });
+      await chiedi(ale, 'lancia', { combattenteId: 'x1', magiaId: 'sp-fuoco', slot: 1, bersagli: ['h1'] });
+      await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 1, y: 2 }, { x: 0, y: 3 }, { x: 0, y: 4 }, { x: 0, y: 5 }, { x: 1, y: 6 }] });
+      ok(!inviati.some((x) => x.t.includes('Ombra') || x.t.includes('"h1"')), 'l\'ombra nascosta non compare mai');
+      ok(!inviati.some((x) => x.t.includes('Il mistero della torre')), 'l\'handout non parte prima della rivelazione');
+      await chiedi(ale, 'ping', { x: 5, y: 5 });
+      eq(extra.ping.map(([n, p]) => [n, p.x, p.y, p.nome]), [['Ale', 5, 5, 'Ale'], ['Bice', 5, 5, 'Ale']], 'ping a tutti con il nome');
+      await chiedi(bice, 'domanda', { testo: 'Posso scassinare la porta?' });
+      eq(extra.domande.map((d) => [d.nome, d.testo]), [['Bice', 'Posso scassinare la porta?']]);
+      m.rivela({ titolo: 'Lettera', testo: 'Il mistero della torre' });
+      await pausa();
+      eq(extra.rivela.map(([n, r]) => [n, r.titolo, r.testo]), [['Ale', 'Lettera', 'Il mistero della torre'], ['Bice', 'Lettera', 'Il mistero della torre']]);
+    });
+  });
+
+  test('Online 2: client della tappa 1 rifiutato con un messaggio chiaro', async () => {
+    const [a, b] = NET().trasporto.coppiaMemoria();
+    const errori = [];
+    NET().sessione.master({ stato: () => onlineState(), suErrore: (t) => errori.push(t) }).collega(b);
+    const ricevuti = [];
+    a.suMessaggio((t) => ricevuti.push(JSON.parse(t)));
+    a.invia(JSON.stringify({ versione: 1, tipo: 'ciao', id: 'v1', seq: 1, dati: { nome: 'Vecchio' } }));
+    await pausa();
+    eq([ricevuti[0].tipo, ricevuti[0].dati.versione], ['incompatibile', 2]);
+    ok(errori[0].includes('protocollo 1') && errori[0].includes('aggiornare'), errori[0]);
+  });
+
+  test('Online 2: due client giocano un turno completo (movimento, attacco, fine turno)', async () => {
+    await partita(async ({ ale, bice, chiedi, c, x, E }) => {
+      ok(await chiedi(ale, 'muovi', { combattenteId: 'x1', celle: [{ x: 1, y: 2 }] }));
+      E.dadiDiProva(seq(15, 5));
+      let e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g1', armaId: 'spada' });
+      eq([e.stato, x('g1').hp], ['eseguita', 2]);
+      e = await chiedi(bice, 'finisciTurno', { combattenteId: 'x2' });
+      eq(e.testo, 'Non è il tuo turno.');
+      e = await chiedi(ale, 'finisciTurno', { combattenteId: 'x1' });
+      eq([e.stato, c().currentId], ['eseguita', 'x2']);
+      eq([ale.stato().vista.combattimento.turno, bice.stato().vista.combattimento.turno], ['x2', 'x2'], 'entrambi vedono il turno di Bea');
+      eq(bice.stato().vista.combattimento.pedine.find((p) => p.id === 'x2').proprie.economia.azione, false, 'Bea ha la sua azione');
+      e = await chiedi(bice, 'muovi', { combattenteId: 'x2', celle: [{ x: 2, y: 2 }] });
+      eq(e.stato, 'eseguita', 'Bea si avvicina al goblin');
+      E.dadiDiProva(seq(19, 4));
+      e = await chiedi(bice, 'attacca', { combattenteId: 'x2', bersaglioId: 'g1', armaId: 'mazza' });
+      eq([e.stato, x('g1').hp], ['eseguita', 0]);
+      e = await chiedi(bice, 'finisciTurno', { combattenteId: 'x2' });
+      eq(c().currentId, 'g2', 'turno dell\'orco (il goblin è a terra)');
+      const v = ale.stato().vista.combattimento;
+      eq([v.turno, v.pedine.find((p) => p.id === 'g1').salute, v.pedine.find((p) => p.id === 'x1').pos], ['g2', 'a terra', { x: 1, y: 2 }]);
+    });
   });
 
   async function runTests() {

@@ -51,7 +51,32 @@
     };
     if (mostraPf) Object.assign(p, { pf: c.hp, pfMax: c.maxHp, pfTemp: c.tempHp || 0 });
     if (delParty(c) && (ds.active || ds.stable)) p.morte = { successi: ds.successes, fallimenti: ds.failures, stabile: ds.stable };
+    if (p.mia) p.proprie = proprie(c, opts);
     return p;
+  }
+
+  // Azioni della propria pedina (tappa 2): armi, magie, azioni da creatura, movimento residuo ed economia del turno.
+  function proprie(x, opts) {
+    const Mv = DnD.movimento;
+    const sc = x.spellcasting;
+    const m = Mv.movementOf(x);
+    const eco = opts.economia ? opts.economia(x) : null;
+    return {
+      armi: (x.weapons || []).map((w) => ({ id: w.id, nome: w.name, testo: DnD.regole.formatModifier(w.toHit) + ' · ' + w.damageDice + (w.damageBonus ? DnD.regole.formatModifier(w.damageBonus) : '') + (w.damageType ? ' ' + w.damageType : '') })),
+      magie: sc ? {
+        cd: sc.dc, attacco: sc.attack, slotsTotali: (sc.slotsTotal || []).slice(), slotsUsati: (sc.slotsUsed || []).slice(),
+        lista: sc.spells.map((sp) => {
+          const inn = sc.innate && sc.innate[sp.id];
+          return { id: sp.id, nome: sp.name, livello: sp.level, effetto: sp.effect.type, gittata: sp.range || '', tempo: sp.castingTime || '', area: Boolean(sp.area), concentrazione: Boolean(sp.concentration),
+            innato: inn ? { freq: inn.freq, rimasti: inn.left === undefined ? null : inn.left } : null };
+        }),
+      } : null,
+      creatura: x.creature && DnD.creature ? DnD.creature.allActions(x.creature).map((a) => ({ id: a.id, nome: a.name })) : [],
+      movimento: { residuo: opts.regole ? Mv.left(x, opts.regole, opts.piedi) : null, velocita: opts.regole ? Mv.speedCells(x, opts.regole, opts.piedi) : null, spostato: m.moves.length > 0, scatti: m.dashes },
+      prono: DnD.condizioni.has(x, 'prono'),
+      blocco: DnD.condizioni.actionBlock(x) || '',
+      economia: eco ? { azione: eco.azione, attacchi: eco.attacchi, bonus: eco.bonus, reazione: eco.reazione } : null,
+    };
   }
 
   // Riga del log ripulita, o null se non deve partire. nomi: { visti: Set, nascosti: [nomi], nemici: Map nome -> maxHp }.
@@ -92,9 +117,32 @@
     const status = DnD.riposi ? DnD.riposi.normalizeStatus(p.status) : obj(p.status);
     out.pf = combattente ? combattente.hp : status.hp === null || status.hp === undefined ? p.maxHp : status.hp;
     if (combattente) out.pfMax = combattente.maxHp;
+    // Scheda completa (tappa 2): campi modificabili con le richieste di modifica.
+    out.pfTemp = combattente ? combattente.tempHp || 0 : status.tempHp || 0;
+    const sc = combattente && combattente.spellcasting ? combattente.spellcasting : p.spellcasting;
+    out.slot = sc && sc.slotsTotal ? sc.slotsTotal.map((n, i) => ({ livello: i + 1, totali: n, usati: (sc.slotsUsed || [])[i] || 0 })).filter((x) => x.totali > 0) : [];
+    out.monete = DnD.attrezzatura ? DnD.attrezzatura.normalizeCoins(p.coins) : {};
+    out.inventario = DnD.attrezzatura ? DnD.attrezzatura.normalizeInventory(p.inventory).map((it, i) => {
+      const eq = arr(st.equipment).find((e) => e.id === it.equipmentId);
+      return { indice: i, nome: eq ? eq.name : 'Oggetto sconosciuto', qty: it.qty, equipaggiato: it.equipped };
+    }) : [];
     out.dadiVita = Math.max(0, out.livello - (status.hitDiceUsed || 0)) + '/' + out.livello;
     out.condizioni = combattente ? DnD.condizioni.normalizeList(combattente.conditions).map((e) => DnD.condizioni.nameOf(e)) : arr(p.sheet && p.sheet.conditions).slice(0, 20);
     return out;
+  }
+
+  // Schede degli altri giocatori in sola lettura limitata: nome, classe, livello, salute, CA, condizioni.
+  function altri(st, c, pers, o) {
+    if (o.schedeAltri === false) return [];
+    const sess = DnD.sessioni.current(st);
+    return DnD.sessioni.visible(st, 'players', sess.id).filter((p) => !pers || p.id !== pers.id).map((p) => {
+      const x = c ? c.combatants.find((y) => y.kind === 'player' && y.sourceId === p.id) : null;
+      if (c && !x) return null;
+      const s = DnD.riposi.normalizeStatus(p.status);
+      const hp = x ? x.hp : s.hp === null ? p.maxHp : s.hp;
+      return { id: p.id, nome: p.name, classe: DnD.classi.className(p.classId), livello: p.level || 1, salute: salute(hp, x ? x.maxHp : p.maxHp), ca: x ? x.ac : null,
+        condizioni: x ? DnD.condizioni.normalizeList(x.conditions).map((e) => DnD.condizioni.nameOf(e)) : arr(p.sheet && p.sheet.conditions).slice(0, 20) };
+    }).filter(Boolean);
   }
 
   // TileSet usati da TileMap, strutture e oggetti (le definizioni servono al giocatore per disegnare le tile).
@@ -126,7 +174,8 @@
     const c = sess && sess.combat;
     const pers = o.personaggioId ? arr(st.players).find((p) => p.id === o.personaggioId) || null : null;
     const mio = c && pers ? c.combatants.find((x) => x.sourceId === pers.id && x.kind === 'player') || null : null;
-    const vista = { master: o.master || 'Master', combattimento: null, scheda: scheda(pers, st, mio), io: { giocatoreId: o.giocatoreId || '', combattenteId: mio ? mio.id : '' } };
+    const vista = { master: o.master || 'Master', combattimento: null, scheda: scheda(pers, st, mio), io: { giocatoreId: o.giocatoreId || '', combattenteId: mio ? mio.id : '', personaggioId: pers ? pers.id : '' },
+      regole: o.regole || null, altri: altri(st, c, pers, o) };
     if (!c) return { vista, immagini: raccolta };
     const tsIndex = DnD.tilemap.tilesetIndex(st.tilesets);
     const vg = DnD.visione.visioneGiocatore({ grid: c.grid, combatants: c.combatants }, { tilesets: tsIndex });
@@ -139,7 +188,7 @@
       nascosti: c.combatants.filter((x) => !ids.has(x.id)).map((x) => x.name),
       nemici: new Map(mostrati.filter((x) => !delParty(x)).map((x) => [x.name, x.maxHp])),
     };
-    const opzPedina = { pfNemici: Boolean(o.pfNemici), combattenteId: mio ? mio.id : '' };
+    const opzPedina = { pfNemici: Boolean(o.pfNemici), combattenteId: mio ? mio.id : '', regole: o.regole, piedi: c.grid.feetPerCell || 5, economia: o.economia };
     const griglia = Object.assign({}, vg);
     delete griglia.combatants;
     for (const e of griglia.structures.concat(griglia.items)) { delete e.sourceId; delete e.hidden; }
@@ -167,6 +216,8 @@
     const cambi = [];
     if (!uguale(prima.scheda, dopo.scheda)) cambi.push({ op: 'scheda', scheda: dopo.scheda });
     if (!uguale(prima.io, dopo.io)) cambi.push({ op: 'io', io: dopo.io });
+    if (!uguale(prima.altri, dopo.altri)) cambi.push({ op: 'altri', altri: dopo.altri });
+    if (!uguale(prima.regole, dopo.regole)) cambi.push({ op: 'regole', regole: dopo.regole });
     const a = prima.combattimento;
     const b = dopo.combattimento;
     if (b) {
@@ -204,6 +255,8 @@
     for (const x of cambi) {
       if (x.op === 'scheda') v.scheda = x.scheda || null;
       else if (x.op === 'io') v.io = obj(x.io);
+      else if (x.op === 'altri') v.altri = arr(x.altri);
+      else if (x.op === 'regole') v.regole = x.regole || null;
       else if (x.op === 'pedina') {
         serve();
         const p = obj(x.pedina);

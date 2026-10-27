@@ -1446,3 +1446,33 @@ input.short { max-width: 8rem; }
 /* Giocatore online: solo la schermata della sessione (niente menù né note). */
 .online-giocatore .app { grid-template-columns: 1fr; }
 .online-giocatore .sidebar, .online-giocatore .notes-fab, .online-giocatore .notes-panel { display: none; }
+/* Gioco online, tappa 2: azioni del giocatore, richieste, scheda modificabile, pannello del master. */
+.online-actions-panel h2 { font-size: 1.05rem; margin: 0 0 0.3rem; }
+.online-actions-panel .online-actions { margin: 0.3rem 0; }
+.btn.online-ready { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.online-requests { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.online-requests li.ok { color: var(--ok-text); }
+.online-requests li.ko { color: var(--danger-text); }
+.online-banner { margin: 0.3rem 0; padding: 0.4rem 0.7rem; border-radius: 8px; border: 1px solid var(--accent); background: var(--panel); font-weight: 700; }
+.online-banner[hidden] { display: none; }
+.online-flash { animation: online-flash 1.2s ease-out 1; }
+@keyframes online-flash { 0% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+:root[data-reduce-motion] .online-flash { animation: none; }
+.online-hint { margin: 0.2rem 0; text-align: center; }
+.online-typing { min-height: 1.1em; margin: 0; }
+.online-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.online-players li { flex-direction: column; align-items: stretch; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+.online-queue h3 { font-size: 0.9rem; margin: 0.3rem 0; }
+.online-request { padding: 0.35rem 0.5rem; border: 1px solid var(--accent); border-radius: 8px; margin-bottom: 0.3rem; }
+.online-request p { margin: 0 0 0.25rem; }
+.online-request input { flex: 1 1 8rem; min-width: 0; }
+.online-log { margin: 0.3rem 0 0; padding-left: 1rem; max-height: 160px; overflow-y: auto; }
+.online-log li.grave { color: var(--danger-text); }
+.online-perms { display: flex; flex-direction: column; gap: 0.35rem; }
+.online-reveal img { max-width: 100%; max-height: 60vh; display: block; margin: 0 auto 0.5rem; border-radius: 6px; }
+.online-reveal-text { white-space: pre-wrap; }
+.online-hp-edit, .online-slots, .online-coins { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.3rem 0; }
+.online-slot { display: inline-flex; align-items: center; gap: 0.2rem; }
+.online-coins .qty, .online-hp-edit .qty, .online-abilities .qty { width: 4.5rem; }
+.online-inventory ul, .online-companions { margin: 0.3rem 0; padding-left: 1rem; }
+.online-companions { list-style: none; padding: 0; }

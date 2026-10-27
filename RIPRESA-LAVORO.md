@@ -1,5 +1,31 @@
 # Ripresa del lavoro
 
+## Fase «FASE ONLINE 2/3: Giocatore attivo e convalida del master» (26 ottobre 2026)
+
+- Stato: **completata**, non ancora committata; prove dal vivo affidate all'utente. Dati invariati (versione 18),
+  protocollo alla versione **2**, cache `session-forge-v35`.
+- `test.html`: **298/298** (14 test nuovi «Online 2: …»; aggiornato il test del dado libero, ora con i tiri convalidati
+  spenti). Dopo le modifiche serve ricaricare senza cache: il service worker e la cache del browser tengono le
+  versioni vecchie di `test.js`.
+- Provato dal vivo con due schede: trascinamento della pedina verificato dal master, attacco fuori portata rifiutato
+  e poi riuscito (dadi del master, PF del nemico come «ferito» nel log del giocatore), PF −1 dalla scheda, Finisci
+  turno. Non provati dal vivo: conferma manuale dal pannello, ping, rivelazioni, scambio di oggetti, rientro con il
+  gettone (coperti dai test in memoria).
+- File nuovo: `js/rete/intenzioni.js`. Toccati: `rete/protocollo.js` (v2, nuovi tipi), `rete/filtro.js` (azioni della
+  propria pedina, scheda completa, compagni, regole), `rete/sessione.js` (riscritta: intenzioni, permessi, coda, gettoni,
+  richieste di tiro, ping, rivelazioni, offerte, registro), `movimento.js` (`walk`, regole del passo condivise con
+  `reach`), `ui-combattimento.js` (API `online`, `performSave` estratto, `moveAction`/`perform*` restituiscono l'esito,
+  `render` senza contenitore, ping sulla griglia), `ui-griglia.js` (trascinamento in sola vista), `ui-dadi.js`
+  (`remoto`), `ui-online.js` (riscritta), CSS, README, CLAUDE.md, `index.html`, `test.html`, `sw.js`.
+- Scelte:
+  - Economia del turno tenuta dal master in memoria (non nei dati): azione con gli attacchi dell'Attacco extra
+    (`generatore.extraAttacks`), azione bonus, reazione; si azzera all'inizio del turno del combattente.
+  - Percorso non continuo rifiutato per intero; percorso troppo lungo o bloccato: si ferma all'ultima cella valida.
+  - Le reazioni passano sempre dal master; le altre azioni generiche sono convalidate e scritte nel log, gli effetti
+    li applica il master.
+  - Gettone tenuto dal master solo per la sessione (il master non salva nulla di nuovo su disco).
+- Da fare nella tappa 3: portale e profili, segnalazione automatica, esplorazione online.
+
 ## Fase «FASE ONLINE 1/3: Collegamento minimo e vista condivisa» (26 ottobre 2026)
 
 - Stato: **completata**, non ancora committata. Dati invariati alla versione **18**, cache `session-forge-v34`.

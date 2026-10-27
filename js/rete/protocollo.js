@@ -1,10 +1,12 @@
 // Protocollo del gioco online: messaggi JSON { versione, tipo, id, seq, dati } con validazione di ogni messaggio
 // ricevuto (versione, tipo e direzione, schema dei dati, lunghezza dei testi, dimensione) e limite di frequenza.
+// Versione 2 (tappa 2): intenzioni del giocatore ed esiti del master, richieste di tiro, ping, rivelazioni, permessi,
+// offerte di oggetti, gettone di rientro. I client della versione 1 vengono rifiutati con un messaggio chiaro.
 // Funzioni pure: il trasporto (trasporto.js) muove solo testo, la sessione (sessione.js) decide cosa farne.
 (function (DnD) {
   'use strict';
 
-  const VERSIONE = 1;
+  const VERSIONE = 2;
   const LIMITI = {
     daGiocatore: 16 * 1024,        // un messaggio di un giocatore (chat, dado, battito…)
     daMaster: 4 * 1024 * 1024,     // istantanea compresa
@@ -13,13 +15,17 @@
     pezzo: 16 * 1024,              // pezzo di un'immagine
     immagine: 8 * 1024 * 1024,     // immagine intera (data URL)
     richiesteImmagini: 200,
+    rivelazione: 5000,             // testo di una rivelazione
+    immagineRivelata: 3 * 1024 * 1024,
   };
   // Chi può mandare ogni tipo: 'g' giocatore, 'm' master.
   const TIPI = {
-    ciao: 'g', chiediIstantanea: 'g', chiediImmagini: 'g',
+    ciao: 'g', chiediIstantanea: 'g', chiediImmagini: 'g', intenzione: 'g',
     benvenuto: 'm', rifiutato: 'm', espulso: 'm', istantanea: 'm', evento: 'm', presenza: 'm', immagine: 'm', immagineNo: 'm', fine: 'm',
-    eco: 'gm', ecoOk: 'gm', battito: 'gm', battitoOk: 'gm', chat: 'gm', dado: 'gm', errore: 'gm', incompatibile: 'gm',
+    esito: 'm', richiestaTiro: 'm', ping: 'm', rivela: 'm', permessi: 'm', offerta: 'm', richiamo: 'm',
+    eco: 'gm', ecoOk: 'gm', battito: 'gm', battitoOk: 'gm', chat: 'gm', dado: 'gm', errore: 'gm', incompatibile: 'gm', scrive: 'gm',
   };
+  const GETTONE = /^[A-Za-z0-9_-]{16,64}$/;
   const obj = (v) => v && typeof v === 'object' && !Array.isArray(v);
   const ID = /^[\w-]{1,64}$/;
   const COLORE = /^#[0-9a-f]{6}$/i;
@@ -43,8 +49,36 @@
     ciao: (d) => {
       const n = nome(d.nome);
       richiedi(n, 'nome mancante');
-      return { nome: n, colore: COLORE.test(d.colore || '') ? d.colore.toLowerCase() : '#4f8cc9' };
+      return { nome: n, colore: COLORE.test(d.colore || '') ? d.colore.toLowerCase() : '#4f8cc9', gettone: GETTONE.test(d.gettone || '') ? d.gettone : '' };
     },
+    // Intenzione: la forma qui, i dati con lo schema del tipo (intenzioni.pulisci, solo i campi previsti).
+    intenzione: (d) => {
+      richiedi(typeof d.id === 'string' && ID.test(d.id) && typeof d.tipo === 'string' && d.tipo.length <= 30 && obj(d.dati), 'intenzione malformata');
+      return { id: d.id, tipo: d.tipo, dati: d.dati };
+    },
+    esito: (d) => ({
+      id: typeof d.id === 'string' && ID.test(d.id) ? d.id : '', stato: ['eseguita', 'rifiutata', 'attesa', 'annullata'].includes(d.stato) ? d.stato : 'rifiutata',
+      testo: pulisciTesto(d.testo, 400), avviso: pulisciTesto(d.avviso, 200),
+    }),
+    richiestaTiro: (d) => {
+      richiedi(typeof d.id === 'string' && ID.test(d.id), 'richiesta non valida');
+      return { id: d.id, caratteristica: typeof d.caratteristica === 'string' ? d.caratteristica.slice(0, 3) : '', cd: Number.isInteger(d.cd) ? d.cd : null, modo: ['vantaggio', 'svantaggio'].includes(d.modo) ? d.modo : 'normale', testo: pulisciTesto(d.testo, 200) };
+    },
+    ping: (d) => {
+      richiedi(intero(d.x, 0, 999) && intero(d.y, 0, 999), 'ping non valido');
+      return { x: d.x, y: d.y, nome: nome(d.nome), colore: COLORE.test(d.colore || '') ? d.colore : '#c9a24f' };
+    },
+    rivela: (d) => {
+      const img = typeof d.immagine === 'string' && d.immagine.length <= LIMITI.immagineRivelata && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(d.immagine) ? d.immagine : null;
+      return { titolo: pulisciTesto(d.titolo, 100).replace(/\n/g, ' '), testo: pulisciTesto(d.testo, LIMITI.rivelazione), immagine: img };
+    },
+    permessi: (d) => ({ permessi: obj(d.permessi) ? d.permessi : {}, pausa: Boolean(d.pausa), convalidati: d.convalidati !== false }),
+    offerta: (d) => {
+      richiedi(typeof d.id === 'string' && ID.test(d.id), 'offerta non valida');
+      return { id: d.id, da: nome(d.da), oggetto: pulisciTesto(d.oggetto, 60), qty: intero(d.qty, 1, 100000) ? d.qty : 1 };
+    },
+    richiamo: (d) => ({ testo: pulisciTesto(d.testo, 200) }),
+    scrive: (d) => ({ nome: nome(d.nome) }),
     chiediIstantanea: () => ({}),
     chiediImmagini: (d) => {
       richiedi(Array.isArray(d.ids) && d.ids.length <= LIMITI.richiesteImmagini && d.ids.every((x) => typeof x === 'string' && ID.test(x)), 'elenco di immagini non valido');
@@ -63,13 +97,13 @@
       richiedi(obj(d.tiro), 'tiro mancante');
       const tiro = DnD.dadi.normalizeTiro(d.tiro);
       richiedi(tiro.gruppi.length && tiro.gruppi.length <= 20 && tiro.gruppi.every((g) => g.values.length <= DnD.dadi.MAX_COUNT), 'tiro non valido');
-      return { tiro, da: typeof d.da === 'string' ? nome(d.da) : '', colore: COLORE.test(d.colore || '') ? d.colore : null };
+      return { tiro, da: typeof d.da === 'string' ? nome(d.da) : '', colore: COLORE.test(d.colore || '') ? d.colore : null, privato: Boolean(d.privato), verificato: d.verificato !== false };
     },
     errore: (d) => ({ testo: pulisciTesto(d.testo, 300) }),
     incompatibile: (d) => ({ versione: Number.isInteger(d.versione) ? d.versione : 0 }),
     benvenuto: (d) => {
       richiedi(typeof d.id === 'string' && ID.test(d.id), 'id del giocatore non valido');
-      return { id: d.id, nome: nome(d.nome), colore: COLORE.test(d.colore || '') ? d.colore : '#4f8cc9', master: nome(d.master), rientro: Boolean(d.rientro) };
+      return { id: d.id, nome: nome(d.nome), colore: COLORE.test(d.colore || '') ? d.colore : '#4f8cc9', master: nome(d.master), rientro: Boolean(d.rientro), gettone: GETTONE.test(d.gettone || '') ? d.gettone : '' };
     },
     rifiutato: (d) => ({ motivo: pulisciTesto(d.motivo, 200) }),
     espulso: (d) => ({ motivo: pulisciTesto(d.motivo, 200) }),

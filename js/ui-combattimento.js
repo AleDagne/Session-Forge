@@ -123,15 +123,17 @@
     log(c, 'movimento', Mv.moveText(t, r.path.length - 1, r.cost, Mv.left(t, rules(), fpc()), fpc()) + (r.stopped ? ' Movimento esaurito.' : ''));
   }
   // Azioni di movimento: Scatto, Disimpegno, Rialzarsi, Annulla spostamento.
-  function moveAction(id, kind) {
+  // Restituisce { ok, testo } (riga del log o motivo del rifiuto); quiet: senza avvisi a schermo (gioco online).
+  function moveAction(id, kind, quiet) {
     const x = byId(id);
-    if (!x) return;
+    if (!x) return { ok: false, testo: 'Combattente non trovato.' };
+    const no = (testo) => { if (!quiet) toast(testo, 'error'); return { ok: false, testo }; };
     if (kind === 'rialzati') {
       const probe = clone(x);
       const r = Mv.standUp(probe, rules(), fpc());
-      if (!r.ok) { toast('Non può rialzarsi: ' + r.reason + '.', 'error'); return; }
+      if (!r.ok) return no('Non può rialzarsi: ' + r.reason + '.');
     }
-    if (kind === 'annulla' && !Mv.movementOf(x).moves.length) { toast(x.name + ' non si è ancora spostato in questo turno.'); return; }
+    if (kind === 'annulla' && !Mv.movementOf(x).moves.length) return no(x.name + ' non si è ancora spostato in questo turno.');
     mutate((c) => {
       const t = c.combatants.find((y) => y.id === id);
       if (kind === 'scatto') { Mv.dash(t); log(c, 'movimento', t.name + ' usa Scatto (azione): +' + cellsText(Mv.speedCells(t, rules(), fpc())) + ', restano ' + cellsText(Mv.left(t, rules(), fpc())) + '.'); }
@@ -139,6 +141,7 @@
       else if (kind === 'rialzati') { const r = Mv.standUp(t, rules(), fpc()); log(c, 'movimento', t.name + ' si rialza (costa ' + cellsText(r.cost) + '), restano ' + cellsText(Mv.left(t, rules(), fpc())) + '.'); }
       else if (kind === 'annulla') { const r = Mv.undoMoves(t); log(c, 'movimento', t.name + ' annulla lo spostamento: torna in ' + G.cellLabel(r.to.x, r.to.y) + ', restituite ' + cellsText(r.refunded) + '.'); }
     });
+    return { ok: true, testo: combat().log[combat().log.length - 1].text };
   }
   function setMode(id, mode) {
     mutate((c) => {
@@ -172,8 +175,10 @@
   // Ogni azione registra i dadi che tira (risultato deciso prima, con lo stesso generatore senza bias); finita
   // l'azione, l'overlay li mostra con il riepilogo. Il log ha già tutto anche se l'animazione è saltata o spenta.
   let diceRec = null;
+  let lastTiro = null; // ultimo tiro mostrato (gioco online: va anche ai giocatori)
   const dice = () => (diceRec ? diceRec.rng : DnD.dadi.randomInt);
-  const beginDice = () => { diceRec = DnD.dadi.registratore(); };
+  let rngProva = null; // generatore deterministico (solo test.html, con online.dadiDiProva)
+  const beginDice = () => { diceRec = DnD.dadi.registratore(rngProva || undefined); };
   function endDice(label, text) {
     const r = diceRec;
     diceRec = null;
@@ -182,7 +187,8 @@
     // Senza riepilogo: l'ultima riga del log (l'esito dell'azione).
     const last = c && c.log.length ? c.log[c.log.length - 1].text : '';
     // Turni automatici dell'IA: coda veloce, il gioco non rallenta.
-    DnD.uiDadi.mostraTiro(r.tiro(label, 'combattimento', { testo: text || last }), { veloce: Boolean(c && c.ai && c.ai.simulated && c.ai.mode === 'auto') });
+    lastTiro = r.tiro(label, 'combattimento', { testo: text || last });
+    if (lastTiro) DnD.uiDadi.mostraTiro(lastTiro, { veloce: Boolean(c && c.ai && c.ai.simulated && c.ai.mode === 'auto') });
   }
 
   // ---------- Combattimento simulato (IA) ----------
@@ -612,6 +618,7 @@
         turnInfo: (x) => speedText(x, true) + (lightText(x) ? ' · ' + lightText(x) : ''),
         // Residuo sopra la pedina di turno; anteprima del piano dell'IA: percorso tratteggiato e bersagli evidenziati.
         overlay: (ctx, view, s) => {
+          if (DnD.uiOnline) DnD.uiOnline.disegnaPing(ctx, view, s);
           const c = combat();
           const cur = c && c.currentId ? byId(c.currentId) : null;
           if (cur && cur.pos && limited(cur)) DnD.uiIa.drawBadge(ctx, view, s, cur, '🦶 ' + Mv.left(cur, rules(), fpc()));
@@ -840,6 +847,7 @@
 
   function render(container) {
     root = container || root;
+    if (!root) return;
     clear(root);
     if (!combat()) renderSetup();
     else if (combat().phase === 'iniziativa') renderInitiative();
@@ -1292,6 +1300,7 @@
     });
     endDice(names[0] + ' attacca ' + names[1], summary);
     if (summary) toast(summary, summaryType);
+    return summary;
   }
 
   // Tiro salvezza: d20 + totale della caratteristica, con vantaggio/svantaggio e CD opzionale.
@@ -1522,6 +1531,7 @@
     });
     endDice(summaryText.split(' · ')[0], summaryText);
     if (summaryText) toast(summaryText, 'success');
+    return summaryText;
   }
 
   function saveDialog(target) {
@@ -1542,36 +1552,42 @@
         const errors = {};
         if (dcValue !== null) DnD.validazione.intInRange(errors, 'dc', dcValue, 1, 40);
         if (!showErrors(body, errors)) return false;
-        const ab = ability.value;
-        const m = body.querySelector('input[name="modo-ts"]:checked').value;
-        let summaryText = '';
-        let summaryType = 'info';
-        beginDice();
-        mutate((c) => {
-          const t = byId(target.id);
-          if (!t) return;
-          // Condizioni: fallimento automatico (FOR e DES da paralizzato, stordito…) o svantaggio.
-          const sm = C.saveMods(t, ab, m);
-          if (sm.autoFail) {
-            log(c, 'ts-fallito', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': fallito in automatico (' + sm.autoFail + ').');
-            summaryText = t.name + ': TS ' + ab + ' fallito in automatico (' + sm.autoFail + ')';
-            summaryType = 'error';
-            return;
-          }
-          const r = R.rollSave({ bonus: t.saves[ab], mode: sm.mode, dc: dcValue }, dice());
-          const why = C.modsText(sm);
-          const d20 = sm.mode === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + sm.mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
-          const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
-          log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' +
-            R.formatModifier(t.saves[ab]) + ' = ' + r.total + (outcome || '.'));
-          summaryText = t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)');
-          summaryType = r.success === false ? 'error' : r.success ? 'success' : 'info';
-        });
-        endDice(target.name + ': tiro salvezza su ' + R.ABILITY_NAMES[ab], summaryText);
-        if (summaryText) toast(summaryText, summaryType);
+        const r = performSave(target.id, ability.value, dcValue, body.querySelector('input[name="modo-ts"]:checked').value);
+        if (r.testo) toast(r.testo, r.tipo);
         return undefined;
       } },
     ]);
+  }
+  // Tiro salvezza di un combattente (d20 + salvezza, condizioni): { testo, tipo, success, total }.
+  function performSave(targetId, ab, dcValue, m) {
+    let summaryText = '';
+    let summaryType = 'info';
+    let esito = null;
+    beginDice();
+    mutate((c) => {
+      const t = byId(targetId);
+      if (!t) return;
+      // Condizioni: fallimento automatico (FOR e DES da paralizzato, stordito…) o svantaggio.
+      const sm = C.saveMods(t, ab, m);
+      if (sm.autoFail) {
+        esito = { success: false, total: null };
+        log(c, 'ts-fallito', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': fallito in automatico (' + sm.autoFail + ').');
+        summaryText = t.name + ': TS ' + ab + ' fallito in automatico (' + sm.autoFail + ')';
+        summaryType = 'error';
+        return;
+      }
+      const r = R.rollSave({ bonus: t.saves[ab], mode: sm.mode, dc: dcValue }, dice());
+      const why = C.modsText(sm);
+      const d20 = sm.mode === R.MODES.normale ? 'd20 = ' + r.natural : 'd20 con ' + sm.mode + ' [' + r.d20Rolls.join(', ') + '] → ' + r.natural;
+      const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
+      log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' +
+        R.formatModifier(t.saves[ab]) + ' = ' + r.total + (outcome || '.'));
+      summaryText = t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)');
+      summaryType = r.success === false ? 'error' : r.success ? 'success' : 'info';
+      esito = r;
+    });
+    endDice((byId(targetId) || { name: '' }).name + ': tiro salvezza su ' + R.ABILITY_NAMES[ab], summaryText);
+    return { testo: summaryText, tipo: summaryType, success: esito ? esito.success : false, total: esito ? esito.total : null };
   }
 
   function healDialog(target) {
@@ -1817,6 +1833,7 @@
     });
     endDice((who ? who.name : '') + (act ? ': ' + act.name : ''), downed.length ? 'A terra: ' + downed.join(', ') : '');
     if (downed.length) toast('A terra: ' + downed.join(', '), 'success');
+    return (who ? who.name : '') + (act ? ': ' + act.name : '') + (downed.length ? ' · a terra: ' + downed.join(', ') : '');
   }
 
   // Resistenza leggendaria: l'ultimo tiro salvezza fallito diventa un successo (PF restituiti di conseguenza).
@@ -2101,9 +2118,40 @@
     scheduleAuto();
   }
 
+  // ---------- Gioco online (rete/sessione.js) ----------
+  // Le intenzioni dei giocatori, già verificate dal master (rete/intenzioni.js), si eseguono con le stesse funzioni
+  // dei comandi del master. Ogni funzione restituisce { ok, testo, tiro } (tiro: i dadi tirati dal master, per
+  // mostrarli anche ai giocatori).
+  function eseguito(fn) {
+    lastTiro = null;
+    const testo = fn();
+    const last = combat() && combat().log.length ? combat().log[combat().log.length - 1].text : '';
+    return { ok: true, testo: testo || last, tiro: lastTiro };
+  }
+  const online = {
+    combat: () => combat(),
+    regole: () => rules(),
+    piediPerCella: () => fpc(),
+    limitato: (x) => limited(x),
+    mappa: () => IA.buildMap(aiState()),
+    statoIA: () => aiState(),
+    modsAttacco: (a, t, ranged, mode) => attackModsFor(a, t, ranged, mode),
+    distanza: (w) => weaponRanged(w),
+    muovi: (id, route) => eseguito(() => { mutate((c) => movementApply(c, id, route)); return ''; }),
+    movimento: (id, kind) => { const r = moveAction(id, kind, true); return { ok: r.ok, testo: r.testo, tiro: null }; },
+    attacca: (id, targetId, weaponId, mode) => eseguito(() => performAttack(id, targetId, weaponId, mode)),
+    lancia: (id, spellId, slot, targetIds, mode) => eseguito(() => performCast(id, spellId, slot, targetIds, mode)),
+    azioneCreatura: (id, actionId, targetIds, mode) => eseguito(() => performCreatureAction(id, actionId, targetIds, mode)),
+    salvezza: (id, ab, dc, mode) => { lastTiro = null; const r = performSave(id, ab, dc, mode); return { ok: true, testo: r.testo, tiro: lastTiro, success: r.success, total: r.total }; },
+    dichiara: (testo, tipo) => eseguito(() => { mutate((c) => log(c, tipo || 'sistema', testo)); return testo; }),
+    prossimoTurno: () => eseguito(() => { nextTurn(); return ''; }),
+    dadiDiProva: (rng) => { rngProva = rng || null; },
+    controllo: (id, kind) => eseguito(() => { mutate((c) => { const t = c.combatants.find((y) => y.id === id); if (t) { t.control = kind; if (kind === 'ia') c.ai.simulated = true; aiPlan = null; } }); return ''; }),
+  };
+
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.combattimento = { title: 'Combattimento', render };
   // Per i test dell'interfaccia: piano corrente ed esecuzione. columns: disposizione a tre colonne riusabile.
   DnD.uiCombattimento = { selectCombatant: (id, source) => selectCombatant(id, source), getGrid: () => grid, columns,
-    currentAiPlan, executePlan, undoAiTurn: () => restoreCombat(aiHistory.undo(), 'Turno IA annullato.'), aiHistory };
+    currentAiPlan, executePlan, undoAiTurn: () => restoreCombat(aiHistory.undo(), 'Turno IA annullato.'), aiHistory, online };
 })(globalThis.DnD = globalThis.DnD || {});

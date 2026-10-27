@@ -89,7 +89,8 @@
   //     label }, normal: Set, dash: Set (chiavi delle celle raggiungibili) }, apply(doc, combatantId, route) }
   //     limiti di velocità nel combattimento (movimento.js): anteprima, costo e fermata all'ultima cella raggiungibile
   //   turnInfo(combattente): testo della barra del turno (velocità e movimento residuo)
-  //   readOnly: sola vista (giocatore online): zoom, spostamento della vista, selezione e misuratore, nessuna modifica
+  //   readOnly: sola vista (giocatore online): zoom, spostamento della vista, selezione e misuratore, nessuna modifica;
+  //     con canDrag(id) e movement si trascina la propria pedina: movement.apply(null, id, percorso) manda la richiesta
   //   tilesets() -> indice dei TileSet da usare al posto della libreria (le definizioni ricevute dal master)
   // }
   function create(opts) {
@@ -1062,10 +1063,14 @@
       } else if (tool === 'struttura' || tool === 'oggetto' || tool === 'etichetta') {
         drag = { type: 'click-tool', p0: p, view0: view, cell, moved: false };
       } else if (ro) {
-        // Sola vista: un clic seleziona la pedina, il trascinamento sposta solo la vista.
+        // Sola vista: un clic seleziona la pedina, il trascinamento sposta solo la vista (o la propria pedina, con canDrag).
         const hit = hitTest(cell);
         if (hit && hit.kind === 'token') select(hit);
-        drag = { type: 'pan', p0: p, view0: view, moved: false, keep: Boolean(hit) };
+        const mv = hit && hit.kind === 'token' && opts.canDrag && opts.canDrag(hit.id) && opts.movement ? opts.movement.begin(hit.id) : null;
+        if (mv) {
+          const at = entityPos(hit);
+          drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p, mv };
+        } else drag = { type: 'pan', p0: p, view0: view, moved: false, keep: Boolean(hit) };
       } else {
         const hit = hitTest(cell);
         if (hit) {
@@ -1148,7 +1153,8 @@
           if (!r || !r.end || r.stopped) DnD.audio.suona('movimento-rifiutato');
           if (!r || !r.end) toast('Non c\'è un percorso libero fin lì.', 'error');
           else if (r.end.x !== d.start.x || r.end.y !== d.start.y) {
-            commit((dd) => opts.movement.apply(dd, d.hit.id, r));
+            if (ro) opts.movement.apply(null, d.hit.id, r);
+            else commit((dd) => opts.movement.apply(dd, d.hit.id, r));
             if (r.stopped) toast('Movimento esaurito: la pedina si ferma all\'ultima cella raggiungibile.', 'error');
           } else if (r.stopped) toast('Movimento esaurito: non può spostarsi oltre.', 'error');
           select(d.hit);
