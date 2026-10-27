@@ -5,6 +5,13 @@
   const { el, toast, svgIcon } = DnD.ui;
   const C = DnD.config;
   const SECTION_KEY = 'dnd-battaglie:sezione';
+  // Modalità di prova (index.html?prova, usata dal test di fumo): archivio in memoria, nessun service worker,
+  // così il test non legge né scrive i dati veri dell'utente.
+  const PROVA = new URLSearchParams(location.search).has('prova');
+  const backendMemoria = () => {
+    const data = {};
+    return { name: 'memoria', get: async (k) => (k in data ? data[k] : null), set: async (k, v) => { data[k] = v; }, clear: async () => { for (const k of Object.keys(data)) delete data[k]; } };
+  };
   let current = null;
   let sidebar = null;
   let notes = null;
@@ -120,7 +127,7 @@
   async function start() {
     document.title = C.APP_NAME;
     document.getElementById('brand-name').textContent = C.APP_NAME;
-    DnD.store = await DnD.dati.openStore(window.localStorage);
+    DnD.store = await DnD.dati.openStore(window.localStorage, PROVA ? { backend: backendMemoria() } : undefined);
     // Immagini importate (TileSet e sfondi delle griglie): stesso database, con cache in memoria.
     DnD.immagini = DnD.immaginiLib.createStore(DnD.store.blobs);
     // File che sostituiscono i suoni predefiniti: stesso database (chiavi "snd:<id>").
@@ -157,7 +164,7 @@
   });
 
   // Il service worker funziona solo su http(s), non aprendo il file direttamente.
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  if (!PROVA && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* l'app funziona comunque */ });
   }
 })(globalThis.DnD = globalThis.DnD || {});

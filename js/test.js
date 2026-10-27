@@ -6840,6 +6840,158 @@
     ok(m.registroCompleto().some((r) => r.includes('Fine della serata')), 'log del master');
   });
 
+  // --- Rete di sicurezza del riordino: migrazione dell'archivio di esempio e test di fumo dell'app ---
+  // Primo punto in cui due JSON differiscono (per capire subito cosa è cambiato).
+  function primaDifferenza(a, b, path) {
+    const p = path || '$';
+    if (JSON.stringify(a) === JSON.stringify(b)) return null;
+    if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return p + ': ' + JSON.stringify(a) + ' ≠ ' + JSON.stringify(b);
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const d = primaDifferenza(a[k], b[k], p + '.' + k);
+      if (d) return d;
+    }
+    return p;
+  }
+  const leggiFixture = async (nome) => {
+    const res = await fetch('test/fixture/' + nome);
+    if (!res.ok) throw new Error('fixture ' + nome + ' non trovata (apri test.html da un server)');
+    return res.text();
+  };
+
+  // L'archivio è stato esportato prima del riordino (versione 18); il risultato atteso è la sua normalizzazione di allora.
+  test('Migrazione: l\'archivio di esempio di prima del riordino si importa identico (nessun dato perso)', async () => {
+    if (location.protocol === 'file:') return; // fetch delle fixture solo da server
+    const testo = await leggiFixture('archivio-v18.json');
+    const atteso = JSON.parse(await leggiFixture('atteso-v18.json'));
+    const stato = JSON.parse(JSON.stringify(DnD.dati.importJSON(testo)));
+    const d = primaDifferenza(stato, atteso);
+    ok(!d, 'normalizzazione cambiata: ' + d);
+    // Ogni id dell'archivio originale c'è ancora dopo l'importazione.
+    const ids = (t) => new Set([...t.matchAll(/"id":"([^"]+)"/g)].map((m) => m[1]));
+    const dopo = ids(JSON.stringify(stato));
+    const persi = [...ids(testo)].filter((id) => !dopo.has(id));
+    eq(persi, [], 'id persi');
+  });
+
+  // index.html, test.html e sw.js elencano gli stessi script (test.html: senza app.js, con test.js) e gli stessi CSS.
+  test('Elenchi dei file: index.html, test.html e cache del service worker allineati', async () => {
+    if (location.protocol === 'file:') return;
+    const testo = async (url) => (await fetch(url)).text();
+    const [index, pagina, sw] = await Promise.all([testo('index.html'), testo('test.html'), testo('sw.js')]);
+    const script = (html) => [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+    const css = (html) => [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
+    const cache = [...sw.matchAll(/'\.\/([^']+)'/g)].map((m) => m[1]);
+    eq(script(pagina), script(index).filter((s) => s !== 'js/app.js').concat('js/test.js'), 'script di test.html');
+    eq(cache.filter((f) => f.endsWith('.js')), script(index), 'script in cache');
+    eq(cache.filter((f) => f.endsWith('.css')), css(index), 'CSS in cache');
+  });
+
+  // Carica l'app vera (index.html?prova: archivio in memoria) in un iframe e la usa come farebbe il master.
+  test('Fumo: sezioni, giocatore, nemico, griglia, sessione, combattimento, esporta e importa senza errori', async () => {
+    if (location.protocol === 'file:' || typeof document === 'undefined') return;
+    const preferenze = Object.assign({}, localStorage); // l'iframe condivide localStorage: si ripristina alla fine
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:0;top:0;width:1280px;height:800px;opacity:0;pointer-events:none';
+    frame.src = 'index.html?prova';
+    const errori = [];
+    const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
+    const fino = async (cond, cosa) => {
+      for (let i = 0; i < 200; i++) { if (cond()) return; await attesa(25); }
+      throw new Error('tempo scaduto: ' + cosa);
+    };
+    try {
+      document.body.append(frame);
+      await fino(() => frame.contentWindow && frame.contentWindow.DnD && frame.contentWindow.DnD.store, 'avvio dell\'app');
+      const W = frame.contentWindow;
+      const A = W.DnD;
+      W.addEventListener('error', (e) => errori.push('errore: ' + e.message));
+      W.addEventListener('unhandledrejection', (e) => errori.push('promessa: ' + (e.reason && e.reason.message)));
+      const errConsole = W.console.error;
+      W.console.error = (...x) => { errori.push('console: ' + x.join(' ')); errConsole.apply(W.console, x); };
+      W.confirm = () => true;
+      W.alert = () => {};
+      let scaricato = null;
+      W.HTMLAnchorElement.prototype.click = function () { if (this.download) scaricato = this.href; };
+      const main = W.document.getElementById('main');
+      const pulsante = (radice, testo) => {
+        const b = [...radice.querySelectorAll('button')].reverse().find((x) => x.textContent.trim() === testo);
+        if (!b) throw new Error('pulsante «' + testo + '» non trovato');
+        return b;
+      };
+      const dialogo = () => W.document.querySelector('dialog.modal[open]');
+      eq(A.store.backend, 'memoria', 'archivio di prova');
+      // Ogni sezione del menù si apre.
+      for (const id of A.config.SECTIONS) {
+        ok(A.app.show(id), 'sezione ' + id);
+        await attesa(30);
+        ok(main.children.length > 0, 'sezione vuota: ' + id);
+      }
+      // Sessione nuova (nome dal dialogo).
+      A.uiSessioni.newSession();
+      await attesa(30);
+      dialogo().querySelector('input').value = 'Sessione fumo';
+      pulsante(dialogo(), 'Conferma').click();
+      await attesa(50);
+      eq(A.sessioni.current(A.store.state).name, 'Sessione fumo');
+      // Giocatore e nemico con i valori predefiniti.
+      A.app.show('giocatori', 'nuovo');
+      await attesa(50);
+      pulsante(main, 'Salva').click();
+      await attesa(50);
+      eq(A.store.state.players.length, 1, 'giocatore salvato');
+      A.app.show('nemici', 'nuovo');
+      await attesa(50);
+      const nome = main.querySelector('input[type=text], input:not([type])');
+      nome.value = 'Orco di prova';
+      nome.dispatchEvent(new W.Event('input', { bubbles: true }));
+      pulsante(main, 'Salva').click();
+      await attesa(50);
+      ok(A.store.state.npcs.some((n) => n.name === 'Orco di prova'), 'nemico salvato');
+      // Griglia nuova nell'editor, salvata.
+      A.app.show('editor');
+      await attesa(50);
+      pulsante(main, 'Crea una griglia').click();
+      await attesa(50);
+      const ng = dialogo().querySelector('[data-key=name]');
+      ng.value = 'Griglia fumo';
+      ng.dispatchEvent(new W.Event('input', { bubbles: true }));
+      pulsante(dialogo(), 'Crea griglia').click();
+      await attesa(50);
+      pulsante(main, '💾 Salva').click();
+      await attesa(50);
+      ok(A.store.state.savedGrids.some((g) => g.name === 'Griglia fumo'), 'griglia salvata');
+      // Combattimento breve: tutti i partecipanti scelti, iniziativa, due turni.
+      A.app.show('combattimento');
+      await attesa(50);
+      for (const c of main.querySelectorAll('input[type=checkbox]')) if (!c.checked) { c.checked = true; c.dispatchEvent(new W.Event('change', { bubbles: true })); }
+      for (const q of main.querySelectorAll('input[aria-label^="Quantità"]')) if (Number(q.value) === 0) { q.value = '1'; q.dispatchEvent(new W.Event('input', { bubbles: true })); q.dispatchEvent(new W.Event('change', { bubbles: true })); }
+      await attesa(50);
+      pulsante(main, 'Tira l\'iniziativa').click();
+      await attesa(100);
+      pulsante(main, 'Inizia combattimento').click();
+      await attesa(100);
+      const cmb = A.sessioni.current(A.store.state).combat;
+      ok(cmb && cmb.combatants.length >= 2, 'combattimento avviato con ' + (cmb ? cmb.combatants.length : 0) + ' combattenti');
+      const round = cmb.round;
+      for (let i = 0; i < cmb.combatants.length; i++) { pulsante(main, 'Prossimo turno ▶').click(); await attesa(30); }
+      ok(A.sessioni.current(A.store.state).combat.round > round, 'il round avanza');
+      // Esporta l'archivio e lo reimporta.
+      await A.uiImpostazioni.exportArchive();
+      ok(scaricato, 'archivio esportato');
+      const testo = await (await W.fetch(scaricato)).text();
+      const prima = JSON.stringify(A.dati.importJSON(testo));
+      await A.uiImpostazioni.importFile(new W.File([testo], 'archivio.json'));
+      await A.store.saved();
+      eq(JSON.stringify(A.store.state), prima, 'stato dopo l\'importazione');
+      ok(A.store.state.npcs.some((n) => n.name === 'Orco di prova'), 'nemico ancora presente');
+      eq(errori, [], 'errori in console');
+    } finally {
+      frame.remove();
+      localStorage.clear();
+      for (const [k, v] of Object.entries(preferenze)) localStorage.setItem(k, v);
+    }
+  });
+
   // solo: facoltativo, esegue solo i test il cui nome contiene questo testo.
   async function runTests(solo) {
     const results = [];
