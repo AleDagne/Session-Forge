@@ -5,7 +5,7 @@
 // modificatori d'attacco, nebbia per i giocatori (manuale, automatica, mista, memoria, stanze), pennelli e
 // `visioneGiocatore()` (lo stato filtrato che il master può mandare ai giocatori). I raggi sono in piedi.
 // Livello regole (gruppo mappa), sopra griglia. Espone DnD.visione (unica fonte di «chi vede chi»: canSee); usa
-// DnD.misure, dati/visione, griglia, tilemap, collisioni, condizioni, movimento, eventi, dadi. Non deve toccare il DOM
+// DnD.misure, dati/visione, griglia, tilemap, collisioni, condizioni, movimento, dadi. Non deve toccare il DOM
 // (il disegno è in ui-visione.js). TileSet predefiniti: tilemap.storeIndex().
 (function (DnD) {
   'use strict';
@@ -551,7 +551,7 @@
       items: (grid.items || []).filter((it) => !it.hidden && (it.otype === 'npc' ? touches(it, visibleNow) : !fogOn || touches(it, known))).map(strip),
       labels: (grid.labels || []).filter((l) => !fogOn || known(l.x, l.y)).map(clone),
       tileMap,
-      events: (grid.events || []).filter((e) => DnD.eventi && DnD.eventi.isVisible(e) && e.cells.some((c) => !fogOn || known(c.x, c.y)))
+      events: (grid.events || []).filter((e) => eventoVisibile(e) && e.cells.some((c) => !fogOn || known(c.x, c.y)))
         .map((e) => ({ id: e.id, name: e.event.name, icon: clone(e.event.icon), cells: clone(e.cells) })),
       combatants: shown.map((c) => ({ id: c.id, name: c.name, icon: clone(c.icon || null), pos: Object.assign({}, c.pos), w: G().tokenDims(c).w, h: G().tokenDims(c).h, kind: c.kind, faction: c.faction })),
       ghosts: fogOn && grid.fog.ghosts ? Object.entries(grid.fog.lastKnown).filter(([k]) => !shown.some((c) => c.id === k)).map(([, p]) => Object.assign({}, p)) : [],
@@ -648,7 +648,11 @@
       h, extra || null]);
   }
 
+  // Un evento piazzato è visibile ai giocatori se è dichiarato visibile o se è già stato scoperto.
+  const eventoVisibile = (inst) => inst.event.visibility.kind === 'visibile' || inst.state.discovered;
+
   DnD.visione = {
+    eventoVisibile,
     normalizeEmitter, normalizeLight, normalizeCarried, normalizeSenses, normalizeRoom, normalizeVision, normalizeFog, emptyVision, emptyFog, ensure, resize,
     sensesFromRace, sensesFromCreature, sensesOf, sensesText, objectBlocksSight, sightMap, lineOfSight, hourLevel, ambientLevel, emitters, lightMap,
     context, lightAt, canPerceive, viewOf, canSee, attackVision, perceptionMods, isPlayer, playersView, cellStates, remember, paintFog, revealAll,

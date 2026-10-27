@@ -154,7 +154,8 @@
 
   const inCells = (cells, p) => Boolean(p) && cells.some((c) => c.x === p.x && c.y === p.y);
   // L'evento è visibile al gruppo (e mostrato sulla mappa dei giocatori)?
-  const isVisible = (inst) => inst.event.visibility.kind === 'visibile' || inst.state.discovered;
+  // Evento piazzato visibile ai giocatori: definito in visione.js (serve alla vista dei giocatori), qui riesportato.
+  const isVisible = (inst) => DnD.visione.eventoVisibile(inst);
 
   // ---------- Membri del gruppo e prove ----------
   // Bonus di un giocatore a una caratteristica, abilità o tiro salvezza (dalle schede: caratteristiche finali e
