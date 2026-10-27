@@ -219,7 +219,7 @@
     const players = () => DnD.sessioni.visible(st(), 'players');
     // Chi agisce: giocatori della sessione (con le loro caratteristiche) e, nel combattimento, i combattenti.
     const actors = () => {
-      const list = players().map((p) => ({ id: 'p:' + p.id, name: p.name, abilities: R.derivedStats(p, st().races.find((r) => r.id === p.raceId)).abilities, player: p }));
+      const list = players().map((p) => ({ id: 'p:' + p.id, name: p.name, abilities: DnD.combattenti.derivedStats(p, st().races.find((r) => r.id === p.raceId)).abilities, player: p }));
       for (const c of ctx.combatants ? ctx.combatants() : []) if (c.kind !== 'player') list.push({ id: 'c:' + c.id, name: c.name, abilities: null, dexMod: c.dexMod, combatant: c });
       return list;
     };
@@ -310,7 +310,7 @@
     }
     function triggerTrap() {
       const list = ctx.combatants ? ctx.combatants() : [];
-      const options = list.length ? list.map((c) => ({ id: c.id, name: c.name, saves: c.saves })) : players().map((p) => ({ id: p.id, name: p.name, saves: R.derivedStats(p, st().races.find((r) => r.id === p.raceId)).saveTotals }));
+      const options = list.length ? list.map((c) => ({ id: c.id, name: c.name, saves: c.saves })) : players().map((p) => ({ id: p.id, name: p.name, saves: DnD.combattenti.derivedStats(p, st().races.find((r) => r.id === p.raceId)).saveTotals }));
       if (!options.length) { act((x) => OM.triggerTrap(x, { name: 'nessuno', saves: {} }, DnD.dadi.randomInt).text); return; }
       const sel = el('select', {}, options.map((o) => el('option', { value: o.id, text: o.name })));
       openDialog('Su chi scatta la trappola?', el('div', { class: 'form' }, field('Bersaglio', sel)), [

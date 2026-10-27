@@ -374,7 +374,7 @@
     const st = w.st;
     const players = X.partyMembers(w).map((p) => clone(p));
     const entries = foes.map((f) => ({ npc: st.npcs.find((n) => n.id === f.npcId), quantity: Math.max(1, Math.min(50, (DnD.dadi.rollExpr(f.qty) || { total: 1 }).total)) })).filter((e) => e.npc);
-    const combatants = R.createCombatants(players, entries, st.races, DnD.dadi.randomInt, st.spells, st.equipment);
+    const combatants = DnD.combattenti.createCombatants(players, entries, st.races, DnD.dadi.randomInt, st.spells, st.equipment);
     // PF dei personaggi: quelli dell'esplorazione.
     for (const c of combatants) if (c.kind === 'player' && w.ex.members[c.sourceId]) c.hp = Math.min(c.maxHp, w.ex.members[c.sourceId].hp);
     // Fazioni del Mondo: della scheda, del party (giocatori) o della città (nemici).

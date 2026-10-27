@@ -158,7 +158,7 @@
     return Math.max(sheet, feat, legend);
   }
   // Bonus di un'abilità: mod. + competenza × grado (maestria = doppia); senza competenza, «metà competenza» (per
-  // difetto) se attiva; più il bonus scritto a mano. d: regole.derivedStats. Restituisce { total, level, detail }.
+  // difetto) se attiva; più il bonus scritto a mano. d: DnD.combattenti.derivedStats. Restituisce { total, level, detail }.
   function skillBonus(c, skill, d, fx, st) {
     const ab = SKILLS()[skill] || 'SAG';
     const m = R().modifier(d.abilities[ab]);
@@ -306,7 +306,7 @@
     const p = clone(c);
     p.sheet = normalizeSheet(p.sheet);
     const race = ctx && ctx.race;
-    const before = R().derivedStats(c, race, ctx && ctx.catalog);
+    const before = DnD.combattenti.derivedStats(c, race, ctx && ctx.catalog);
     const info = before.info;
     const from = c.level;
     const max = c.type === 'leggendario' ? 40 : 20;
@@ -326,7 +326,7 @@
     const names = arr(opts.featureNames).length ? opts.featureNames : ['Privilegio di livello ' + p.level];
     for (const n of names) p.sheet.features.push(normalizeFeature({ name: n, source: 'classe', level: p.level }));
     if (p.spellcasting) p.spellcasting.known = [...new Set(p.spellcasting.known.concat(arr(opts.spells)))];
-    const after = R().derivedStats(p, race, ctx && ctx.catalog);
+    const after = DnD.combattenti.derivedStats(p, race, ctx && ctx.catalog);
     const slots = (d) => (d.spell ? d.spell.slotsTotal : [0, 0, 0, 0, 0, 0, 0, 0, 0]);
     return {
       player: p,

@@ -246,12 +246,12 @@
     const pf = partyFactionOf(st, opts.sessionId);
     const lines = [];
     const missing = [];
-    const combatants = R.createCombatants(players, [], st.races, rng, st.spells, st.equipment);
+    const combatants = DnD.combattenti.createCombatants(players, [], st.races, rng, st.spells, st.equipment);
     const rowOf = new Map();
     for (const row of enc.creatures) {
       const src = sourceOf(st, row);
       if (!src) { missing.push(row); continue; }
-      const made = R.createCombatants([], [{ npc: src, quantity: row.qty }], st.races, rng, st.spells, st.equipment);
+      const made = DnD.combattenti.createCombatants([], [{ npc: src, quantity: row.qty }], st.races, rng, st.spells, st.equipment);
       const npc = worldNpcOf(st, row);
       for (const x of made) {
         x.control = row.ai ? 'ia' : 'manuale';

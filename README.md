@@ -318,7 +318,7 @@ multiattacco se ci sono più armi); l'originale resta invariato.
 
 Logica pura e testata in `js/scheda.js`, dati modificabili in `js/dati/scheda.js`, interfaccia in `js/ui-scheda.js`. La
 creazione e la modifica di un giocatore (anche leggendario) avvengono sulla **scheda a pagine**, organizzata come la
-scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`regole.derivedStats`, classi, razze,
+scheda cartacea e compilata al suo posto; i calcoli sono quelli di sempre (`combattenti.derivedStats`, classi, razze,
 Attrezzatura, riposi). I nemici Standard e gli NPC usano ancora il form di prima.
 
 - **Tre modalità** sulla stessa bozza, senza perdere dati: **🧭 Creazione guidata**, **📜 Scheda**, **🎲 Vista di gioco**.
@@ -1907,6 +1907,7 @@ js/riposi.js          riposi e risorse (logica pura): soggetti (scheda, combatte
 js/condizioni.js      condizioni e concentrazione (dati e logica pura): effetti su tiri e velocità, durata, sfinimento, morte
 js/movimento.js       velocità e movimento: fonti, conversione in celle, residuo, condizioni, percorso minimo, verifica di un percorso proposto (walk)
 js/regole.js          regole 5e come funzioni pure (modificatori, attacco, cura, turni, PF, CA, TS)
+js/combattenti.js     valori derivati (razza, classe, scheda, catalogo) e costruzione dei combattenti di uno scontro
 js/dati/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/dati/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
 js/generatore.js      logica pura del generatore di nemici

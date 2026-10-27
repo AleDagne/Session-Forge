@@ -378,7 +378,7 @@
     let node;
     if (npc.base === 'creatura') node = DnD.uiMostri.statblock(npc.stats);
     else {
-      const stats = R.derivedStats(npc.stats, st().races.find((r) => r.id === npc.stats.raceId), st().equipment);
+      const stats = DnD.combattenti.derivedStats(npc.stats, st().races.find((r) => r.id === npc.stats.raceId), st().equipment);
       node = el('div', { class: 'small' },
         el('p', { text: [DnD.ui.raceName(npc.stats.raceId), DnD.classi.className(npc.stats.classId), 'liv. ' + npc.stats.level].filter(Boolean).join(' · ') }),
         el('p', { text: 'PF ' + npc.stats.maxHp + ' · CA ' + stats.ac.total }),
@@ -444,7 +444,7 @@
     const se = DnD.sessioni.current(s);
     const members = DnD.party.members(c.party, players()).list;
     const it = ctx.getItem();
-    const npcX = R.createCombatants([], [{ npc: Object.assign(clone(c.npc.stats), { id: c.npc.id, name: c.npc.name }), quantity: 1 }], s.races, DnD.dadi.randomInt, s.spells, s.equipment)[0];
+    const npcX = DnD.combattenti.createCombatants([], [{ npc: Object.assign(clone(c.npc.stats), { id: c.npc.id, name: c.npc.name }), quantity: 1 }], s.races, DnD.dadi.randomInt, s.spells, s.equipment)[0];
     Object.assign(npcX, { faction: c.factionId, hostileTo: [c.party ? c.party.factionId : 'giocatori'], npc: N.combatData(c.npc, c.state, '', 'ostile') });
     if (it.npcState.hp !== null) npcX.hp = Math.min(npcX.maxHp, it.npcState.hp);
     ctx.update((x) => { x.npcState.hostile = true; x.npcState.attitude = 'ostile'; });
@@ -458,7 +458,7 @@
         DnD.dati.pushLog(cb, 'sistema', '⚠ ' + npcX.name + ' diventa ostile ed entra nel combattimento' + (npcX.joinRound ? ' al round ' + npcX.joinRound : '') + '.');
       });
     } else {
-      const xs = R.createCombatants(members, [], s.races, DnD.dadi.randomInt, s.spells, s.equipment);
+      const xs = DnD.combattenti.createCombatants(members, [], s.races, DnD.dadi.randomInt, s.spells, s.equipment);
       const ctxF = { parties: world().parties, cities: world().cities, factions: world().factions };
       for (const x of xs) x.faction = F.defaultFactionFor(members.find((m) => m.id === x.sourceId), 'player', ctxF);
       DnD.store.update((st2) => {

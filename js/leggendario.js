@@ -150,7 +150,7 @@
   }
 
   // Giocatore "effettivo": la scheda con gli effetti dei nodi già dentro, per i calcoli esistenti
-  // (regole.derivedStats e regole.toCombatant). Le caratteristiche restano sotto il tetto (di base 30).
+  // (DnD.combattenti.derivedStats e DnD.combattenti.toCombatant). Le caratteristiche restano sotto il tetto (di base 30).
   function effectivePlayer(c, st) {
     if (!isLegendary(c)) return c;
     const fx = effects(c, st);
@@ -158,11 +158,11 @@
     e.asi = Object.assign({}, e.asi);
     for (const [ab, v] of Object.entries(fx.abilities)) e.asi[ab] = (e.asi[ab] || 0) + v;
     const race = st && st.races ? st.races.find((r) => r.id === c.raceId) || null : null;
-    const base = R().derivedStats(c, race, st && st.equipment);
+    const base = DnD.combattenti.derivedStats(c, race, st && st.equipment);
     if (fx.saves.length) { e.saveMode = 'manuale'; e.saves = [...new Set(base.saves.concat(fx.saves))]; }
     if (fx.stats.competenza) e.profBonusOverride = base.profBonus + fx.stats.competenza;
     // PF: bonus diretti più il modificatore di COS cresciuto (o calato) con i nodi, per ogni livello.
-    const conDelta = fx.abilities.COS ? R().modifier(R().derivedStats(e, race, st && st.equipment).abilities.COS) - R().modifier(base.abilities.COS) : 0;
+    const conDelta = fx.abilities.COS ? R().modifier(DnD.combattenti.derivedStats(e, race, st && st.equipment).abilities.COS) - R().modifier(base.abilities.COS) : 0;
     const hpBonus = (fx.stats.pf || 0) + conDelta * c.level;
     if (hpBonus) e.maxHp = Math.max(c.level, c.maxHp + hpBonus);
     if (fx.stats.ca) { if (e.acMode === 'auto') e.armor.bonus = (e.armor.bonus || 0) + fx.stats.ca; else e.ac += fx.stats.ca; }
@@ -183,7 +183,7 @@
   function derived(c, st) {
     const race = st && st.races ? st.races.find((r) => r.id === c.raceId) || null : null;
     const e = effectivePlayer(c, st);
-    const stats = R().derivedStats(e, race, st && st.equipment);
+    const stats = DnD.combattenti.derivedStats(e, race, st && st.equipment);
     const fx = effects(c, st);
     const skillOf = (skill) => R().modifier(stats.abilities[SKILL_ABILITY()[skill] || 'SAG']) + (fx.skills[skill] || 0) * stats.profBonus;
     const daily = dailySpells(c, st);
@@ -203,7 +203,7 @@
   // salvezza: caratteristiche finali con gli effetti dei nodi e competenze/maestrie del Percorso.
   function checkBonus(c, what, save, st) {
     const race = st && st.races ? st.races.find((r) => r.id === c.raceId) || null : null;
-    const d = R().derivedStats(effectivePlayer(c, st), race, st && st.equipment);
+    const d = DnD.combattenti.derivedStats(effectivePlayer(c, st), race, st && st.equipment);
     const isAbility = R().ABILITIES.includes(what);
     if (save && isAbility) return d.saveTotals[what];
     if (isAbility) return R().modifier(d.abilities[what]);
@@ -245,7 +245,7 @@
   }
 
   // Combattente di un leggendario: velocità, iniziativa, attacco e danno, difese, sensi, privilegi come azioni,
-  // trasformazioni disponibili. x: combattente creato da regole.toCombatant con il giocatore effettivo.
+  // trasformazioni disponibili. x: combattente creato da DnD.combattenti.toCombatant con il giocatore effettivo.
   function applyToCombatant(x, c, st, rng) {
     const fx = effects(c, st);
     const s = fx.stats;
@@ -253,7 +253,7 @@
     if (s.iniziativa) x.initiative += s.iniziativa;
     if (s.attacco || s.danno) x.weapons = x.weapons.map((w) => Object.assign({}, w, { toHit: w.toHit + (s.attacco || 0), damageBonus: w.damageBonus + (s.danno || 0) }));
     x.defenses = { vuln: x.defenses.vuln, res: [...new Set(x.defenses.res.concat(fx.res))], imm: [...new Set(x.defenses.imm.concat(fx.imm))] };
-    const prof = R().derivedStats(effectivePlayer(c, st), null, st.equipment).profBonus;
+    const prof = DnD.combattenti.derivedStats(effectivePlayer(c, st), null, st.equipment).profBonus;
     const acts = featureActions(fx.features, x.abilities, prof);
     if (acts.actions.length || acts.bonusActions.length || acts.reactions.length || acts.traits.length) {
       // Pseudo-scheda da creatura: i privilegi diventano pulsanti (usi, ricarica) come per le creature.

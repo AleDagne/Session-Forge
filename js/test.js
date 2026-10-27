@@ -172,7 +172,7 @@
     const race = DnD.dati.normalizeRace({ id: 'r1', name: 'Elfo', bonuses: DnD.dati.makeBonuses({ DES: 2 }) });
     const goblin = DnD.dati.normalizeCreature({ id: 'g', name: 'Goblin', raceId: 'r1', maxHp: 7, abilities: { DES: 14 }, weapons: [{ name: 'Scimitarra', damageDice: '1d6' }] });
     const eroe = DnD.dati.normalizeCreature({ id: 'p', name: 'Eroe', maxHp: 20, abilities: { DES: 10 } }, true);
-    const list = R().createCombatants([eroe], [{ npc: goblin, quantity: 3 }], [race], seq(10, 5, 6, 7));
+    const list = DnD.combattenti.createCombatants([eroe], [{ npc: goblin, quantity: 3 }], [race], seq(10, 5, 6, 7));
     eq(list.map((c) => c.name), ['Eroe', 'Goblin 1', 'Goblin 2', 'Goblin 3']);
     eq(list.map((c) => c.initiative), [10, 8, 9, 10]);
     list[1].hp = 1;
@@ -180,7 +180,7 @@
     eq(list[2].hp, 7, 'PF indipendenti');
     eq(list[2].weapons[0].name, 'Scimitarra', 'armi indipendenti');
     eq(goblin.weapons[0].name, 'Scimitarra', 'modello originale intatto');
-    eq(R().createCombatants([], [{ npc: goblin, quantity: 1 }], [], seq(1))[0].name, 'Goblin');
+    eq(DnD.combattenti.createCombatants([], [{ npc: goblin, quantity: 1 }], [], seq(1))[0].name, 'Goblin');
   });
 
   // --- Validazione ---
@@ -331,7 +331,7 @@
     const goblin = DnD.dati.normalizeCreature({ id: 'g', name: 'Goblin', maxHp: 7 });
     const eroe = DnD.dati.normalizeCreature({ id: 'p', name: 'Eroe', maxHp: 20 }, true);
     const mk = (players, qty) => ({
-      combatants: R().createCombatants(players, [{ npc: goblin, quantity: qty }], [], () => 10),
+      combatants: DnD.combattenti.createCombatants(players, [{ npc: goblin, quantity: qty }], [], () => 10),
       grid: { structures: [], items: [], labels: [], zones: [], ignoreCollisions: false, sourceGridId: null },
     });
     const c1 = mk([eroe], 2);
@@ -365,7 +365,7 @@
   test('taglia della pedina dalla razza', () => {
     const big = DnD.dati.normalizeRace({ id: 'r', name: 'Gigante', size: 'Enorme' });
     const ogre = DnD.dati.normalizeCreature({ id: 'o', name: 'Ogre', raceId: 'r' });
-    const [c] = R().createCombatants([], [{ npc: ogre, quantity: 1 }], [big], () => 1);
+    const [c] = DnD.combattenti.createCombatants([], [{ npc: ogre, quantity: 1 }], [big], () => 1);
     eq([c.w, c.h, c.copy, c.pos], [3, 3, 0, null]);
     eq(G().tokenSize('Grande'), 2);
     eq(G().tokenSize('Piccola'), 1);
@@ -486,13 +486,13 @@
       id: 'm', name: 'Monaco', raceId: 'r', classId: 'monaco', level: 5, acMode: 'auto', armor: { type: 'nessuna', unarmored: true },
       abilities: { FOR: 10, DES: 16, COS: 12, INT: 10, SAG: 14, CAR: 8 },
     });
-    const st = R().derivedStats(monk, race);
+    const st = DnD.combattenti.derivedStats(monk, race);
     eq([st.ac.total, st.profBonus, st.saves], [15, 3, ['FOR', 'DES']]);
     eq(st.saveTotals, { FOR: 3, DES: 6, COS: 2, INT: 0, SAG: 2, CAR: -1 });
-    const [c] = R().createCombatants([monk], [], [race], () => 10);
+    const [c] = DnD.combattenti.createCombatants([monk], [], [race], () => 10);
     eq([c.ac, c.saves.DES], [15, 6]);
     monk.profBonusOverride = 9;
-    eq(R().derivedStats(monk, race).saveTotals.DES, 12, 'bonus competenza sovrascritto');
+    eq(DnD.combattenti.derivedStats(monk, race).saveTotals.DES, 12, 'bonus competenza sovrascritto');
   });
 
   test('nome casuale dalla lista, preferendo quelli non usati', () => {
@@ -523,12 +523,12 @@
     eq([M().spellAttackBonus(2, 3), M().spellSaveDc(2, 3)], [5, 13]);
     eq([M().spellAttackBonus(6, 5), M().spellSaveDc(6, 5)], [11, 19]);
     const mage = DnD.dati.normalizeCreature({ name: 'Mira', classId: 'mago', level: 5, abilities: { INT: 16 }, asi: { INT: 2 } });
-    const s = R().derivedStats(mage, null).spell;
+    const s = DnD.combattenti.derivedStats(mage, null).spell;
     eq([s.ability, s.mod, s.attack, s.dc], ['INT', 4, 7, 15]);
     mage.spellcasting.dcOverride = 17;
     mage.spellcasting.ability = 'CAR';
-    eq([R().derivedStats(mage, null).spell.dc, R().derivedStats(mage, null).spell.attack], [17, 3], 'sovrascritture');
-    eq(R().derivedStats(DnD.dati.normalizeCreature({ name: 'G', classId: 'guerriero' }), null).spell, null, 'non incantatore');
+    eq([DnD.combattenti.derivedStats(mage, null).spell.dc, DnD.combattenti.derivedStats(mage, null).spell.attack], [17, 3], 'sovrascritture');
+    eq(DnD.combattenti.derivedStats(DnD.dati.normalizeCreature({ name: 'G', classId: 'guerriero' }), null).spell, null, 'non incantatore');
   });
 
   test('slot per classe e livello (completo, mezzo, patto)', () => {
@@ -546,7 +546,7 @@
     eq(T('patto', 11), [0, 0, 0, 0, 3, 0, 0, 0, 0]);
     eq(T('patto', 20), [0, 0, 0, 0, 4, 0, 0, 0, 0]);
     const pal = DnD.dati.normalizeCreature({ name: 'P', classId: 'paladino', level: 1 });
-    eq(R().derivedStats(pal, null).spell.slotsTotal.reduce((a, b) => a + b), 0);
+    eq(DnD.combattenti.derivedStats(pal, null).spell.slotsTotal.reduce((a, b) => a + b), 0);
   });
 
   test('consumo e ripristino degli slot', () => {
@@ -619,7 +619,7 @@
     const big = DnD.dati.normalizeRace({ id: 'r', name: 'Grande', size: 'Grande' });
     const g = DnD.dati.normalizeCreature({ id: 'g', name: 'Ogre', raceId: 'r' });
     const combat = {
-      combatants: R().createCombatants([p, p], [{ npc: g, quantity: 2 }], [big], () => 1),
+      combatants: DnD.combattenti.createCombatants([p, p], [{ npc: g, quantity: 2 }], [big], () => 1),
       grid: { structures: [], items: [], labels: [], zones: [], ignoreCollisions: false },
     };
     const saved = DnD.dati.normalizeSavedGrid({
@@ -804,7 +804,7 @@
       for (const level of [1, 5, 11, 20]) {
         const where = classId + ' liv. ' + level;
         const { creature: c } = gen(classId, level);
-        const stats = R().derivedStats(c, genRace({ FOR: 1, DES: 1, COS: 1, INT: 1, SAG: 1, CAR: 1 }));
+        const stats = DnD.combattenti.derivedStats(c, genRace({ FOR: 1, DES: 1, COS: 1, INT: 1, SAG: 1, CAR: 1 }));
         const ab = stats.abilities;
         ok(Object.values(ab).every((v) => v <= 20), where + ': caratteristica oltre 20 ' + JSON.stringify(ab));
         eq([c.level, c.classId, c.generated, c.origin.classId, c.hpMode, c.acMode, c.saveMode], [level, classId, true, classId, 'auto', 'auto', 'classe'], where);
@@ -830,7 +830,7 @@
     const race = genRace({ DES: 2 });
     const ctx = genCtx(race);
     const g = (classId, level, magicItems) => gen(classId, level, { abilityMethod: 'standard', magicItems }, ctx, fixed).creature;
-    const acOf = (c) => R().derivedStats(c, race);
+    const acOf = (c) => DnD.combattenti.derivedStats(c, race);
     // Ranger: DES 15+2 = 17 (+3) ma l'armatura media conta al massimo +2 -> 13 + 2.
     eq(acOf(g('ranger', 1)).ac, { total: 15, detail: 'Armatura media 13 + DES(+3, max +2) = 15' });
     eq(acOf(g('bardo', 1)).ac.detail, 'Armatura leggera 11 + DES(+3) = 14');
@@ -878,7 +878,7 @@
     ok(empty.creature.spellcasting.known.length === 0 && empty.warnings[0].includes('non contiene incantesimi'), 'libreria vuota: avviso');
     const full = gen('mago', 5, {}, genCtx(genRace(), lib)).creature;
     eq(full.spellcasting.known.length, 3 + 4, 'trucchetti (3 dal livello 4) e tutti i 4 incantesimi fino al 3° livello');
-    ok(R().derivedStats(full, genRace()).spell.dc >= 8 + 3, 'CD calcolata');
+    ok(DnD.combattenti.derivedStats(full, genRace()).spell.dc >= 8 + 3, 'CD calcolata');
     eq(gen('guerriero', 5, {}, genCtx(genRace(), lib)).creature.spellcasting.known, [], 'non incantatore');
   });
 
@@ -1408,7 +1408,7 @@
     const big = DnD.dati.normalizeRace({ id: 'r', name: 'Gigante', size: 'Grande' });
     const a = DnD.dati.normalizeCreature({ id: 'a', name: 'Bruto', raceId: 'r' });
     const b = DnD.dati.normalizeCreature({ id: 'b', name: 'Drago', raceId: 'r', gridSize: { auto: false, w: 2, h: 4 } });
-    const [ca, cb] = R().createCombatants([], [{ npc: a, quantity: 1 }, { npc: b, quantity: 1 }], [big], () => 10);
+    const [ca, cb] = DnD.combattenti.createCombatants([], [{ npc: a, quantity: 1 }, { npc: b, quantity: 1 }], [big], () => 10);
     eq([ca.w, ca.h, cb.w, cb.h], [2, 2, 2, 4]);
     eq(DnD.dati.normalizeCreature({ name: 'Vecchio' }).gridSize, { auto: true, w: 1, h: 1 }, 'personaggi esistenti: Automatica');
     eq(G().tokenDims({ size: 3 }), { w: 3, h: 3 }, 'combattenti precedenti (size) ancora validi');
@@ -1518,13 +1518,13 @@
     // Vale per ogni combattente: un giocatore con la resistenza della razza.
     const nano = DnD.dati.normalizeRace({ id: 'n', name: 'Nano', resistances: 'Veleno' });
     const p = DnD.dati.normalizeCreature({ id: 'p', name: 'Thorin', raceId: 'n' }, true);
-    eq(R().createCombatants([p], [], [nano], () => 1)[0].defenses.res, ['veleno']);
+    eq(DnD.combattenti.createCombatants([p], [], [nano], () => 1)[0].defenses.res, ['veleno']);
   });
 
   test('Creature: multiattacco, ricarica, usi giornalieri e azioni leggendarie', () => {
     const d = ex('esempio-drago-cenere');
     eq(CR().expandMultiattack(d, d.actions[0]).map((a) => a.name), ['Morso', 'Artiglio', 'Artiglio']);
-    const [c] = R().createCombatants([], [{ npc: d, quantity: 1 }], [], () => 10);
+    const [c] = DnD.combattenti.createCombatants([], [{ npc: d, quantity: 1 }], [], () => 10);
     const st = c.creature;
     eq([c.maxHp, c.ac, c.w, c.h, c.defenses.imm, st.legendaryPoints, st.legendaryResistance], [123, 17, 2, 2, ['fuoco'], { max: 3, left: 3 }, { max: 1, left: 1 }]);
     const breath = CR().allActions(st).find((a) => a.name === 'Soffio di cenere');
@@ -1559,7 +1559,7 @@
   });
 
   test('Creature: Resistenza leggendaria trasforma un tiro salvezza fallito in riuscito', () => {
-    const [c] = R().createCombatants([], [{ npc: ex('esempio-drago-cenere'), quantity: 1 }], [], () => 10);
+    const [c] = DnD.combattenti.createCombatants([], [{ npc: ex('esempio-drago-cenere'), quantity: 1 }], [], () => 10);
     c.hp = 100;
     c.pendingSave = { full: [{ amount: 30, type: 'freddo' }], half: true, applied: 30, magical: true, text: 'Cono di freddo' };
     const r = CR().useLegendaryResistance(c);
@@ -1600,7 +1600,7 @@
     // Collegamento con le schede: arma "auto" dal catalogo, arma scritta a mano invariata, CA automatica.
     const c = DnD.dati.normalizeCreature({ name: 'Guardia', level: 1, abilities: ab, acMode: 'auto', armor: { equipmentId: get('Cotta di maglia').id, shieldId: get('Scudo').id },
       weapons: [{ name: 'Spada lunga', equipmentId: get('Spada lunga').id }, { name: 'Pugno', toHit: 9, damageDice: '1d4', damageBonus: 1 }] });
-    const st = R().derivedStats(c, null, cat);
+    const st = DnD.combattenti.derivedStats(c, null, cat);
     eq([st.ac.total, st.weapons[0].toHit, st.weapons[0].damageBonus, st.weapons[1].toHit], [18, 5, 3, 9]);
     const manual = Object.assign({}, c.weapons[0], { auto: false, toHit: 12 });
     eq(ATT().resolveWeapon(manual, cat, ab, 2).toHit, 12, 'sovrascritta a mano');
@@ -2148,7 +2148,7 @@
     const race = DnD.dati.normalizeRace({ id: 'r', name: 'Elfo', bonuses: DnD.dati.makeBonuses({ DES: 2 }) });
     race.bonuses.DES.apply = true;
     const npc = DnD.dati.normalizeCreature({ id: 'n', name: 'Esploratore', raceId: 'r', abilities: ab({ FOR: 14, DES: 13 }) });
-    const [c] = R().createCombatants([], [{ npc, quantity: 1 }], [race], () => 10);
+    const [c] = DnD.combattenti.createCombatants([], [{ npc, quantity: 1 }], [race], () => 10);
     eq([c.abilities.DES, IA().archetypeOf(c, cat), c.control, c.faction], [15, 'DES', 'ia', 'nemici'], 'DES 13 + 2 razziale = 15');
     eq(DnD.dati.normalizeCreature({ name: 'Vecchio' }).behavior, IA().normalizeBehavior(), 'nemici esistenti: Aggressivo, Automatico');
     eq(IA().normalizeBehavior().temperament + '/' + IA().normalizeBehavior().archetype, 'aggressivo/auto');
@@ -2292,7 +2292,7 @@
   });
 
   test('IA: creature con multiattacco e ricarica', () => {
-    const [d] = R().createCombatants([], [{ npc: ex('esempio-drago-cenere'), quantity: 1 }], [], () => 10);
+    const [d] = DnD.combattenti.createCombatants([], [{ npc: ex('esempio-drago-cenere'), quantity: 1 }], [], () => 10);
     d.pos = { x: 2, y: 2 };
     const foes = [mkHero({ id: 'a', name: 'Aria', pos: { x: 5, y: 2 } }), mkHero({ id: 'b', name: 'Bran', pos: { x: 5, y: 3 } })];
     const p = plan(aiState([d].concat(foes)), d.id);
@@ -2316,9 +2316,9 @@
     const human = st.races.find((r) => r.name === 'Umano');
     const boots = DnD.attrezzatura.normalizeEquipment({ id: 'stivali', name: 'Stivali veloci', category: 'magici', speedBonus: 3 });
     const hero = DnD.dati.normalizeCreature({ name: 'Kael', raceId: human.id, classId: 'guerriero', level: 3, inventory: [{ equipmentId: 'stivali', qty: 1, equipped: false }] }, true);
-    eq(R().createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 30, 'razza');
+    eq(DnD.combattenti.createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 30, 'razza');
     hero.inventory[0].equipped = true;
-    eq(R().createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 40, 'stivali equipaggiati +3 m = +10 ft');
+    eq(DnD.combattenti.createCombatants([hero], [], st.races, () => 10, st.spells, [boots])[0].speeds.cammina, 40, 'stivali equipaggiati +3 m = +10 ft');
     // Creatura: tutte le modalità.
     const harpy = DnD.creature.normalizeMonster({ name: 'Arpia', speed: { walk: 6, fly: 12, swim: 0 } });
     eq(MV().speedsFromCreature(harpy.speed), { cammina: 20, scalare: 0, nuotare: 0, volare: 40, scavare: 0 });
@@ -2328,7 +2328,7 @@
     c.legend.path.links.push(['nucleo', 'v']);
     c.legend.unlocked = ['nucleo', 'v'];
     c.legend.transformations = [formOf({ creature: { name: 'Drago', speed: { walk: 12, fly: 24 }, abilities: { FOR: 20, DES: 10, COS: 20, INT: 8, SAG: 8, CAR: 8 } } })];
-    const x = R().createCombatants([c], [], [], () => 10, st.spells, st.equipment)[0];
+    const x = DnD.combattenti.createCombatants([c], [], [], () => 10, st.spells, st.equipment)[0];
     eq(x.speeds.cammina, 40, 'nodo: +3 m = +10 ft');
     LG().transform(x, c.legend.transformations[0]);
     eq([x.speeds.cammina, x.speeds.volare], [40, 80], 'forma: velocità della creatura');
@@ -2606,11 +2606,11 @@
   test('Boss nel combattimento: PF scalati, eventi di fase e sconfitta, log, temperamento, vignettatura', () => {
     const boss = bossOf([{ threshold: 100, name: 'A' }, { threshold: 50, name: 'Furia', note: 'Spacca il pavimento.', effect: 'tremolio', temperament: 'aggressivo' }], { behavior: { temperament: 'furbo' } });
     const hero = DnD.dati.normalizeCreature({ name: 'Eroe', classId: 'guerriero', maxHp: 20 }, true);
-    let list = R().createCombatants([hero, hero], [{ npc: boss, quantity: 1 }], [], seq(10, 10, 10), [], []);
+    let list = DnD.combattenti.createCombatants([hero, hero], [{ npc: boss, quantity: 1 }], [], seq(10, 10, 10), [], []);
     const x = list.find((c) => c.boss);
     eq([x.maxHp, x.hp, x.boss.phase, x.boss.revealed], [100, 100, 0, false], 'senza scala');
     boss.boss.scaleByPlayers = true;
-    list = R().createCombatants([hero, hero, hero], [{ npc: boss, quantity: 1 }], [], seq(10, 10, 10, 10), [], []);
+    list = DnD.combattenti.createCombatants([hero, hero, hero], [{ npc: boss, quantity: 1 }], [], seq(10, 10, 10, 10), [], []);
     eq(list.find((c) => c.boss).maxHp, 300, 'PF × 3 giocatori');
     const c = DnD.dati.normalizeSession({ combat: { combatants: [x, list[0]] } }).combat;
     const bx = c.combatants.find((y) => y.boss);
@@ -2756,7 +2756,7 @@
     const st = DnD.store.state;
     const hero = DnD.dati.normalizeCreature({ name: 'Aria', classId: 'guerriero', maxHp: 20 }, true);
     const gob = DnD.dati.normalizeCreature({ name: 'Goblin', maxHp: 7 }, false);
-    const cs = R().createCombatants([hero], [{ npc: gob, quantity: 1 }], [], seq(10, 5), [], []);
+    const cs = DnD.combattenti.createCombatants([hero], [{ npc: gob, quantity: 1 }], [], seq(10, 5), [], []);
     cs[0].pos = { x: 2, y: 2 };
     cs[1].pos = { x: 6, y: 3 };
     DnD.store.update((s) => { S().current(s).combat = DnD.dati.normalizeSession({ combat: { phase: 'attivo', round: 1, currentId: cs[0].id, combatants: cs, grid: { w: 20, h: 12 } } }).combat; });
@@ -3239,7 +3239,7 @@
     const ctx = { members: () => [c], st, rng: seq(10), ex: { rotation: 0 }, log() {} };
     eq(DnD.eventi.resolveCheck({ what: 'Furtività', dc: 30, who: 'migliore', mode: 'normale' }, ctx).results[0].total, 30, 'd20 (10) + 20');
     // Combattente: sensi e Percezione passiva.
-    let x = R().createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
+    let x = DnD.combattenti.createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
     eq([x.legend.senses['vista cieca'], x.legend.passive, DnD.dati.normalizeCombatant(x).legend.passive], [9, 20, 20]);
     // Magia 2 volte al giorno per un guerriero (non incantatore): si lancia senza slot, con la migliore tra INT, SAG, CAR.
     const spell = st.spells.find((s) => s.level > 0);
@@ -3247,7 +3247,7 @@
     c.legend.path.links.push(['nucleo', 'g']);
     c.legend.unlocked.push('g');
     c.legend.spellUses[spell.id] = 1;
-    x = R().createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
+    x = DnD.combattenti.createCombatants([c], [], st.races, seq(10), st.spells, st.equipment)[0];
     eq([x.spellcasting.ability, x.spellcasting.dc, x.spellcasting.spells.some((s) => s.id === spell.id), x.spellcasting.innate[spell.id]], ['SAG', 8 + 9 + 1, true, { freq: 'giorno', left: 1 }], 'un uso già speso oggi');
     eq(LG().derived(c, st).daily, [{ spellId: spell.id, n: 2, left: 1 }]);
     LG().rest(c, false);
@@ -3266,7 +3266,7 @@
       mech: { kind: 'attacco', ability: 'FOR', damages: [{ dice: '4d8', type: 'radioso' }] } }] }));
     c.legend.path.links.push(['nucleo', 'f']);
     c.legend.unlocked = ['nucleo', 'f'];
-    const x = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    const x = DnD.combattenti.createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
     const a = x.creature.actions.find((y) => y.name === 'Colpo divino');
     eq([a.freq.kind, a.freq.uses, x.creature.uses[a.id], a.mech.toHit], ['giorno', 2, 2, 7 + 5], 'competenza +7 e FOR +5');
     DnD.creature.consume(x.creature, a);
@@ -3337,7 +3337,7 @@
     const c = legendaryOf(30, { abilities: { FOR: 16, DES: 16, COS: 14, INT: 18, SAG: 15, CAR: 13 } });
     c.legend.transformations = [formOf()];
     const t = c.legend.transformations[0];
-    let x = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    let x = DnD.combattenti.createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
     eq(x.legend.transformations, ['t1'], 'disponibile (nessun nodo richiesto)');
     x.hp = 150;
     const r = LG().transform(x, t);
@@ -3345,7 +3345,7 @@
     eq([x.boss.title, x.boss.theme, DnD.boss.bars([x], 'giocatori').shown.length], ['Forma del drago · Ali d\'oro', 'gelo', 1], 'barra boss in alto (nome del giocatore + forma)');
     eq(DnD.boss.normalizeCombatBoss(x.boss).theme, 'gelo');
     // Tema vuoto: la forma prende il tema del personaggio (chiave «lg:»), che sopravvive al salvataggio.
-    const y = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    const y = DnD.combattenti.createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
     LG().transform(y, Object.assign({}, t, { theme: '' }));
     eq([y.boss.theme, DnD.boss.normalizeCombatBoss(y.boss).theme, DnD.boss.theme(y.boss.theme).legendary], ['lg:divino', 'lg:divino', true], 'tema del personaggio');
     eq(DnD.boss.theme('lg:inesistente').name, 'Infernale', 'tema sconosciuto: ripiego');
@@ -3361,13 +3361,13 @@
     ok(/25 danni in eccesso/.test(lines[0]), lines[0]);
     eq(LG().transform(x, t).ok, false, 'usi esauriti (1 per riposo lungo)');
     // Durata: 2 round, poi fine.
-    x = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    x = DnD.combattenti.createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
     LG().transform(x, t);
     eq(LG().tick(x).length, 1);
     ok(/fine della durata/.test(LG().tick(x)[0]) && !x.legend.form, 'fine a durata');
     // PF temporanei: si consumano prima; fine anticipata.
     c.legend.transformations = [formOf({ hpMode: 'temporanei', uses: { n: 2 } })];
-    x = R().createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
+    x = DnD.combattenti.createCombatants([c], [], [], seq(10), st.spells, st.equipment)[0];
     x.hp = 80;
     LG().transform(x, c.legend.transformations[0]);
     eq([x.hp, x.maxHp], [180, c.maxHp + 100]);
@@ -4776,7 +4776,7 @@
   test('Riposi nel combattimento: stato dalla scheda e ritorno, PF temporanei, riposo di un nemico', () => {
     const st = DnD.dati.emptyState();
     const p = restHero({ status: { hp: 12, tempHp: 5, hitDiceUsed: 1, exhaustion: 2, resources: [{ id: 'r1', label: 'Furia', max: 3, value: 1, reset: 'lungo' }] } });
-    const [x] = R().createCombatants([p], [], st.races, () => 10);
+    const [x] = DnD.combattenti.createCombatants([p], [], st.races, () => 10);
     eq([x.hp, x.tempHp, x.hitDice, DnD.condizioni.exhaustion(x), x.resources[0].value], [12, 5, { die: 10, total: 5, used: 1 }, 2, 1], 'dalla scheda');
     eq([RP().absorbTemp(x, 8), x.tempHp], [{ rest: 3, absorbed: 5 }, 0], 'i PF temporanei assorbono per primi');
     Object.assign(x, { hp: 7 });
@@ -5258,7 +5258,7 @@
 
   test('Scheda: abilità con competenza, maestria e metà competenza; passive', () => {
     const p = hero({ sheet: { skills: { 'Furtività': 2, 'Indagare': 1 }, half: true, skillBonus: { 'Percezione': 2 } } });
-    const d = R().derivedStats(p, null, []);
+    const d = DnD.combattenti.derivedStats(p, null, []);
     const fx = SH().featEffects(p, []);
     const b = (k) => SH().skillBonus(p, k, d, fx, null);
     eq([b('Furtività').total, b('Indagare').total, b('Atletica').total, b('Percezione').total], [9, 5, 1, 4], 'maestria 3+6, competenza 2+3, metà 0+1, bonus 1+1+2');
@@ -5270,12 +5270,12 @@
 
   test('Scheda: valori automatici sovrascritti e ritorno ad auto', () => {
     const p = hero({ sheet: { initiativeBonus: 2, speedBonus: 3 } });
-    const d = () => R().derivedStats(p, null, []);
+    const d = () => DnD.combattenti.derivedStats(p, null, []);
     eq([SH().initiative(p, d(), null).total, SH().speed(p, null, null, []).total], [5, 12], 'auto: DES + bonus, razza + bonus');
     p.sheet.overrides.initiative = 7;
     p.sheet.overrides.speed = 6;
     eq([SH().initiative(p, d(), null).total, SH().initiative(p, d(), null).manual, SH().speed(p, null, null, []).total], [7, true, 6], 'a mano');
-    const x = R().createCombatants([p], [], [], seq(10), [], [])[0];
+    const x = DnD.combattenti.createCombatants([p], [], [], seq(10), [], [])[0];
     eq([x.initiative, x.speeds.cammina], [17, 20], 'nel combattimento: iniziativa 10 + 7, velocità 6 m = 20 piedi');
     p.sheet.overrides.initiative = null;
     p.sheet.overrides.speed = null;
@@ -5286,7 +5286,7 @@
   test('Scheda: capacità di carico e sintonia', () => {
     const cat = DnD.attrezzatura.defaults().concat([1, 2, 3, 4].map((i) => DnD.dati.normalizeEquipment({ id: 'anello-' + i, name: 'Anello ' + i, category: 'magici', attunement: true })));
     const p = hero({ inventory: [{ equipmentId: 'eq-cotta-di-maglia', qty: 1 }], coins: { mo: 100 } });
-    const d = R().derivedStats(p, null, cat);
+    const d = DnD.combattenti.derivedStats(p, null, cat);
     const c = SH().carry(p, d, cat);
     eq([c.weight, c.capacity, c.over], [28.5, 75, false], 'FOR 10 × 7,5 kg');
     p.sheet.overrides.carry = 20;
@@ -5320,7 +5320,7 @@
     const fx = SH().featEffects(p, feats);
     eq([fx.abilities, fx.ac, fx.saves, fx.skills], [{ COS: 1, SAG: 1 }, 2, ['DES'], ['Percezione']], 'effetti sommati');
     withState(st, () => {
-      const d = R().derivedStats(p, null, []);
+      const d = DnD.combattenti.derivedStats(p, null, []);
       eq([d.abilities.COS, d.abilities.SAG, d.ac.total, d.saves.includes('DES')], [13, 13, 15, true], 'caratteristiche, CA e salvezze');
       ok(d.ac.detail.includes('talenti 2'), 'dettaglio della CA');
       eq(SH().skillBonus(p, 'Percezione', d, d.fx, st).level, 1, 'competenza dal talento');
@@ -5345,17 +5345,17 @@
     eq(SH().levelUp(hero({ level: 20 }), {}, { feats: [] }).summary, null, 'livello massimo');
     eq([SH().xpInfo(hero({ level: 3, xp: 2700 })).canLevelUp, SH().xpInfo(hero({ level: 3, xp: 2699 })).canLevelUp, SH().levelForXp(6500), SH().xpInfo(hero({ level: 3 })).next], [true, false, 5, 2700], 'soglie dei PE');
     const cleric = hero({ classId: 'chierico', abilities: { FOR: 10, DES: 10, COS: 12, INT: 10, SAG: 16, CAR: 10 }, sheet: { spellFlags: { a: { prepared: true }, b: { prepared: true }, c: { prepared: false } } } });
-    eq(SH().preparable(cleric, R().derivedStats(cleric, null, [])), { max: 8, prepared: 2 }, 'chierico: livello + SAG');
+    eq(SH().preparable(cleric, DnD.combattenti.derivedStats(cleric, null, [])), { max: 8, prepared: 2 }, 'chierico: livello + SAG');
     const pal = hero({ classId: 'paladino', abilities: { FOR: 14, DES: 10, COS: 12, INT: 10, SAG: 10, CAR: 14 } });
-    eq(SH().preparable(pal, R().derivedStats(pal, null, [])).max, 4, 'paladino: metà livello + CAR');
-    eq(SH().preparable(hero(), R().derivedStats(hero(), null, [])), null, 'il ladro non prepara');
+    eq(SH().preparable(pal, DnD.combattenti.derivedStats(pal, null, [])).max, 4, 'paladino: metà livello + CAR');
+    eq(SH().preparable(hero(), DnD.combattenti.derivedStats(hero(), null, [])), null, 'il ladro non prepara');
     const fighter = hero({ classId: 'guerriero', sheet: { spellcaster: true, casterType: 'mezzo' } });
-    ok(SH().isCaster(fighter) && R().derivedStats(fighter, null, []).spell.slotsTotal[0] === 4, 'casella «Incantatore»: come la classe personalizzata');
+    ok(SH().isCaster(fighter) && DnD.combattenti.derivedStats(fighter, null, []).spell.slotsTotal[0] === 4, 'casella «Incantatore»: come la classe personalizzata');
   });
 
   test('Scheda: condizioni e tiri contro la morte tra scheda e combattimento', () => {
     const p = hero({ status: { hp: 0 }, sheet: { conditions: ['prono'], deathSaves: { successes: 1, failures: 2 } } });
-    const x = R().createCombatants([p], [], [], seq(10), [], [])[0];
+    const x = DnD.combattenti.createCombatants([p], [], [], seq(10), [], [])[0];
     eq([DnD.condizioni.has(x, 'prono'), x.deathSaves.active, x.deathSaves.successes, x.deathSaves.failures], [true, true, 1, 2], 'dalla scheda');
     DnD.condizioni.remove(x, 'prono');
     DnD.condizioni.apply(x, { type: 'avvelenato' });

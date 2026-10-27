@@ -218,7 +218,7 @@
     if (!npc) return null;
     const v = worldView(st);
     const source = Object.assign(clone(npc.stats), { id: npc.id, name: it.name || npc.name, icon: clone(it.icon) });
-    const x = R.createCombatants([], [{ npc: source, quantity: 1 }], st.races, dice(), st.spells, st.equipment)[0];
+    const x = DnD.combattenti.createCombatants([], [{ npc: source, quantity: 1 }], st.races, dice(), st.spells, st.equipment)[0];
     const fid = NP.factionOf(npc, it.npcState, v.cities);
     const party = DnD.party.active(v.parties, v.world);
     const att = hostile ? 'ostile' : NP.attitudeOf(npc, it.npcState, FZ.reputationOf(v.world, party, fid));
@@ -887,7 +887,7 @@
     }
     const playerSummary = (c) => { // i leggendari con gli effetti dei nodi già applicati
       const e = DnD.leggendario.effectivePlayer(c, st);
-      return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + R.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
+      return [DnD.classi.className(c.classId), 'PF ' + e.maxHp, 'CA ' + DnD.combattenti.derivedStats(e, st.races.find((r) => r.id === c.raceId), st.equipment).ac.total];
     };
     const summary = (c) => (DnD.boss.isMonster(c)
       ? [c.type === 'boss' ? 'Boss' : 'Creatura', 'GS ' + DF.crOf(c) + (DF.crOf(c) !== c.cr ? ' effettivo' : ''), 'PF ' + M.hpInfo(c).total, 'CA ' + c.ac]
@@ -989,7 +989,7 @@
         return;
       }
       beginDice();
-      const combatants = R.createCombatants(players, entries, st.races, dice(), st.spells, st.equipment);
+      const combatants = DnD.combattenti.createCombatants(players, entries, st.races, dice(), st.spells, st.equipment);
       endDice('Iniziativa', '');
       for (const x of combatants) {
         if (setup.control[x.sourceId]) x.control = setup.control[x.sourceId];
