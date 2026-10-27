@@ -1921,7 +1921,8 @@ js/immagini.js        immagini importate: archivio IndexedDB con cache, lettura 
 js/dati/suoni.js      effetti sonori (dati e logica pura): categorie, eventi con le ricette, impostazioni, esiti → eventi
 js/audio.js           effetti sonori: unico modulo Web Audio (sintesi, nodo master, limiti, coda, file in IndexedDB)
 js/ui-suoni.js        gruppo «Suoni» nelle impostazioni, finestra «Tutti i suoni», pulsante rapido e Alt+M
-js/tileset.js         logica pura dei TileSet: sorgenti, taglio (anche a copertura), id delle tile, proprietà, migrazioni
+js/tileset.js         logica pura dei TileSet: sorgenti, taglio (anche a copertura), id delle tile, proprietà, orientamenti
+js/migrazioni-tile.js  migrazioni dei vecchi formati delle tile: immagini «stirate» (v5→v6) e TileSet con sorgenti (v7)
 js/tile.js            logica pura del componente «Taglia immagine in tile» (X e Y, bordi parziali, flag)
 js/tilemap.js         logica pura delle TileMap: livelli, pittura, timbri, regioni, trasformazioni, ingombro
 js/collisioni.js      logica pura delle collisioni: poligoni, celle bloccate con soglia, info di cella

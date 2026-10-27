@@ -1068,7 +1068,7 @@
     // Versioni 6, 7 e 8: immagini "stirate" -> tilemap su tileset, TileSet con sorgenti e livelli generici,
     // poi Attrezzatura, oggetti di mappa e creature (sui dati grezzi, prima di tutto); 9: boss d'esempio;
     // 10: biomi ed eventi.
-    raw = migrateV18(migrateV17(migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(T().migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))))))));
+    raw = migrateV18(migrateV17(migrateV16(migrateV12(migrateV11(migrateV10(migrateV9(migrateV8(DnD.migrazioniTile.migrateRaw(JSON.parse(JSON.stringify(obj(raw))))))))))));
     const { sessions, currentSessionId } = normalizeSessions(raw);
     // Chi non appartiene a una sessione esistente (es. dati precedenti) va nella prima.
     const ids = new Set(sessions.map((x) => x.id));

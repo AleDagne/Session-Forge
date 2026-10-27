@@ -256,7 +256,7 @@
     if (!isSessionFile(raw) || !raw.session || typeof raw.session !== 'object') throw new Error('Il file non contiene una sessione.');
     if (typeof raw.version === 'number' && raw.version > DnD.dati.VERSION) throw new Error('La sessione proviene da una versione più recente dell\'app.');
     const before12 = !(typeof raw.version === 'number' && raw.version >= 12);
-    raw = DnD.dati.migrateV8(DnD.tileset.migrateRaw(clone(raw)));
+    raw = DnD.dati.migrateV8(DnD.migrazioniTile.migrateRaw(clone(raw)));
     const D = DnD.dati;
     const norm = {
       races: D.normalizeRace, spells: D.normalizeSpell, structures: D.normalizeStructure, equipment: D.normalizeEquipment,

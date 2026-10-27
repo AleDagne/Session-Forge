@@ -6904,9 +6904,11 @@
     frame.src = 'index.html?prova';
     const errori = [];
     const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
-    // Avvio lento senza cache (109 script) e con la pagina in secondo piano: fino a 30 secondi.
+    // Avvio lento senza cache (oltre 100 script) e timer rallentati se la pagina è in secondo piano: si misura il
+    // tempo trascorso, non i giri, fino a 2 minuti.
     const fino = async (cond, cosa) => {
-      for (let i = 0; i < 1200; i++) { if (cond()) return; await attesa(25); }
+      const limite = Date.now() + 120000;
+      while (Date.now() < limite) { if (cond()) return; await attesa(25); }
       throw new Error('tempo scaduto: ' + cosa);
     };
     try {
