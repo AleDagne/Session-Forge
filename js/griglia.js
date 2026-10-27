@@ -296,14 +296,14 @@
 
   // feetPerCell: piedi per casella della mappa (5 di base; 5 ft = 1,5 m).
   function formatDistance(cells, feetPerCell) {
-    const ft = cells * (feetPerCell || 5);
-    return cells + (cells === 1 ? ' casella' : ' caselle') + ' · ' + ft + ' ft · ' + String(Math.round(ft * 0.3 * 100) / 100).replace('.', ',') + ' m';
+    const ft = cells * (feetPerCell || DnD.misure.PIEDI_PER_CASELLA);
+    return cells + (cells === 1 ? ' casella' : ' caselle') + ' · ' + ft + ' ft · ' + String(Math.round(ft * DnD.misure.METRI_PER_PIEDE * 100) / 100).replace('.', ',') + ' m';
   }
 
   // Velocità in metri -> testo con caselle e piedi.
   function formatSpeed(meters) {
-    const cells = Math.floor(meters / 1.5 + 1e-9);
-    return String(meters).replace('.', ',') + ' m · ' + cells * 5 + ' ft · ' + cells + (cells === 1 ? ' casella' : ' caselle');
+    const cells = DnD.misure.celleDaMetri(meters);
+    return String(meters).replace('.', ',') + ' m · ' + cells * DnD.misure.PIEDI_PER_CASELLA + ' ft · ' + cells + (cells === 1 ? ' casella' : ' caselle');
   }
 
   // ---------- Sfondo ----------

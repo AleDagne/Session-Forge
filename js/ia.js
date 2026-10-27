@@ -43,7 +43,7 @@
   const alive = (c) => c.hp > 0;
 
   // ---------- Armi e azioni ----------
-  const cells = (m) => Math.max(1, Math.floor((Number(m) || 0) / 1.5 + 1e-9));
+  const cells = (m) => Math.max(1, DnD.misure.celleDaMetri(Number(m) || 0));
   const avgDice = (dice) => { const p = DnD.dadi.parseExpr(dice); return p ? (p.count * (p.sides + 1)) / 2 + p.modifier : 0; };
   const RANGED_NAMES = [[/arco/i, 16, 64], [/balestra/i, 16, 64], [/fionda/i, 6, 24], [/giavellott/i, 6, 24], [/dardo/i, 4, 12], [/pugnal/i, 4, 12]];
 
@@ -80,7 +80,7 @@
       if (m.kind === 'attacco') {
         const o = { source: 'creatura', id: a.id, name: a.name, toHit: M.toHit(st, m), parts: parts(a), magical: m.magical, recharge: a.freq.kind === 'ricarica' };
         const list = [];
-        if (m.range !== 'distanza') list.push(Object.assign({}, o, { ranged: false, reach: Math.max(1, Math.round(m.reach / 1.5)) }));
+        if (m.range !== 'distanza') list.push(Object.assign({}, o, { ranged: false, reach: Math.max(1, Math.round(m.reach / DnD.misure.METRI_PER_CASELLA)) }));
         if (m.range !== 'mischia') list.push(Object.assign({}, o, { ranged: true, range: cells(m.rangeNormal || 9), long: cells(m.rangeLong || m.rangeNormal || 9) }));
         return list;
       }

@@ -213,7 +213,7 @@
   function portataArma(w, ranged, catalogo) {
     const eq = w.equipmentId ? (catalogo || []).find((e) => e.id === w.equipmentId) : null;
     const wp = eq && eq.weapon;
-    if (ranged) return wp && (wp.rangeLong || wp.rangeNormal) ? Math.floor((wp.rangeLong || wp.rangeNormal) / 1.5) : Infinity;
+    if (ranged) return wp && (wp.rangeLong || wp.rangeNormal) ? Math.floor((wp.rangeLong || wp.rangeNormal) / DnD.misure.METRI_PER_CASELLA) : Infinity;
     return wp && (wp.props || []).includes('portata') ? 2 : 1;
   }
   function verificaAttacco(ctx, d) {
@@ -240,7 +240,7 @@
     if (/^(sé|se stesso|personale)/.test(r)) return 0;
     if (/contatto/.test(r)) return 1;
     const m = /(\d+(?:[.,]\d+)?)\s*(m\b|metri)/.exec(r);
-    return m ? Math.floor(Number(m[1].replace(',', '.')) / 1.5) : null;
+    return m ? Math.floor(Number(m[1].replace(',', '.')) / DnD.misure.METRI_PER_CASELLA) : null;
   }
   function verificaMagia(ctx, d) {
     const x = ctx.x;

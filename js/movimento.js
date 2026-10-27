@@ -1,4 +1,6 @@
 // Velocità e movimento nel combattimento (funzioni pure, nessun accesso al DOM).
+// Livello regole (gruppo mappa). Espone DnD.movimento; usa DnD.misure, griglia, condizioni, dati/ia e, come ostilità
+// predefinita se il chiamante non la passa, DnD.fazioni.ostili.
 // - Velocità di ogni combattente in PIEDI per modalità (camminare, scalare, nuotare, volare, scavare): dalla razza
 //   o dalla scheda della creatura (in metri nelle librerie: 1,5 m = 5 ft), più i bonus dei nodi e degli oggetti,
 //   la forma della trasformazione attiva e la sovrascrittura a mano. In celle: piedi / piedi per cella, per difetto.
@@ -34,10 +36,11 @@
   const conditions = () => DnD.condizioni.TYPE_IDS;
 
   // ---------- Unità ----------
-  const feetFromMeters = (m) => Math.max(0, Math.round(((Number(m) || 0) / 1.5) * 5));
-  const metersFromFeet = (ft) => Math.round(ft * 0.3 * 100) / 100;
+  const MIS = DnD.misure;
+  const feetFromMeters = (m) => Math.max(0, Math.round(((Number(m) || 0) / MIS.METRI_PER_CASELLA) * MIS.PIEDI_PER_CASELLA));
+  const metersFromFeet = (ft) => Math.round(ft * MIS.METRI_PER_PIEDE * 100) / 100;
   // Celle da piedi: piedi / piedi per cella, arrotondato per difetto.
-  const cellsOf = (feet, feetPerCell) => Math.max(0, Math.floor((Number(feet) || 0) / (feetPerCell > 0 ? feetPerCell : 5) + 1e-9));
+  const cellsOf = (feet, feetPerCell) => Math.max(0, Math.floor((Number(feet) || 0) / (feetPerCell > 0 ? feetPerCell : MIS.PIEDI_PER_CASELLA) + MIS.EPSILON));
   const formatFeet = (ft) => ft + ' ft (' + String(metersFromFeet(ft)).replace('.', ',') + ' m)';
 
   function normalizeRules(r) {
@@ -175,7 +178,8 @@
   function distance(a, b, rules) {
     const dx = Math.abs(a.x - b.x);
     const dy = Math.abs(a.y - b.y);
-    return normalizeRules(rules).diagonals === 'alternata' ? Math.max(dx, dy) + Math.floor(Math.min(dx, dy) / 2) : Math.max(dx, dy);
+    // Regola facoltativa 5-10-5: ogni seconda diagonale costa una casella in più; altrimenti come griglia.cellDistance.
+    return normalizeRules(rules).diagonals === 'alternata' ? Math.max(dx, dy) + Math.floor(Math.min(dx, dy) / 2) : G().cellDistance(a, b);
   }
 
   // ---------- Percorso minimo ----------

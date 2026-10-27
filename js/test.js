@@ -6875,6 +6875,13 @@
     eq(persi, [], 'id persi');
   });
 
+  test('Misure: caselle da metri (per difetto, con tolleranza) e conversioni piedi/metri', () => {
+    const MI = DnD.misure;
+    eq([MI.celleDaMetri(4.5), MI.celleDaMetri(1.4), MI.celleDaMetri(9), MI.celleDaMetri(0)], [3, 0, 6, 0]);
+    eq([DnD.movimento.feetFromMeters(9), DnD.movimento.metersFromFeet(30), DnD.movimento.cellsOf(35, 5)], [30, 9, 7]);
+    eq([DnD.movimento.distance({ x: 0, y: 0 }, { x: 3, y: 2 }), DnD.movimento.distance({ x: 0, y: 0 }, { x: 3, y: 2 }, { diagonals: 'alternata' })], [3, 4]);
+  });
+
   // index.html, test.html e sw.js elencano gli stessi script (test.html: senza app.js, con test.js) e gli stessi CSS.
   test('Elenchi dei file: index.html, test.html e cache del service worker allineati', async () => {
     if (location.protocol === 'file:') return;
@@ -6897,8 +6904,9 @@
     frame.src = 'index.html?prova';
     const errori = [];
     const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Avvio lento senza cache (109 script) e con la pagina in secondo piano: fino a 30 secondi.
     const fino = async (cond, cosa) => {
-      for (let i = 0; i < 200; i++) { if (cond()) return; await attesa(25); }
+      for (let i = 0; i < 1200; i++) { if (cond()) return; await attesa(25); }
       throw new Error('tempo scaduto: ' + cosa);
     };
     try {
