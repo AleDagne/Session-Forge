@@ -171,7 +171,7 @@
         const st = DnD.store.state;
         const ts = st.tilesets.find((t) => t.id === cut.tilesetId);
         const byId = DnD.tilemap.tilesetIndex(st.tilesets);
-        if (ts && cut.selection.includes('1')) tiles = DnD.tilemap.withFootprint(Object.assign(DnD.tilemap.imageTiles(ts, cut.srcId, cut.selection, {}), { sel: cut.selection }), byId, 'item');
+        if (ts && cut.selection.includes('1')) tiles = DnD.collisioni.withFootprint(Object.assign(DnD.tilemap.imageTiles(ts, cut.srcId, cut.selection, {}), { sel: cut.selection }), byId, 'item');
       }
       const data = {
         id: o.id, name: inp.name.value.trim(), otype: inp.otype.value, description: inp.description.value.trim(),

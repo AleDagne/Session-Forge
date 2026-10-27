@@ -228,7 +228,7 @@
       const byId = TM.tilesetIndex(st.tilesets);
       let t = Object.assign(TM.imageTiles(ts, cut.srcId, cut.selection, { drawAll: inp.drawAll.checked, layer: inp.layer.value, fade: inp.fade.checked }), { sel: cut.selection });
       for (const op of ops) t = TM.transformTiles(t, op, byId);
-      return TM.withFootprint(Object.assign(t, { ops: ops.slice() }), byId, 'structure');
+      return DnD.collisioni.withFootprint(Object.assign(t, { ops: ops.slice() }), byId, 'structure');
     }
     const imagePreview = el('div', { class: 'image-panel-preview' });
     const imageInfo = el('div', { class: 'muted small', 'aria-live': 'polite' });

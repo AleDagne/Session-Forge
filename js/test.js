@@ -1013,7 +1013,7 @@
     const ts = lTileset();
     const selection = TS().detectEmpty(lAlpha(), 48, 48, ts.sources[0]).replace(/[01]/g, (c) => (c === '1' ? '0' : '1'));
     eq(selection, '100100111');
-    const t = TM().withFootprint(TM().imageTiles(ts, 0, selection, {}), byId(ts), 'structure');
+    const t = DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, selection, {}), byId(ts), 'structure');
     eq([t.kind, t.w, t.h, t.mask, t.cells, t.drawAll], ['immagine', 3, 3, '100100111', '100100111', false]);
     eq([tileAt(t, 0, 0, 0), tileAt(t, 0, 1, 0), tileAt(t, 0, 2, 2)], [[0, tid(0, 0), 0], null, [0, tid(2, 2), 0]], 'un tile per cella, gli esclusi non si disegnano');
     const bottom = TM().imageTiles(ts, 0, '000000111', {});
@@ -1097,7 +1097,7 @@
     eq(TM().transformRegion(TM().transformRegion(reg, 'specchia'), 'specchia'), reg);
     eq(TM().transformRegion(TM().transformRegion(reg, 'specchia-v'), 'specchia-v'), reg);
     eq(TM().transformRegion(TM().transformRegion(reg, 'ruota'), 'ruota-sx'), reg);
-    const s = TM().regionToTiles(t, { x: 1, y: 2, w: 2, h: 1 }, byId(ts), 'structure');
+    const s = DnD.collisioni.regionToTiles(t, { x: 1, y: 2, w: 2, h: 1 }, byId(ts), 'structure');
     eq([s.kind, s.w, s.h, s.tilesets, s.cells], ['mappa', 2, 1, ['ts-casa'], '10'], 'regione salvata come struttura (bloccante la prima tile)');
   });
 
@@ -1157,18 +1157,18 @@
     let R = [1, 0, 0, 1];
     for (const op of ['ruota', 'specchia', 'ruota', 'ruota', 'specchia', 'ruota', 'ruota']) {
       cur = TM().transformTiles(cur, op, {});
-      R = op === 'ruota' ? G().rotateMatrix(R) : G().mirrorMatrix(R);
+      R = op === 'ruota' ? DnD.tileset.rotateMatrix(R) : DnD.tileset.mirrorMatrix(R);
       for (let l = 0; l < 2; l++) {
         for (let y = 0; y < 2; y++) for (let x = 0; x < 3; x++) {
           const base = t.layers[l].data[y * 3 + x];
           if (!base) continue;
           const local = { x: -0.3, y: -0.4 };
-          const q = G().applyMatrix(R, x + 0.5 + local.x - 1.5, y + 0.5 + local.y - 1);
+          const q = DnD.tileset.applyMatrix(R, x + 0.5 + local.x - 1.5, y + 0.5 + local.y - 1);
           const px = q.x + cur.w / 2;
           const py = q.y + cur.h / 2;
           const c = cur.layers[l].data[Math.floor(py) * cur.w + Math.floor(px)];
           ok(c && c[1] === base[1], op + ': tile ' + base[1] + ' fuori posto');
-          const lq = G().applyMatrix(TS().ORIENTS[c[2]], local.x, local.y);
+          const lq = DnD.tileset.applyMatrix(TS().ORIENTS[c[2]], local.x, local.y);
           ok(Math.abs(lq.x - (px - Math.floor(px) - 0.5)) < 1e-9 && Math.abs(lq.y - (py - Math.floor(py) - 0.5)) < 1e-9, op + ': tile ' + base[1] + ' non ruotato');
         }
       }
@@ -1187,20 +1187,20 @@
 
   test('Collisioni: ingombro delle strutture dai flag, dai poligoni e dalle celle forzate', () => {
     const ts = lTileset();
-    const tA = TM().withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
+    const tA = DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
     const placed = DnD.dati.normalizePlacedStructure(Object.assign({ id: 'casa', x: 5, y: 5 }, G().placedFields({ mode: 'tiles', tiles: tA })));
     const board = { combatants: [{ id: 't', size: 1, pos: null }], structures: [placed], items: [], ignoreCollisions: false };
     ok(!G().canPlaceToken(board, 't', 5, 5) && G().canPlaceToken(board, 't', 6, 5) && !G().canPlaceToken(board, 't', 7, 7), 'Modalità A');
     const m = mapWith(4, 1, ts);
     m.layers[0].data = [[0, tid(0, 0), 0], [0, tid(1, 1), 0], [0, tid(2, 2), 0], null];
-    eq(TM().footprint(m, byId(ts), 'structure'), '1010', 'dai flag "Bloccante"');
+    eq(DnD.collisioni.footprint(m, byId(ts), 'structure'), '1010', 'dai flag "Bloccante"');
     m.overrides = 'l--b';
-    eq(TM().footprint(m, byId(ts), 'structure'), '0011', 'forzate: libera e bloccata');
+    eq(DnD.collisioni.footprint(m, byId(ts), 'structure'), '0011', 'forzate: libera e bloccata');
     m.overrides = '----';
     TS().setTileProps(ts, [tid(1, 1)], { excluded: false, collision: { enabled: true, polygons: [COL().fullRect()] } });
-    eq(TM().footprint(m, byId(ts), 'structure'), '1110', 'dal poligono di collisione');
-    eq(TM().footprint(m, byId(ts), 'item'), '1110', 'oggetto: celle occupate');
-    eq(TM().footprint(m, {}, 'structure'), '0000', 'TileSet sconosciuto: nessun blocco calcolato');
+    eq(DnD.collisioni.footprint(m, byId(ts), 'structure'), '1110', 'dal poligono di collisione');
+    eq(DnD.collisioni.footprint(m, byId(ts), 'item'), '1110', 'oggetto: celle occupate');
+    eq(DnD.collisioni.footprint(m, {}, 'structure'), '0000', 'TileSet sconosciuto: nessun blocco calcolato');
     eq(G().templateShape(DnD.dati.normalizeMapObject({ name: 'Forziere' }), 'item'), { w: 1, h: 1, cells: '1' });
   });
 
@@ -1304,7 +1304,7 @@
     eq([TS().resolveTile(ts, tid(0, 0, 9)), [...COL().blockedSet(t, byId(ts))]], [null, [2]], 'le tile mancanti non bloccano e non rompono la mappa');
     eq(DnD.dati.normalizeTiles(t).layers[0].data, t.layers[0].data, 'i riferimenti restano (segnaposto grigio)');
     // L'ingombro salvato con la tilemap resta valido anche se il TileSet sparisce.
-    const placed = DnD.dati.normalizePlacedStructure(Object.assign({ x: 2, y: 2 }, G().placedFields({ mode: 'tiles', tiles: TM().withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure') })));
+    const placed = DnD.dati.normalizePlacedStructure(Object.assign({ x: 2, y: 2 }, G().placedFields({ mode: 'tiles', tiles: DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure') })));
     const board = { combatants: [{ id: 't', size: 1, pos: null }], structures: [placed], items: [], ignoreCollisions: false, tilesets: {} };
     ok(!G().canPlaceToken(board, 't', 2, 2) && G().canPlaceToken(board, 't', 3, 2));
   });
@@ -1312,7 +1312,7 @@
   test('TileSet: dove è usato (avviso prima di eliminare)', () => {
     const ts = lTileset();
     TS().addSource(ts, { imageId: null, imageW: 32, imageH: 32 }, { tileW: 32, tileH: 32 });
-    const tiles = TM().withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
+    const tiles = DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
     const tileMap = Object.assign(TM().newGridMap(), { tilesets: [ts.id] });
     tileMap.layers[0].data[0] = [0, tid(0, 0, 1), 0];
     const state = { structures: [{ name: 'Casa', tiles }], items: [], savedGrids: [{ name: 'Cripta', structures: [], items: [], tileMap }], sessions: [] };
@@ -1328,8 +1328,8 @@
     const ts = lTileset();
     ts.sources[0].imageId = imageId;
     TS().addSource(ts, { imageId, imageW: 48, imageH: 48 }, { tileW: 48, tileH: 48 });
-    const casa = DnD.dati.normalizeStructure({ id: 'casa', name: 'Casa', mode: 'tiles', tiles: TM().withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure') });
-    const muro = DnD.dati.normalizeStructure({ id: 'muro', name: 'Muro', mode: 'tiles', tiles: TM().withFootprint(TM().imageTiles(ts, 0, '000000111', {}), byId(ts), 'structure') });
+    const casa = DnD.dati.normalizeStructure({ id: 'casa', name: 'Casa', mode: 'tiles', tiles: DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure') });
+    const muro = DnD.dati.normalizeStructure({ id: 'muro', name: 'Muro', mode: 'tiles', tiles: DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '000000111', {}), byId(ts), 'structure') });
     eq(TM().referencedTilesetIds({ structures: [casa, muro] }), ['ts-casa']);
     eq([Object.keys(backend.data).length, IMG().referencedIds({ tilesets: [ts] })], [1, [imageId]], 'immagine salvata una volta sola anche con due sorgenti');
     eq([casa.tiles.w, muro.tiles.w, muro.tiles.h], [3, 3, 1]);
@@ -1346,7 +1346,7 @@
     const state = DnD.dati.emptyState();
     const sess = DnD.sessioni.current(state);
     state.tilesets.push(ts, DnD.dati.normalizeTileset(other), DnD.dati.normalizeTileset(unused));
-    const tiles = TM().withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
+    const tiles = DnD.collisioni.withFootprint(TM().imageTiles(ts, 0, '100100111', {}), byId(ts), 'structure');
     state.structures.push(DnD.dati.normalizeStructure({ id: 'casa', name: 'Casa', mode: 'tiles', tiles }));
     const tileMap = Object.assign(TM().newGridMap(), { tilesets: ['ts-mappa'] });
     tileMap.layers[0].data[0] = [0, tid(0, 0), 0];
@@ -1663,12 +1663,12 @@
     const L = '100100111';
     const free = TS().newTileset('libero', 'Libero');
     TS().addSource(free, { imageId: null, imageW: 48, imageH: 48 }, { tileW: 16, tileH: 16 });
-    const tFree = TM().withFootprint(Object.assign(TM().imageTiles(free, 0, L, {}), { sel: L }), byId(free), 'structure');
+    const tFree = DnD.collisioni.withFootprint(Object.assign(TM().imageTiles(free, 0, L, {}), { sel: L }), byId(free), 'structure');
     eq([tFree.w, tFree.h, tFree.cells], [3, 3, L], 'nessun tile Bloccante: bloccano tutti i selezionati');
     const partial = TS().newTileset('parz', 'P');
     TS().addSource(partial, { imageId: null, imageW: 48, imageH: 48 }, { tileW: 16, tileH: 16 });
     TS().setTileProps(partial, [tid(0, 2), tid(1, 2), tid(2, 2)], { blocking: true });
-    const tP = TM().withFootprint(TM().imageTiles(partial, 0, L, {}), byId(partial), 'structure');
+    const tP = DnD.collisioni.withFootprint(TM().imageTiles(partial, 0, L, {}), byId(partial), 'structure');
     eq(tP.cells, '000000111', 'solo i selezionati Bloccanti bloccano');
     const placed = DnD.dati.normalizePlacedStructure(Object.assign({ x: 2, y: 2 }, G().placedFields({ mode: 'tiles', tiles: tFree })));
     const board = { w: 10, h: 10, combatants: [{ id: 't', w: 1, h: 1, pos: null }], structures: [placed], items: [], ignoreCollisions: false, tilesets: byId(free) };

@@ -298,7 +298,7 @@
   function refreshTemplates(st, tilesetId) {
     const byId = TM.tilesetIndex(st.tilesets);
     for (const [list, kind] of [[st.structures, 'structure'], [st.mapObjects, 'item']]) {
-      for (const x of list) if (x.tiles && x.tiles.tilesets.includes(tilesetId)) x.tiles = TM.withFootprint(x.tiles, byId, kind);
+      for (const x of list) if (x.tiles && x.tiles.tilesets.includes(tilesetId)) x.tiles = DnD.collisioni.withFootprint(x.tiles, byId, kind);
     }
   }
 

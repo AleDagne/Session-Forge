@@ -1,7 +1,7 @@
 // Migrazioni dei vecchi formati delle tile (dati grezzi, prima della normalizzazione): immagini «stirate» della
 // versione 5 -> tilemap su TileSet «legacy» (formato 6), poi TileSet con sorgenti e livelli generici (versione 7).
 // Livello stato (migrazioni). Espone DnD.migrazioniTile { legacyTilesetId, opsFor, migrateLegacy, migrateV7,
-// migrateRaw }; usa DnD.tileset, DnD.tilemap (visita delle tilemap) e DnD.griglia (matrici di rotazione).
+// migrateRaw }; usa DnD.tileset (anche le matrici di rotazione) e DnD.tilemap (visita delle tilemap).
 // Non deve toccare DOM, disco o rete. Le dimensioni in pixel delle sorgenti legacy si completano all'avvio
 // (tileset.resolveLegacy, ui-tileset).
 (function (DnD) {
@@ -20,8 +20,7 @@
   };
   // Rotazione/specchio di una tilemap nel formato della versione 6 (due livelli, celle [ts, indice, orientamento]).
   function legacyTransform(t, op) {
-    const G = DnD.griglia;
-    const orient = (o) => TS().ORIENTS.findIndex((m) => m.every((v, i) => v === (op === 'ruota' ? G.rotateMatrix(TS().ORIENTS[o]) : G.mirrorMatrix(TS().ORIENTS[o]))[i]));
+    const orient = (o) => TS().ORIENTS.findIndex((m) => m.every((v, i) => v === (op === 'ruota' ? TS().rotateMatrix(TS().ORIENTS[o]) : TS().mirrorMatrix(TS().ORIENTS[o]))[i]));
     const rotate = op === 'ruota';
     const w = rotate ? t.h : t.w;
     const h = rotate ? t.w : t.h;
@@ -34,14 +33,13 @@
     });
   }
   function opsFor(m) {
-    const G = DnD.griglia;
     const key = (x) => x.join(',');
     const seen = new Map([[key([1, 0, 0, 1]), []]]);
     const queue = [[1, 0, 0, 1]];
     while (queue.length) {
       const cur = queue.shift();
       if (key(cur) === key(m)) return seen.get(key(cur));
-      for (const [op, next] of [['ruota', G.rotateMatrix(cur)], ['specchia', G.mirrorMatrix(cur)]]) {
+      for (const [op, next] of [['ruota', TS().rotateMatrix(cur)], ['specchia', TS().mirrorMatrix(cur)]]) {
         if (!seen.has(key(next))) { seen.set(key(next), seen.get(key(cur)).concat(op)); queue.push(next); }
       }
     }

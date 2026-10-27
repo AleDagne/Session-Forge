@@ -219,20 +219,6 @@
     return { w: t.w, h: t.h, cells: t.cells };
   }
 
-  // Matrici 2×2 [m00, m01, m10, m11] degli orientamenti dei tile.
-  const neg = (v) => 0 - v;
-  // Rotazione oraria di 90° (asse y verso il basso): (x, y) -> (-y, x).
-  function rotateMatrix(m) {
-    return [neg(m[2]), neg(m[3]), m[0], m[1]];
-  }
-  // Specchio orizzontale: (x, y) -> (-x, y).
-  function mirrorMatrix(m) {
-    return [neg(m[0]), neg(m[1]), m[2], m[3]];
-  }
-  function applyMatrix(m, x, y) {
-    return { x: m[0] * x + m[1] * y + 0, y: m[2] * x + m[3] * y + 0 };
-  }
-
   // Campi di un elemento piazzato a partire dal modello: ingombro e copia della tilemap.
   function placedFields(t, kind) {
     const tiles = t.mode === 'tiles' && t.tiles ? JSON.parse(JSON.stringify(t.tiles)) : null;
@@ -549,7 +535,7 @@
   }
 
   DnD.griglia = {
-    blockedCells, boardOf, isCellBlocked, objectBlocks, canPlaceItem, templateShape, rotateMatrix, mirrorMatrix, applyMatrix, placedFields, transformPlaced,
+    blockedCells, boardOf, isCellBlocked, objectBlocks, canPlaceItem, templateShape, placedFields, transformPlaced,
     SIZE, DEFAULT_SIZE, MIN_SIZE, MAX_SIZE, STRIDE, CELL_PX, MIN_ZOOM, MAX_ZOOM, MAX_TOKEN, PRESETS, PRESET_NAMES, TOKEN_SIZES, TOKEN_PRESETS,
     BG_FITS, BG_FIT_NAMES,
     dims, key, keyX, keyY, colLabel, cellLabel, shapeFrom, isFilled, presetShape, rotateShape, mirrorShape, resizeShape, squareShape, rectShape,

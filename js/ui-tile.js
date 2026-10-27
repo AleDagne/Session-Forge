@@ -37,7 +37,7 @@
       const layer = t.layers[1] && t.layers[1].data.some(Boolean) ? 'Sopra' : 'Base';
       let next = Object.assign(TM.imageTiles(ts, srcId, sel, { drawAll: t.drawAll, layer, fade: t.layers[1] && t.layers[1].fade }), { sel, ops: t.ops || [] });
       for (const op of next.ops) next = TM.transformTiles(next, op, byId);
-      x.tiles = TM.withFootprint(next, byId, st.structures.includes(x) ? 'structure' : 'item');
+      x.tiles = DnD.collisioni.withFootprint(next, byId, st.structures.includes(x) ? 'structure' : 'item');
       if (st.structures.includes(x)) Object.assign(x, { w: x.tiles.w, h: x.tiles.h, cells: x.tiles.cells });
     }
   }

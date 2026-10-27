@@ -4,6 +4,8 @@
 // Le pedine si muovono a scatti sulle celle: una cella è bloccata se i poligoni ne coprono almeno la
 // soglia del TileSet (50% di base). La copertura si misura campionando 16×16 punti per cella, così
 // poligoni sovrapposti non contano due volte. Il flag "Bloccante" e "Non navigabile" bloccano tutta la tile.
+// Livello regole (gruppo mappa), sopra tilemap.js. Espone DnD.collisioni (anche l'ingombro delle tilemap: footprint,
+// withFootprint, regionToTiles); usa DnD.tileset e DnD.tilemap. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
@@ -151,9 +153,60 @@
     return info;
   }
 
+  // ---------- Ingombro delle tilemap (spostato da tilemap.js: dipende dalle collisioni) ----------
+  // Ingombro. Strutture "da immagine": i tile selezionati; se tra quelli selezionati ce n'è almeno uno
+  // "Bloccante", bloccano solo quelli (gli altri selezionati restano disegnati ma attraversabili).
+  // Tilemap: celle bloccate (flag "Bloccante", navigabilità e poligoni di collisione) per le strutture,
+  // celle occupate da una tile per gli oggetti. Le celle forzate con lo strumento Blocco hanno la precedenza.
+  function footprint(t, byId, kind) {
+    if (t.kind === 'immagine') {
+      const blocking = new Array(t.w * t.h).fill(false);
+      for (const l of t.layers) {
+        l.data.forEach((c, i) => {
+          if (c && t.mask[i] === '1' && TS().tileProps(byId[t.tilesets[c[0]]], c[1]).blocking) blocking[i] = true;
+        });
+      }
+      if (!blocking.some(Boolean)) return t.mask;
+      return blocking.map((b) => (b ? '1' : '0')).join('');
+    }
+    const n = t.w * t.h;
+    const on = new Uint8Array(n);
+    if (kind === 'item') {
+      for (const l of t.layers) {
+        l.data.forEach((c, i) => {
+          if (!c || TS().isExcluded(byId[t.tilesets[c[0]]], c[1])) return;
+          const s = TM().spanOf(t, byId, c);
+          for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+            const x = (i % t.w) + dx;
+            const y = Math.floor(i / t.w) + dy;
+            if (x < t.w && y < t.h) on[y * t.w + x] = 1;
+          }
+        });
+      }
+    } else {
+      for (const k of blockedSet(t, byId, t.w, { overrides: false })) on[k] = 1;
+    }
+    let cells = '';
+    for (let i = 0; i < n; i++) cells += t.overrides[i] === 'b' ? '1' : t.overrides[i] === 'l' ? '0' : on[i] ? '1' : '0';
+    return cells;
+  }
+
+  function withFootprint(t, byId, kind) {
+    return Object.assign({}, t, { cells: footprint(t, byId, kind) });
+  }
+
+  // Una regione della mappa (tutti i livelli) come tilemap di una struttura o di un oggetto riutilizzabile.
+  function regionToTiles(t, rect, byId, kind) {
+    const part = TM().crop(JSON.parse(JSON.stringify(t)), rect);
+    part.kind = 'mappa';
+    part.layers = part.layers.map((l) => Object.assign(l, { locked: false }));
+    part.mask = '1'.repeat(rect.w * rect.h);
+    return withFootprint(TM().pruneTilesets(part), byId, kind);
+  }
+
   DnD.collisioni = {
     SAMPLES, MAX_POLYGONS, MAX_POINTS,
     pointInPolygon, polygonArea, coverage, orientPoint, orientPolygons, normalizePolygons, fullRect,
-    tileBlockMask, eachCoveredCell, blockedSet, cellInfo,
+    tileBlockMask, eachCoveredCell, blockedSet, cellInfo, footprint, withFootprint, regionToTiles,
   };
 })(globalThis.DnD = globalThis.DnD || {});
