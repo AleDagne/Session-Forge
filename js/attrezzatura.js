@@ -1,6 +1,8 @@
 // Attrezzatura (catalogo degli oggetti di gioco, libreria globale): normalizzazione, calcolo di bonus per
 // colpire, danno e CA dagli oggetti scelti, peso dell'inventario e precarica di armi e armature base del
 // regolamento (solo nomi, danni, proprietà, CA, costi e pesi; nessuna descrizione). Funzioni pure.
+// Livello regole. Espone DnD.attrezzatura (unica fonte per monete, valori in rame e peso delle monete); usa DnD.dadi,
+// DnD.regole (modificatori) e DnD.icone.normalizeIcon. Non deve toccare DOM, disco o rete.
 (function (DnD) {
   'use strict';
 
