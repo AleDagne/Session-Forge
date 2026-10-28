@@ -127,7 +127,7 @@
   async function start() {
     document.title = C.APP_NAME;
     document.getElementById('brand-name').textContent = C.APP_NAME;
-    DnD.store = await DnD.dati.openStore(window.localStorage, PROVA ? { backend: backendMemoria() } : undefined);
+    await DnD.archivio.apri(window.localStorage, PROVA ? { backend: backendMemoria() } : undefined);
     // Immagini importate (TileSet e sfondi delle griglie): stesso database, con cache in memoria.
     DnD.immagini = DnD.immaginiLib.createStore(DnD.store.blobs);
     // File che sostituiscono i suoni predefiniti: stesso database (chiavi "snd:<id>").
@@ -152,12 +152,13 @@
     show(initial === 'oggetti' || initial === 'strutture' ? 'asset' : initial);
   }
 
-  DnD.app = {
+  // L'interfaccia DnD.app è dichiarata in ui-comune.js (le sezioni la usano senza dipendere da questo file): qui si riempie.
+  Object.assign(DnD.app, {
     show, refreshAll, switchSession, canLeaveSection,
     navigate: (name, action) => show(name, action),
     toggleSidebar: (collapsed) => sidebar && sidebar.toggle(collapsed),
     notes: () => notes,
-  };
+  });
 
   start().catch((e) => {
     main.textContent = 'Impossibile avviare l\'app: ' + e.message;

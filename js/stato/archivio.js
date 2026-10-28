@@ -166,7 +166,17 @@
     return store;
   }
 
-  DnD.archivio = { openStore, saveErrorMessage };
+  /**
+   * Apre l'archivio e lo rende lo store dell'app (DnD.store), letto dall'interfaccia e dalla rete.
+   * @param {Storage} storage localStorage (o un sostituto)  @param {{backend?: object}} [opts]
+   * @returns {Promise<object>} lo store
+   */
+  async function apri(storage, opts) {
+    DnD.store = await openStore(storage, opts);
+    return DnD.store;
+  }
+
+  DnD.archivio = { openStore, saveErrorMessage, apri };
   // Sorgente dello stato corrente per le regole (modello.statoCorrente): lo store aperto, se c'è.
   DnD.modello.registraFonteStato(() => (DnD.store ? DnD.store.state : null));
   // DnD.dati resta la facciata pubblica dello stato (app.js, test): qui le si aggiungono le funzioni dell'archivio.

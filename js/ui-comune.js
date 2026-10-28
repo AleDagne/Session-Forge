@@ -209,4 +209,10 @@
   }
 
   DnD.ui = { shortcutsBlocked, el, clear, fill, field, numberInput, textInput, readNumber, showErrors, toast, openDialog, promptText, openMenu, closeMenu, persistentToggle, scrollBehavior, svgIcon, emptyState, raceName };
+
+  // Interfaccia dell'app per le sezioni (navigazione, aggiornamento, sessioni, barra, note): dichiarata qui, alla base
+  // dell'interfaccia, e riempita da app.js all'avvio. Prima dell'avvio ogni funzione segnala l'errore.
+  const nonPronta = (nome) => () => { throw new Error('app non ancora avviata: DnD.app.' + nome); };
+  DnD.app = Object.fromEntries(['show', 'refreshAll', 'switchSession', 'canLeaveSection', 'navigate', 'toggleSidebar', 'notes']
+    .map((nome) => [nome, nonPronta(nome)]));
 })(globalThis.DnD = globalThis.DnD || {});
