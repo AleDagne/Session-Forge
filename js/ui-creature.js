@@ -734,7 +734,7 @@
       });
       const inventory = cfg.isPlayer ? inventoryEditor(c) : null;
       // Mondo: fazione (vuota = del party per i giocatori, della città o Nemici per i nemici) e città d'origine.
-      const worldRefs = DnD.uiMondo.worldRefsEditor(c, { player: cfg.isPlayer });
+      const worldRefs = DnD.uiMondoComuni.worldRefsEditor(c, { player: cfg.isPlayer });
       inp.raceId.addEventListener('change', refresh);
       inp.level.addEventListener('input', refresh);
       if (inp.abilityCap) inp.abilityCap.addEventListener('input', refresh);

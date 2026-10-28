@@ -167,7 +167,7 @@
         }
         // Mondo: reputazione del party attivo con una fazione e operazioni sulle quest della sessione.
         case 'reputazione': return [el('div', { class: 'input-row' },
-          DnD.uiMondo.factionSelect(a.factionId, { empty: '— scegli —', onchange: set('factionId') }),
+          DnD.uiMondoComuni.factionSelect(a.factionId, { empty: '— scegli —', onchange: set('factionId') }),
           el('label', { class: 'inline small' }, 'variazione', numberInput(a.delta, { class: 'qty', min: -200, max: 200, oninput: set('delta', (t) => readNumber(t) || 0) })),
           textInput(a.reason, { placeholder: 'motivazione (registro)', oninput: set('reason') }))];
         case 'quest': {

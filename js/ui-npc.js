@@ -11,7 +11,7 @@
   const K = DnD.mondoDati;
   const A = DnD.attrezzatura;
   const R = DnD.regole;
-  const UM = () => DnD.uiMondo;
+  const UM = () => DnD.uiMondoComuni;
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const opt = (value, text, selected) => el('option', { value, text, selected });
   const SUBTABS = [{ id: 'generale', label: 'Generale' }, { id: 'scheda', label: 'Scheda' }, { id: 'mercante', label: 'Mercante' }, { id: 'dialogo', label: 'Dialogo' }, { id: 'altro', label: 'Quest e routine' }];

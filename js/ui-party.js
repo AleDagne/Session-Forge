@@ -7,7 +7,7 @@
   const { el, clear, field, numberInput, textInput, readNumber, toast } = DnD.ui;
   const P = DnD.party;
   const A = DnD.attrezzatura;
-  const UM = () => DnD.uiMondo;
+  const UM = () => DnD.uiMondoComuni;
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const opt = (value, text, selected) => el('option', { value, text, selected });
   let root = null;

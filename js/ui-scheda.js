@@ -432,7 +432,7 @@
       const portrait = DnD.uiIcone.iconPicker(p.sheet.portrait || p.icon, false, 'Ritratto (separato dalla pedina)');
       const token = DnD.uiIcone.iconPicker(p.icon, false, 'Pedina');
       const grid = DnD.uiCreatureComuni.gridSizeEditor(p.gridSize, { size: () => { const r = st().races.find((x) => x.id === p.raceId); return r ? r.size : null; } });
-      const world = DnD.uiMondo.worldRefsEditor(p, { player: true });
+      const world = DnD.uiMondoComuni.worldRefsEditor(p, { player: true });
       readers.push(() => { const r1 = portrait.read(); if (r1.icon) p.sheet.portrait = r1.icon; const r2 = token.read(); if (r2.icon) p.icon = r2.icon; Object.assign(p, grid.read(), world.read()); });
       const story = DnD.noteEditor.create({ html: p.sheet.story, label: 'Storia del personaggio', onChange: (h) => { p.sheet.story = DnD.note.sanitizeHtml(h); } });
       const ta = (key, label, src) => el('div', { class: 'char-textbox' }, el('textarea', { rows: 3, maxlength: 5000, value: (src || p.sheet)[key], 'aria-label': label, oninput: (e) => { (src || p.sheet)[key] = e.target.value; } }), el('div', { class: 'char-box-label', text: label }));

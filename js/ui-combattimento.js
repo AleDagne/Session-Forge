@@ -835,7 +835,7 @@
       }
     });
     DnD.audio.suonaTutti(sounds, { veloce: fast });
-    if (provoked) { aiPlan = null; if (DnD.uiMondo) DnD.uiMondo.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
+    if (provoked) { aiPlan = null; if (DnD.uiMondo) DnD.uiMondoComuni.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
     if (events.some((e) => e.kind === 'fase')) aiPlan = null;
     render();
     DnD.uiBoss.playEvents(events, root && root.querySelector('.combat-layout'));
@@ -1950,7 +1950,7 @@
           el('div', { class: 'title-with-icon' }, DnD.icone.iconCanvas(x.icon, 28), el('h3', { text: x.name })),
           el('span', { class: 'muted small', text: (x.kind === 'player' ? 'Giocatore' : x.boss ? 'Boss (GS ' + x.creature.cr + ')' : x.creature ? 'Creatura (GS ' + x.creature.cr + ')' : 'Nemico') + ' · Iniziativa ' + x.initiative +
             ' · ' + G.tokenDims(x).w + '×' + G.tokenDims(x).h + (aiOn() ? ' · ' + (x.control === 'ia' ? '🤖 IA' : '👤 Manuale') : '') + (x.hidden ? ' · nascosto' : '') }),
-          DnD.uiMondo ? DnD.uiMondo.factionBadge(x.faction) : null,
+          DnD.uiMondo ? DnD.uiMondoComuni.factionBadge(x.faction) : null,
           x.npc ? el('span', { class: 'tag att-' + x.npc.attitude, title: 'NPC del Mondo', text: '👤 ' + DnD.mondoDati.ATTITUDE_NAMES[x.npc.attitude] }) : null,
           x.hostileTo && x.hostileTo.length ? el('span', { class: 'tag danger', title: 'Ostile per una provocazione', text: '⚔ provocato' }) : null,
           x.joinRound ? el('span', { class: 'badge', text: 'ENTRA AL ROUND ' + x.joinRound }) : null,
