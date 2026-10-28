@@ -431,7 +431,7 @@
     function pageStory() {
       const portrait = DnD.uiIcone.iconPicker(p.sheet.portrait || p.icon, false, 'Ritratto (separato dalla pedina)');
       const token = DnD.uiIcone.iconPicker(p.icon, false, 'Pedina');
-      const grid = DnD.uiCreature.gridSizeEditor(p.gridSize, { size: () => { const r = st().races.find((x) => x.id === p.raceId); return r ? r.size : null; } });
+      const grid = DnD.uiCreatureComuni.gridSizeEditor(p.gridSize, { size: () => { const r = st().races.find((x) => x.id === p.raceId); return r ? r.size : null; } });
       const world = DnD.uiMondo.worldRefsEditor(p, { player: true });
       readers.push(() => { const r1 = portrait.read(); if (r1.icon) p.sheet.portrait = r1.icon; const r2 = token.read(); if (r2.icon) p.icon = r2.icon; Object.assign(p, grid.read(), world.read()); });
       const story = DnD.noteEditor.create({ html: p.sheet.story, label: 'Storia del personaggio', onChange: (h) => { p.sheet.story = DnD.note.sanitizeHtml(h); } });
@@ -682,7 +682,7 @@
       el('div', { class: 'char-game-cols' },
         el('div', {}, el('b', { class: 'small', text: 'Abilità' }), el('ul', { class: 'char-list small' }, c.skills.filter((s) => s.level || s.extra).map((s) => el('li', { text: fmt(s.total) + ' ' + s.skill + (s.level === 2 ? ' (maestria)' : '') })),
           c.skills.every((s) => !s.level && !s.extra) ? el('li', { class: 'muted', text: 'Nessuna competenza.' }) : null)),
-        el('div', {}, el('b', { class: 'small', text: 'Attacchi' }), el('ul', { class: 'char-list small' }, d.weapons.map((w) => el('li', { text: DnD.uiCreature.weaponLabel(w) })), d.weapons.length ? null : el('li', { class: 'muted', text: 'Nessuno.' }))),
+        el('div', {}, el('b', { class: 'small', text: 'Attacchi' }), el('ul', { class: 'char-list small' }, d.weapons.map((w) => el('li', { text: DnD.uiCreatureComuni.weaponLabel(w) })), d.weapons.length ? null : el('li', { class: 'muted', text: 'Nessuno.' }))),
         el('div', {}, el('b', { class: 'small', text: 'Privilegi' }), el('ul', { class: 'char-list small' }, p.sheet.features.map((f) => el('li', { text: f.name + (f.uses.kind === 'volonta' ? '' : ' (' + f.uses.max + ' ' + K.USES_NAMES[f.uses.kind] + ')') })), p.sheet.features.length ? null : el('li', { class: 'muted', text: 'Nessuno.' })))));
     return box;
   }
@@ -709,7 +709,7 @@
         el('div', { class: 'print-cols' },
           el('div', {}, el('h3', { text: 'Tiri salvezza' }), el('ul', {}, R.ABILITIES.map((ab) => el('li', { text: (d.saves.includes(ab) ? '● ' : '○ ') + fmt(d.saveTotals[ab]) + ' ' + R.ABILITY_NAMES[ab] }))),
             el('h3', { text: 'Abilità' }), el('ul', {}, c.skills.map((s) => el('li', { text: (s.level === 2 ? '◉ ' : s.level ? '● ' : '○ ') + fmt(s.total) + ' ' + s.skill })))),
-          el('div', {}, el('h3', { text: 'Attacchi' }), el('ul', {}, d.weapons.map((w) => el('li', { text: DnD.uiCreature.weaponLabel(w) }))),
+          el('div', {}, el('h3', { text: 'Attacchi' }), el('ul', {}, d.weapons.map((w) => el('li', { text: DnD.uiCreatureComuni.weaponLabel(w) }))),
             el('h3', { text: 'Equipaggiamento' }), el('ul', {}, pp.inventory.map((x) => { const e = st().equipment.find((y) => y.id === x.equipmentId); return el('li', { text: x.qty + '× ' + (e ? e.name : '?') + (x.equipped ? ' (equip.)' : '') + (x.attuned ? ' (sintonia)' : '') }); })),
             el('p', { text: 'Monete: ' + A.formatCoins(pp.coins) }),
             el('h3', { text: 'Competenze e linguaggi' }), el('p', { text: pp.sheet.proficiencies.map((x) => x.text).join(', ') || '—' })),

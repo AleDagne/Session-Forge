@@ -314,7 +314,7 @@
     const importInput = el('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: () => {
       const f = importInput.files[0];
       importInput.value = '';
-      if (f) DnD.uiCreature.importOne(f, () => render());
+      if (f) DnD.uiCreatureComuni.importOne(f, () => render());
     } });
     const shown = list().filter((c) => !query || (c.name + ' ' + c.boss.title + ' ' + c.boss.epithet).toLowerCase().includes(query.toLowerCase()));
     const f = forge('I Boss', 'Le minacce che chiudono un capitolo');
@@ -346,7 +346,7 @@
               el('button', { class: 'btn primary', text: 'Scheda', onclick: () => { viewing = c.id; render(); } }),
               el('button', { class: 'btn', text: 'Modifica', onclick: () => { editing = c.id; render(); } }),
               el('button', { class: 'btn', text: 'Duplica', onclick: () => duplicate(c) }),
-              el('button', { class: 'btn', text: 'Esporta', onclick: () => DnD.uiCreature.exportOne(c) }),
+              el('button', { class: 'btn', text: 'Esporta', onclick: () => DnD.uiCreatureComuni.exportOne(c) }),
               el('button', { class: 'btn danger', text: 'Elimina', onclick: () => remove(c) })));
           return card;
         }))

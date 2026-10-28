@@ -11,29 +11,8 @@
   let editing = null;
   let root = null;
 
-  // Canvas con la forma disegnata cella per cella, scalata per stare in `box` pixel.
-  function shapeCanvas(shape, color, box) {
-    const cell = Math.max(3, Math.floor(box / Math.max(shape.w, shape.h)));
-    const canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = shape.w * cell * dpr;
-    canvas.height = shape.h * cell * dpr;
-    canvas.style.width = shape.w * cell + 'px';
-    canvas.style.height = shape.h * cell + 'px';
-    canvas.className = 'shape-canvas';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.fillStyle = color;
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    for (let y = 0; y < shape.h; y++) {
-      for (let x = 0; x < shape.w; x++) {
-        if (!G.isFilled(shape, x, y)) continue;
-        ctx.fillRect(x * cell, y * cell, cell, cell);
-        ctx.strokeRect(x * cell + 0.5, y * cell + 0.5, cell - 1, cell - 1);
-      }
-    }
-    return canvas;
-  }
+  // Anteprima della forma: in ui-tileset.js (serve anche alle anteprime dei modelli).
+  const shapeCanvas = (shape, color, box) => DnD.uiTileset.shapeCanvas(shape, color, box);
 
   function render(container) {
     root = container || root;
@@ -340,5 +319,4 @@
   // Scheda della sezione Asset (vedi ui-asset.js).
   DnD.schede = DnD.schede || {};
   DnD.schede.strutture = { title: 'Strutture', render, reset: () => { editing = null; } };
-  DnD.uiStrutture = { shapeCanvas };
 })(globalThis.DnD = globalThis.DnD || {});

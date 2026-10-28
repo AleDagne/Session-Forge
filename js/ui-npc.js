@@ -383,7 +383,7 @@
         el('p', { text: [DnD.ui.raceName(npc.stats.raceId), DnD.classi.className(npc.stats.classId), 'liv. ' + npc.stats.level].filter(Boolean).join(' · ') }),
         el('p', { text: 'PF ' + npc.stats.maxHp + ' · CA ' + stats.ac.total }),
         el('div', { class: 'stat-line' }, R.ABILITIES.map((ab) => el('span', { class: 'stat' }, el('b', { text: ab }), ' ' + stats.abilities[ab]))),
-        stats.weapons.length ? el('ul', {}, stats.weapons.map((w) => el('li', { text: DnD.uiCreature.weaponLabel(w) }))) : null);
+        stats.weapons.length ? el('ul', {}, stats.weapons.map((w) => el('li', { text: DnD.uiCreatureComuni.weaponLabel(w) }))) : null);
     }
     openDialog('Scheda di ' + npc.name, node, [{ text: 'Chiudi' }]).classList.add('wide');
   }

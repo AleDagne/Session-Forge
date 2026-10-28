@@ -34,7 +34,7 @@
     const importInput = el('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: () => {
       const f = importInput.files[0];
       importInput.value = '';
-      if (f) DnD.uiCreature.importOne(f, () => render());
+      if (f) DnD.uiCreatureComuni.importOne(f, () => render());
     } });
     const shown = list().filter((c) => !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.ctype.includes(query.toLowerCase()));
     root.append(
@@ -62,7 +62,7 @@
               el('button', { class: 'btn primary', text: 'Scheda', onclick: () => { viewing = c.id; render(); } }),
               el('button', { class: 'btn', text: 'Modifica', onclick: () => { editing = c.id; render(); } }),
               el('button', { class: 'btn', text: 'Duplica', onclick: () => duplicate(c) }),
-              el('button', { class: 'btn', text: 'Esporta', onclick: () => DnD.uiCreature.exportOne(c) }),
+              el('button', { class: 'btn', text: 'Esporta', onclick: () => DnD.uiCreatureComuni.exportOne(c) }),
               el('button', { class: 'btn danger', text: 'Elimina', onclick: () => remove(c) })));
         }))
         : el('p', { class: 'empty', text: query ? 'Nessuna creatura per «' + query + '».' : 'Nessuna creatura in questa sessione. Creane una o condividi quelle d\'esempio.' }));
@@ -177,7 +177,7 @@
     const alignment = textInput(m.alignment, { maxlength: 60, list: alignList.id, oninput: (e) => { m.alignment = e.target.value; refresh(); } });
     const cr = el('select', { 'data-key': 'cr', onchange: (e) => { m.cr = e.target.value; refresh(); } }, K.CRS.map((x) => opt(x, x + ' (' + M.formatXp(M.xpForCr(x)) + ' PE)', x === m.cr)));
     const icon = DnD.uiIcone.iconPicker(m.icon, false, null, (x) => gridSize.suggest(x.grid, x.name));
-    const gridSize = DnD.uiCreature.gridSizeEditor(m.gridSize, { size: () => m.size });
+    const gridSize = DnD.uiCreatureComuni.gridSizeEditor(m.gridSize, { size: () => m.size });
     const behavior = DnD.uiIa.behaviorEditor(m.behavior, {
       name: () => m.name.trim(),
       combatant: () => ({ id: 'anteprima', abilities: m.abilities, weapons: [], spellcasting: null, creature: DnD.creature.combatState(DnD.creature.normalizeMonster(m)) }),

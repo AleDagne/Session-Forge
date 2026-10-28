@@ -47,7 +47,7 @@
         el('div', {}, el('b', { text: 'PF ' + c.maxHp }), el('div', { class: 'calc-detail', text: c.hpDetail })),
         el('div', {}, el('b', { text: 'CA ' + stats.ac.total }), el('div', { class: 'calc-detail', text: stats.ac.detail }))),
       el('div', {}, el('b', { text: 'Armi' }),
-        el('ul', { class: 'weapon-list small' }, c.weapons.map((w) => el('li', { text: DnD.uiCreature.weaponLabel(w) })))),
+        el('ul', { class: 'weapon-list small' }, c.weapons.map((w) => el('li', { text: DnD.uiCreatureComuni.weaponLabel(w) })))),
       stats.spell ? el('div', {}, el('b', { text: 'Incantesimi' }),
         el('p', { class: 'small', text: 'CD ' + stats.spell.dc + ' · attacco ' + R.formatModifier(stats.spell.attack) + ' · ' + stats.spell.ability +
           ' · slot ' + (stats.spell.slotsTotal.map((n, i) => (n ? (i + 1) + '°×' + n : '')).filter(Boolean).join(', ') || '—') }),

@@ -1206,7 +1206,7 @@
       value: t.id, selected: t === preferred,
       text: t.name + ' (CA ' + t.ac + ', PF ' + t.hp + '/' + t.maxHp + ')' + (R.isDown(t) ? ' – a terra' : ''),
     })));
-    const weapon = el('select', {}, attacker.weapons.map((w) => el('option', { value: w.id, text: DnD.uiCreature.weaponLabel(w), selected: w.id === preset.weaponId })));
+    const weapon = el('select', {}, attacker.weapons.map((w) => el('option', { value: w.id, text: DnD.uiCreatureComuni.weaponLabel(w), selected: w.id === preset.weaponId })));
     const mode = (value, label) => el('label', { class: 'check' },
       el('input', { type: 'radio', name: 'modo', value, checked: value === (preset.mode || R.MODES.normale) }), ' ' + label);
     const currentMode = () => body.querySelector('input[name="modo"]:checked').value;

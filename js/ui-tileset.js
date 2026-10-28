@@ -255,7 +255,7 @@
   // Miniatura di un modello: tilemap, altrimenti forma o icona.
   function templatePreview(t, kind, size) {
     if (!(t.mode === 'tiles' && t.tiles)) {
-      return kind === 'item' ? DnD.icone.iconCanvas(t.icon, size) : DnD.uiStrutture.shapeCanvas(t, t.color, size);
+      return kind === 'item' ? DnD.icone.iconCanvas(t.icon, size) : shapeCanvas(t, t.color, size);
     }
     const tiles = t.tiles;
     const cell = size / Math.max(tiles.w, tiles.h);
@@ -370,7 +370,32 @@
     return changed;
   }
 
+  // Canvas con la forma disegnata cella per cella, scalata per stare in `box` pixel.
+  function shapeCanvas(shape, color, box) {
+    const cell = Math.max(3, Math.floor(box / Math.max(shape.w, shape.h)));
+    const canvas = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = shape.w * cell * dpr;
+    canvas.height = shape.h * cell * dpr;
+    canvas.style.width = shape.w * cell + 'px';
+    canvas.style.height = shape.h * cell + 'px';
+    canvas.className = 'shape-canvas';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    for (let y = 0; y < shape.h; y++) {
+      for (let x = 0; x < shape.w; x++) {
+        if (!DnD.griglia.isFilled(shape, x, y)) continue;
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+        ctx.strokeRect(x * cell + 0.5, y * cell + 0.5, cell - 1, cell - 1);
+      }
+    }
+    return canvas;
+  }
+
   DnD.uiTileset = {
+    shapeCanvas,
     colors, onThemeChange, sizedCanvas, viewport, sourceImage, drawTile, drawTiles, missingTilesets, tileThumb, templatePreview,
     importImage, addImageSource, refreshTemplates, saveTileset, tilesetFromFile, confirmUse, acceptImages, resolveLegacyTilesets,
   };
