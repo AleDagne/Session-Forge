@@ -690,4 +690,6 @@
   DnD.sezioni = DnD.sezioni || {};
   DnD.sezioni.esplorazione = { title: 'Esplorazione', render, reset: () => { if (tools) tools.reset(); snoozed = false; } };
   DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo, restDialog, muoviOnline };
+  // Il riposo del gruppo durante l'esplorazione (tempo, scorte, incontri) passa da qui anche quando parte da Riposi.
+  DnD.uiRiposi.registraRiposoEsplorazione(restDialog);
 })(globalThis.DnD = globalThis.DnD || {});

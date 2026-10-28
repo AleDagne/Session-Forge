@@ -125,7 +125,7 @@
     const st = DnD.store.state;
     const se = session(st);
     // Con un'esplorazione in corso il riposo del gruppo passa da lì (tempo, scorte, incontri).
-    if (se.exploration && DnD.uiEsplorazione && ids.every((id) => se.exploration.members[id])) { DnD.uiEsplorazione.restDialog(kind); return; }
+    if (se.exploration && riposoEsplorazione && ids.every((id) => se.exploration.members[id])) { riposoEsplorazione(kind); return; }
     const preview = JSON.parse(JSON.stringify(st));
     const subjects = playersOf(preview, ids).map((p) => ({ id: p.id, acc: RP.fromSheet(p, preview) }));
     restDialog({ kind, title, subjects, now: se.restClock, onConfirm: (params) => {
@@ -192,5 +192,10 @@
     ];
   }
 
-  DnD.uiRiposi = { resourcesBox, restDialog, showSummary, restPlayers, restoreAllPlayers, playerDialog, groupButtons, combatActive, BUSY };
+  // Riposo durante un'esplorazione: la finestra la registra ui-esplorazione.js (sta sopra questo modulo).
+  let riposoEsplorazione = null;
+  /** @param {(kind: 'breve'|'lungo') => void} fn */
+  const registraRiposoEsplorazione = (fn) => { riposoEsplorazione = fn; };
+
+  DnD.uiRiposi = { registraRiposoEsplorazione, resourcesBox, restDialog, showSummary, restPlayers, restoreAllPlayers, playerDialog, groupButtons, combatActive, BUSY };
 })(globalThis.DnD = globalThis.DnD || {});
