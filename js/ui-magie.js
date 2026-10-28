@@ -64,8 +64,7 @@
   function exportList() {
     const list = filtered();
     if (!list.length) { toast('Nessun incantesimo da esportare.', 'error'); return; }
-    const IM = DnD.uiImpostazioni;
-    IM.download(JSON.stringify(M.exportFile(list, DnD.config.APP_NAME), null, 2), IM.slug(DnD.config.APP_NAME) + '-incantesimi.json');
+    DnD.ui.download(JSON.stringify(M.exportFile(list, DnD.config.APP_NAME), null, 2), DnD.ui.slug(DnD.config.APP_NAME) + '-incantesimi.json');
     toast(list.length + (list.length === 1 ? ' incantesimo esportato.' : ' incantesimi esportati.'), 'success');
   }
   // Importa incantesimi da file: si aggiungono alla libreria, saltando quelli con un nome già presente.

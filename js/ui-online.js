@@ -1510,6 +1510,8 @@
     vistaGiocatore: () => Boolean(gioc),
     attivo: () => Boolean(master || gioc),
   };
+  // Pulsanti «Online» e «Test connessione» del pannello Impostazioni.
+  DnD.uiImpostazioni.registraOnline({ apri: () => DnD.uiOnline.apri(), testConnessione: () => DnD.uiOnline.testConnessione() });
   // Pulsante «Online» e ping dei giocatori sulla griglia del combattimento.
   DnD.uiCombattimento.registraAgganci({ apriOnline: () => DnD.uiOnline.apri(), disegnaPing: (ctx, view, s) => DnD.uiOnline.disegnaPing(ctx, view, s) });
 })(globalThis.DnD = globalThis.DnD || {});

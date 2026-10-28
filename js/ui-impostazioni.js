@@ -9,6 +9,10 @@
   const ICONS = DnD.config.ICONS;
 
   const { slug, today, download } = DnD.ui;
+  // Pulsanti del gioco online nel pannello: le funzioni le registra ui-online.js (sta sopra le impostazioni).
+  const online = { apri: () => {}, testConnessione: () => {} };
+  /** @param {{apri: () => void, testConnessione: () => void}} fn */
+  const registraOnline = (fn) => { Object.assign(online, fn); };
 
   // Le immagini importate stanno fuori dallo stato: si aggiungono al file quelle effettivamente usate.
   const imagesOf = (part) => DnD.immagini.getMany(DnD.immaginiLib.referencedIds(part));
@@ -144,8 +148,8 @@
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Online' }),
         el('div', { class: 'settings-actions' },
-          el('button', { type: 'button', class: 'btn small', text: '🌐 Online: ospita o unisciti', onclick: () => DnD.uiOnline.apri() }),
-          el('button', { type: 'button', class: 'btn small', text: '🩺 Test connessione', onclick: () => DnD.uiOnline.testConnessione() }))),
+          el('button', { type: 'button', class: 'btn small', text: '🌐 Online: ospita o unisciti', onclick: () => online.apri() }),
+          el('button', { type: 'button', class: 'btn small', text: '🩺 Test connessione', onclick: () => online.testConnessione() }))),
       el('fieldset', { class: 'settings-group' },
         el('legend', { text: 'Dati' }),
         el('div', { class: 'settings-actions' },
@@ -204,5 +208,5 @@
     sync();
   }
 
-  DnD.uiImpostazioni = { mount, exportArchive, exportSession, importFile };
+  DnD.uiImpostazioni = { registraOnline, mount, exportArchive, exportSession, importFile };
 })(globalThis.DnD = globalThis.DnD || {});
