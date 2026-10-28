@@ -128,8 +128,6 @@
     document.title = C.APP_NAME;
     document.getElementById('brand-name').textContent = C.APP_NAME;
     await DnD.archivio.apri(window.localStorage, PROVA ? { backend: backendMemoria() } : undefined);
-    // Immagini importate (TileSet e sfondi delle griglie): stesso database, con cache in memoria.
-    DnD.immagini = DnD.immaginiLib.createStore(DnD.store.blobs);
     // File che sostituiscono i suoni predefiniti: stesso database (chiavi "snd:<id>").
     DnD.audio.collegaArchivio(DnD.store.blobs);
     // Tileset migrati dalle immagini "stirate": la dimensione dei tile si completa leggendo i pixel.

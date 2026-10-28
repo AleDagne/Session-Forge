@@ -167,12 +167,15 @@
   }
 
   /**
-   * Apre l'archivio e lo rende lo store dell'app (DnD.store), letto dall'interfaccia e dalla rete.
+   * Apre l'archivio e lo rende lo store dell'app (DnD.store, con l'archivio delle immagini DnD.immagini), letto
+   * dall'interfaccia e dalla rete.
    * @param {Storage} storage localStorage (o un sostituto)  @param {{backend?: object}} [opts]
    * @returns {Promise<object>} lo store
    */
   async function apri(storage, opts) {
     DnD.store = await openStore(storage, opts);
+    // Immagini importate (TileSet e sfondi delle griglie): stesso database, con cache in memoria.
+    DnD.immagini = DnD.immaginiLib.createStore(DnD.store.blobs);
     return DnD.store;
   }
 
