@@ -1936,6 +1936,7 @@ js/esplorazione.js    logica pura dell'esplorazione: scala, gruppo, movimento, t
 js/ui-biomi.js, js/ui-eventi.js  Asset › Biomi ed Eventi (editor a blocchi, Prova evento, esporta/importa)
 js/ui-mappa-esplorazione.js  disegno di biomi ed eventi; strumenti Bioma ed Evento sulla griglia
 js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cache), strumenti, pannello «Luce e visione», «Vedi come»
+js/ui-colonne.js      disposizione a tre colonne delle schermate di gioco (Combattimento, Esplorazione, Online)
 js/ui-esplorazione.js schermata Esplorazione: gruppo, mappa, tempo e registro, finestra evento, combattimenti
 js/layout-combattimento.js  layout del combattimento: larghezze, colonne aperte/chiuse, schede su schermi stretti
 js/dati/creature.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi
@@ -1960,6 +1961,7 @@ js/ui-tile.js         componente «Taglia immagine in tile» (strutture, oggetti
 js/ui-pannello-tile.js  pannello Tile sotto la griglia: palette, strumenti, livelli
 js/ui-asset.js        sezione Asset con le schede Strutture e Oggetti
 js/ui-attrezzatura.js, js/ui-oggetti-mappa.js  catalogo dell'Attrezzatura, oggetti di mappa e pannello di interazione
+js/ui-creature-comuni.js aiuti delle schede dei Nemici: etichetta d'arma, dimensione sulla griglia, esporta/importa
 js/ui-mostri.js       Nemici › Creature: elenco, form (riusato dai boss), scheda stampabile, stima del CS
 js/ui-boss.js         Nemici › Boss (forgia, anteprima, evocazione) e boss nel combattimento (barre, ombra, effetti)
 js/ui-percorso.js     editor della mappa a nodi del Percorso e modalità Sblocca (canvas)
@@ -1970,6 +1972,7 @@ js/party.js           party (logica pura): membri, un solo party per giocatore, 
 js/citta.js           città (logica pura): atteggiamento, contenuti, segnaposto «Entra in una mappa»
 js/npc.js             NPC (logica pura): istanze, monete, mercante, combattente neutrale, dialoghi, vista dei giocatori
 js/quest.js           quest (logica pura): requisiti, diario, obiettivi, consegna, scadenza, vista dei giocatori
+js/ui-mondo-comuni.js accesso al Mondo e componenti comuni (fazioni, città, reputazione) usati da più sezioni
 js/ui-mondo.js        sezione Mondo: Fazioni, Città, componenti comuni (fazione, reputazione, suoni)
 js/ui-party.js        Giocatori › Party: elenco, form, dettaglio con reputazione e diario
 js/ui-npc.js          Mondo › NPC: editor, pannello sulla griglia, dialogo giocabile, finestra di scambio
