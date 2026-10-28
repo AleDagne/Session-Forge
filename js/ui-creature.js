@@ -551,7 +551,7 @@
   // Esporta una singola creatura (nemico standard o creatura del Manuale) come file JSON.
   function exportOne(c) {
     const data = { app: DnD.config.APP_NAME, kind: 'creatura', version: DnD.dati.VERSION, exportedAt: new Date().toISOString(), creature: c };
-    DnD.uiImpostazioni.download(JSON.stringify(data, null, 2), DnD.uiImpostazioni.slug(DnD.config.APP_NAME) + '-creatura-' + DnD.uiImpostazioni.slug(c.name) + '.json');
+    DnD.ui.download(JSON.stringify(data, null, 2), DnD.ui.slug(DnD.config.APP_NAME) + '-creatura-' + DnD.ui.slug(c.name) + '.json');
     toast('«' + c.name + '» esportato.', 'success');
   }
   // Importa una creatura da file: diventa un nemico della sessione corrente (con un id nuovo).

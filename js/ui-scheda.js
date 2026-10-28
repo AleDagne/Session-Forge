@@ -800,7 +800,7 @@
   // ---------- Esporta / importa un personaggio ----------
   function exportCharacter(p) {
     const data = S.exportCharacter(p, st());
-    DnD.uiImpostazioni.download(JSON.stringify(data, null, 2), DnD.uiImpostazioni.slug(DnD.config.APP_NAME) + '-personaggio-' + DnD.uiImpostazioni.slug(p.name) + '.json');
+    DnD.ui.download(JSON.stringify(data, null, 2), DnD.ui.slug(DnD.config.APP_NAME) + '-personaggio-' + DnD.ui.slug(p.name) + '.json');
     toast('«' + p.name + '» esportato.', 'success');
   }
   async function importCharacter(file, onDone) {

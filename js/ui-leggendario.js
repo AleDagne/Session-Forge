@@ -415,8 +415,8 @@
             return null;
           }) }),
           el('button', { class: 'btn small', text: '⬇ Carica modello…', onclick: () => templateDialog(id) }),
-          el('button', { class: 'btn small', text: 'Esporta JSON', onclick: () => DnD.uiImpostazioni.download(JSON.stringify({ app: DnD.config.APP_NAME, kind: 'percorso', version: DnD.dati.VERSION, path: cur().legend.path }, null, 2),
-            DnD.uiImpostazioni.slug(DnD.config.APP_NAME) + '-percorso-' + DnD.uiImpostazioni.slug(cur().legend.path.name) + '.json') }),
+          el('button', { class: 'btn small', text: 'Esporta JSON', onclick: () => DnD.ui.download(JSON.stringify({ app: DnD.config.APP_NAME, kind: 'percorso', version: DnD.dati.VERSION, path: cur().legend.path }, null, 2),
+            DnD.ui.slug(DnD.config.APP_NAME) + '-percorso-' + DnD.ui.slug(cur().legend.path.name) + '.json') }),
           el('button', { class: 'btn small', text: 'Importa JSON', onclick: () => importInput.click() }), importInput)),
       pathWidget.node);
     pathWidget.refresh();

@@ -74,7 +74,7 @@
   }
   function exportOne(e) {
     const data = { app: DnD.config.APP_NAME, kind: 'evento', version: DnD.dati.VERSION, exportedAt: new Date().toISOString(), event: e };
-    DnD.uiImpostazioni.download(JSON.stringify(data, null, 2), DnD.uiImpostazioni.slug(DnD.config.APP_NAME) + '-evento-' + DnD.uiImpostazioni.slug(e.name) + '.json');
+    DnD.ui.download(JSON.stringify(data, null, 2), DnD.ui.slug(DnD.config.APP_NAME) + '-evento-' + DnD.ui.slug(e.name) + '.json');
   }
   async function importOne(file) {
     try {

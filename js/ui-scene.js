@@ -646,7 +646,7 @@
   }
   function exportEncounter(e) {
     const data = { app: DnD.config.APP_NAME, kind: 'incontro', version: DnD.dati.VERSION, exportedAt: new Date().toISOString(), encounter: e };
-    DnD.uiImpostazioni.download(JSON.stringify(data, null, 2), DnD.uiImpostazioni.slug(DnD.config.APP_NAME) + '-incontro-' + DnD.uiImpostazioni.slug(e.name) + '.json');
+    DnD.ui.download(JSON.stringify(data, null, 2), DnD.ui.slug(DnD.config.APP_NAME) + '-incontro-' + DnD.ui.slug(e.name) + '.json');
     toast('«' + e.name + '» esportato.', 'success');
   }
   async function importEncounter(file) {

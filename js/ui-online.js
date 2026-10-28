@@ -498,7 +498,7 @@
   }
   function scaricaRegistro() {
     if (!master) return;
-    DnD.uiImpostazioni.download(['Sessione online (master) — ' + new Date().toLocaleString('it-IT'), ''].concat(master.s.registroCompleto()).join('\n'), 'sessione-online-master-' + DnD.uiImpostazioni.today() + '.txt', 'text/plain');
+    DnD.ui.download(['Sessione online (master) — ' + new Date().toLocaleString('it-IT'), ''].concat(master.s.registroCompleto()).join('\n'), 'sessione-online-master-' + DnD.ui.today() + '.txt', 'text/plain');
   }
 
   // Pannello del master: barra in basso a sinistra, si apre con giocatori, interruttori, richieste e chat.
@@ -1388,7 +1388,7 @@
   // Riepilogo di fine partita: solo ciò che il giocatore ha ricevuto (già filtrato dal master).
   function esportaRiepilogo() {
     if (!gioc) return;
-    DnD.uiImpostazioni.download(gioc.s.riepilogo(), 'sessione-online-' + DnD.uiImpostazioni.today() + '.txt', 'text/plain');
+    DnD.ui.download(gioc.s.riepilogo(), 'sessione-online-' + DnD.ui.today() + '.txt', 'text/plain');
   }
   function fineGiocatore(motivo, stato) {
     if (!gioc) return;

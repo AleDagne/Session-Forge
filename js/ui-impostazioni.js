@@ -8,18 +8,7 @@
   const I = DnD.impostazioni;
   const ICONS = DnD.config.ICONS;
 
-  const slug = (text) => text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'dati';
-  const today = () => new Date().toISOString().slice(0, 10);
-
-  // Scarica un file (JSON di base; anche note .html e .txt e singole creature).
-  function download(text, filename, type) {
-    const blob = new Blob([text], { type: type || 'application/json' });
-    const a = el('a', { href: URL.createObjectURL(blob), download: filename });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }
+  const { slug, today, download } = DnD.ui;
 
   // Le immagini importate stanno fuori dallo stato: si aggiungono al file quelle effettivamente usate.
   const imagesOf = (part) => DnD.immagini.getMany(DnD.immaginiLib.referencedIds(part));
@@ -215,5 +204,5 @@
     sync();
   }
 
-  DnD.uiImpostazioni = { download, slug, today, mount, exportArchive, exportSession, importFile };
+  DnD.uiImpostazioni = { mount, exportArchive, exportSession, importFile };
 })(globalThis.DnD = globalThis.DnD || {});
