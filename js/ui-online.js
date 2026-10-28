@@ -1036,7 +1036,7 @@
       chiedi('muoviGruppo', { x: cell.x, y: cell.y }, 'Gruppo verso ' + DnD.griglia.cellLabel(cell.x, cell.y));
     });
     d.center = el('div', { class: 'combat-center' }, d.vuoto, gioc.grid.node, el('p', { class: 'muted small online-hint', text: 'Trascina la tua pedina per chiedere lo spostamento · clic prolungato = ping a tutti' }));
-    const cols = DnD.uiCombattimento.columns({
+    const cols = DnD.uiColonne.columns({
       key: 'dnd-battaglie:layout-online',
       left: { title: 'Tu', body: [d.azioni, d.esplora, d.scheda, d.mondo, d.cards] },
       center: d.center,
@@ -1510,4 +1510,6 @@
     vistaGiocatore: () => Boolean(gioc),
     attivo: () => Boolean(master || gioc),
   };
+  // Pulsante «Online» e ping dei giocatori sulla griglia del combattimento.
+  DnD.uiCombattimento.registraAgganci({ apriOnline: () => DnD.uiOnline.apri(), disegnaPing: (ctx, view, s) => DnD.uiOnline.disegnaPing(ctx, view, s) });
 })(globalThis.DnD = globalThis.DnD || {});

@@ -657,7 +657,7 @@
       el('button', { class: 'btn small primary', text: 'Combatti qui', onclick: battleOnMap }),
       e.stack.length ? el('button', { class: 'btn small', text: '↩ Esci', onclick: () => { mutate((ww) => { X.exitMap(ww.ex); X.log(ww, '↩ Il gruppo esce.', 'mappa'); }); } }) : null) : null;
     const center = el('div', { class: 'combat-center' }, banner, tools.node, g.node);
-    const cols = DnD.uiCombattimento.columns({
+    const cols = DnD.uiColonne.columns({
       key: LAYOUT_KEY,
       left: { title: 'Gruppo', body: left },
       center,
@@ -692,4 +692,6 @@
   DnD.uiEsplorazione = { combatBanner, onCombatEnded, getGrid: () => grid, undo, redo, restDialog, muoviOnline };
   // Il riposo del gruppo durante l'esplorazione (tempo, scorte, incontri) passa da qui anche quando parte da Riposi.
   DnD.uiRiposi.registraRiposoEsplorazione(restDialog);
+  // Il combattimento mostra lo striscione dell'esplorazione e le passa la fine dello scontro.
+  DnD.uiCombattimento.registraAgganci({ bannerEsplorazione: combatBanner, fineCombattimento: onCombatEnded });
 })(globalThis.DnD = globalThis.DnD || {});

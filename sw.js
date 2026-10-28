@@ -1,6 +1,6 @@
 // Service worker minimale: mette in cache i file dell'app per l'uso offline.
 // Aumenta CACHE quando modifichi i file, così i client scaricano la nuova versione.
-const CACHE = 'session-forge-v71';
+const CACHE = 'session-forge-v72';
 const FILES = [
   './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './css/dadi.css', './icons/icon.svg', './js/impostazioni.js',
   './js/config.js', './js/dati/misure.js', './js/modello.js', './js/dadi.js', './js/regole.js', './js/statistiche.js', './js/combattenti.js', './js/dati/classi.js', './js/magie.js', './js/dati/equipaggiamento.js', './js/dati/nomi.js', './js/dati/colori.js',
@@ -11,7 +11,7 @@ const FILES = [
   './js/ui-icone.js', './js/ui-razze.js', './js/ui-magie.js', './js/ui-incantesimi.js', './js/ui-asset.js', './js/ui-oggetti-mappa.js',
   './js/ui-ia.js', './js/ui-mondo-comuni.js', './js/ui-creature-comuni.js', './js/ui-scheda.js', './js/ui-creature.js', './js/ui-mostri.js', './js/ui-boss.js', './js/ui-percorso.js', './js/ui-leggendario.js',
   './js/ui-generatore.js', './js/ui-tileset.js', './js/ui-tile.js', './js/ui-strutture.js', './js/ui-attrezzatura.js', './js/ui-biomi.js',
-  './js/ui-eventi.js', './js/ui-mondo.js', './js/ui-party.js', './js/ui-npc.js', './js/ui-quest.js', './js/ui-scene.js', './js/note-editor.js', './js/ui-note.js', './js/ui-dadi.js', './js/ui-griglia.js', './js/ui-pannello-tile.js', './js/ui-visione.js',
+  './js/ui-eventi.js', './js/ui-mondo.js', './js/ui-party.js', './js/ui-npc.js', './js/ui-quest.js', './js/ui-scene.js', './js/note-editor.js', './js/ui-note.js', './js/ui-dadi.js', './js/ui-colonne.js', './js/ui-griglia.js', './js/ui-pannello-tile.js', './js/ui-visione.js',
   './js/ui-mappa-esplorazione.js', './js/ui-editor-griglie.js', './js/ui-combattimento.js', './js/ui-esplorazione.js', './js/ui-sessioni.js',
   './js/ui-suoni.js', './js/ui-impostazioni.js', './js/ui-online.js', './js/app.js',
 ];
