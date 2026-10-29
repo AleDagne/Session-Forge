@@ -1939,6 +1939,7 @@ js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cac
 js/ui-colonne.js      disposizione a tre colonne delle schermate di gioco (Combattimento, Esplorazione, Online)
 js/ui-griglia-disegno.js colori del canvas dal tema e primitive di disegno della griglia (pedine, strutture, zone, TileMap, percorsi)
 js/ui-griglia-pannello.js pannello laterale della griglia: combattenti, strutture, oggetti, NPC e Attrezzatura da scegliere o trascinare
+js/ui-griglia-puntatore.js puntatore e tastiera sulla griglia: clic, trascinamento, strumenti, zoom, menu contestuale, scorciatoie
 js/ui-esplorazione.js schermata Esplorazione: gruppo, mappa, tempo e registro, finestra evento, combattimenti
 js/layout-combattimento.js  layout del combattimento: larghezze, colonne aperte/chiuse, schede su schermi stretti
 js/dati/creature.js   tabelle delle creature (GS, PE, taglie, danni, condizioni, abilità, Guida del DM) ed esempi
