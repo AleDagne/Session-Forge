@@ -18,11 +18,28 @@
   // Funzioni dei moduli sopra il combattimento (vedi registraAgganci in fondo).
   const agganci = { bannerEsplorazione: null, fineCombattimento: null, apriOnline: () => {}, disegnaPing: null };
 
-  let root = null;
+  // Stato della schermata (radice, combattente selezionato, griglia, visione, dadi, IA, avvisi…): un solo oggetto,
+  // così le sezioni in altri file (preparazione, incantesimi, azioni delle creature…) lo condividono.
+  const S = {
+    root: null,
+    selectedId: null, // combattente selezionato (scheda e pedina)
+    grid: null, // widget della griglia: creato una volta, così vista e annulla/ripeti sopravvivono ai render
+    vision: null, // luce, visione e nebbia di guerra sulla griglia (ui-visione.js)
+    diceRec: null,
+    lastTiro: null, // ultimo tiro mostrato (gioco online: va anche ai giocatori)
+    rngProva: null, // generatore deterministico (solo test.html, con online.dadiDiProva)
+    pendingAggr: null, // { attackerId, targetIds } dell'azione ostile in corso (provocazioni, uccisioni)
+    overNotified: null, // id del combattimento per cui si è già annunciata la fine
+    sceneEndNotified: '', // combattimento ed esito della condizione di fine della scena già annunciati
+    provoked: false,
+    aiPlan: null, // { forId, round, plan } del turno in corso
+    aiPaused: false, // modalità automatica in pausa
+    aiBusy: false, // esecuzione in corso (animazione)
+    aiTimer: null,
+    hurtLines: [],
+    setupInput: null,
+  };
   const setup = { players: new Set(), npcs: {}, gridId: '', control: {}, faction: {}, simulated: false }; // selezione del setup (non persistita)
-  let selectedId = null; // combattente selezionato (scheda e pedina)
-  let grid = null;       // widget della griglia: creato una volta, così vista e annulla/ripeti sopravvivono ai render
-  let vision = null;     // luce, visione e nebbia di guerra sulla griglia (ui-visione.js)
 
   const session = (st) => DnD.sessioni.current(st || DnD.store.state);
   const combat = () => session().combat;
@@ -65,8 +82,8 @@
   }
   // Luce sulla pedina: icona e nome del livello («☀ luce intensa»).
   function lightText(x) {
-    if (!x.pos || !vision) return '';
-    const lv = vision.levelAt(x.pos.x, x.pos.y);
+    if (!x.pos || !S.vision) return '';
+    const lv = S.vision.levelAt(x.pos.x, x.pos.y);
     const src = x.light && x.light.on ? V.sourceById(x.light.kind) : null;
     return DnD.visioneDati.LEVEL_ICONS[lv] + ' ' + DnD.visioneDati.LEVEL_NAMES[lv].toLowerCase() + (src ? ' (' + src.icon + ' ' + src.name.toLowerCase() + ')' : '');
   }
@@ -149,13 +166,13 @@
     mutate((c) => {
       const t = c.combatants.find((y) => y.id === id);
       t.moveMode = mode;
-      aiPlan = null;
+      S.aiPlan = null;
       log(c, 'movimento', t.name + ': modalità di movimento ' + Mv.MODE_NAMES[mode].toLowerCase() + ' (' + Mv.feetIn(t, mode) + ' ft).');
     });
   }
   // Finestra delle condizioni (applica, modifica, togli, concentrazione, tiri contro la morte): ui-condizioni.js.
   function conditionsDialog(x) {
-    UC().dialog(x.id, { mutate, log, byId, combatants: () => combat().combatants, after: () => { aiPlan = null; } });
+    UC().dialog(x.id, { mutate, log, byId, combatants: () => combat().combatants, after: () => { S.aiPlan = null; } });
   }
   // Riquadro del movimento nella scheda: velocità e residuo con il motivo, condizioni, azioni.
   function movementBox(x) {
@@ -176,21 +193,18 @@
   // ---------- Dadi animati ----------
   // Ogni azione registra i dadi che tira (risultato deciso prima, con lo stesso generatore senza bias); finita
   // l'azione, l'overlay li mostra con il riepilogo. Il log ha già tutto anche se l'animazione è saltata o spenta.
-  let diceRec = null;
-  let lastTiro = null; // ultimo tiro mostrato (gioco online: va anche ai giocatori)
-  const dice = () => (diceRec ? diceRec.rng : DnD.dadi.randomInt);
-  let rngProva = null; // generatore deterministico (solo test.html, con online.dadiDiProva)
-  const beginDice = () => { diceRec = DnD.dadi.registratore(rngProva || undefined); };
+  const dice = () => (S.diceRec ? S.diceRec.rng : DnD.dadi.randomInt);
+  const beginDice = () => { S.diceRec = DnD.dadi.registratore(S.rngProva || undefined); };
   function endDice(label, text) {
-    const r = diceRec;
-    diceRec = null;
+    const r = S.diceRec;
+    S.diceRec = null;
     if (!r) return;
     const c = combat();
     // Senza riepilogo: l'ultima riga del log (l'esito dell'azione).
     const last = c && c.log.length ? c.log[c.log.length - 1].text : '';
     // Turni automatici dell'IA: coda veloce, il gioco non rallenta.
-    lastTiro = r.tiro(label, 'combattimento', { testo: text || last });
-    if (lastTiro) DnD.uiDadi.mostraTiro(lastTiro, { veloce: Boolean(c && c.ai && c.ai.simulated && c.ai.mode === 'auto') });
+    S.lastTiro = r.tiro(label, 'combattimento', { testo: text || last });
+    if (S.lastTiro) DnD.uiDadi.mostraTiro(S.lastTiro, { veloce: Boolean(c && c.ai && c.ai.simulated && c.ai.mode === 'auto') });
   }
 
   // ---------- Combattimento simulato (IA) ----------
@@ -209,10 +223,7 @@
   const relTable = (st) => FZ.table(worldView(st).factions);
   const factionName = (id) => { const f = worldView().factions.find((x) => x.id === id); return f ? f.name : 'fazione eliminata'; };
   const partyFaction = (st) => { const v = worldView(st); const p = DnD.party.active(v.parties, v.world); return p ? p.factionId : 'giocatori'; };
-  let pendingAggr = null;   // { attackerId, targetIds } dell'azione ostile in corso (provocazioni, uccisioni)
-  let overNotified = null;  // id del combattimento per cui si è già annunciata la fine
-  let sceneEndNotified = '';  // combattimento ed esito della condizione di fine della scena già annunciati
-  const noteAggression = (attackerId, targetIds) => { pendingAggr = { attackerId, targetIds: targetIds.filter(Boolean) }; };
+  const noteAggression = (attackerId, targetIds) => { S.pendingAggr = { attackerId, targetIds: targetIds.filter(Boolean) }; };
 
   // Copia di un NPC piazzata sulla griglia -> combattente (stessa posizione, PF e stato della copia).
   function npcItemToCombatant(st, it, hostile) {
@@ -281,10 +292,9 @@
     v.world.provocations.push({ id: DnD.dadi.uid(), at: new Date().toISOString(), text: lines[0] || '', combatId: c.id,
       factions: Object.fromEntries(res.factionsBefore.map((f) => [f.id, f.relations])), combatants: before, repIds, reverted: false });
     if (v.world.provocations.length > 50) v.world.provocations.splice(0, v.world.provocations.length - 50);
-    provoked = true;
+    S.provoked = true;
     return lines;
   }
-  let provoked = false;
 
   // Annulla l'ultima provocazione che ha toccato il combattente (decisione del master).
   function revertProvocation(x) {
@@ -298,7 +308,7 @@
       for (const id of pr.repIds || []) FZ.revertReputation(w.world, st.parties, id);
       const p = w.world.provocations.find((y) => y.id === pr.id);
       if (p) p.reverted = true;
-      aiPlan = null;
+      S.aiPlan = null;
       log(c, 'sistema', '↶ Il master annulla la provocazione: ' + (pr.text || '') + ' (relazioni, ostilità e reputazione ripristinate).');
     });
   }
@@ -319,7 +329,7 @@
           // Prova di Persuasione: le condizioni di chi parla (avvelenato, spaventato…) danno svantaggio.
           const r = R.rollSave({ bonus: p ? DnD.leggendario.checkBonus(p, 'Persuasione', false, DnD.store.state) : 0, mode: C.checkMods(who).mode, dc: t.npc.calmDc }, dice());
           log(c, r.success ? 'successo' : 'fallimento', who.name + ' prova a calmare ' + t.name + ': Persuasione ' + r.total + ' contro CD ' + t.npc.calmDc + ' → ' + (r.success ? NP.calm(t) : 'non ci riesce.'));
-          aiPlan = null;
+          S.aiPlan = null;
         });
         endDice('Calma ' + x.name, '');
       } },
@@ -345,14 +355,14 @@
     // Combattimento da una scena: condizioni di fine dell'incontro (vittoria, sconfitta, fuga, round, obiettivo).
     const fromScene = c.phase === 'attivo' ? DnD.scene.ofCombat(st, c) : null;
     const end = fromScene ? DnD.scene.endCheck(c, fromScene.enc, relTable(st), pf) : null;
-    if (end && sceneEndNotified !== c.id + end.outcome) {
-      sceneEndNotified = c.id + end.outcome;
+    if (end && S.sceneEndNotified !== c.id + end.outcome) {
+      S.sceneEndNotified = c.id + end.outcome;
       lines.push('🎬 Condizione di fine dell\'incontro: ' + DnD.sceneDati.OUTCOME_NAMES[end.outcome] + ' (' + end.text + '). Termina il combattimento per il riepilogo della scena.');
     }
-    if (c.phase === 'attivo' && overNotified !== c.id) {
+    if (c.phase === 'attivo' && S.overNotified !== c.id) {
       const over = FZ.combatOver(c.combatants, relTable(st), pf);
       if (over.over) {
-        overNotified = c.id;
+        S.overNotified = c.id;
         lines.push('🏁 Tutte le fazioni ostili al party sono sconfitte o in fuga: il combattimento può terminare.');
       }
     }
@@ -372,7 +382,7 @@
           const t = c.combatants.find((y) => y.id === x.id);
           t.prevFaction = t.faction;
           t.faction = sel.value;
-          aiPlan = null;
+          S.aiPlan = null;
           log(c, 'sistema', '⚑ ' + t.name + ' cambia fazione: ' + factionName(t.prevFaction) + ' → ' + factionName(t.faction) + '.');
         });
         return undefined;
@@ -386,7 +396,7 @@
       const from = t.faction;
       t.faction = t.prevFaction;
       t.prevFaction = '';
-      aiPlan = null;
+      S.aiPlan = null;
       log(c, 'sistema', '↶ ' + t.name + ' torna alla fazione ' + factionName(t.faction) + ' (era ' + factionName(from) + ').');
     });
   }
@@ -397,10 +407,6 @@
     const warn = FZ.areaWarnings(caster, targetIds.map(byId).filter(Boolean), relTable());
     return !warn.length || confirm('Attenzione: l\'area colpisce anche ' + warn.map((w) => w.name + ' (' + DnD.mondoDati.LEVEL_NAMES[w.level].toLowerCase() + ')').join(', ') + '. Continuare?');
   }
-  let aiPlan = null;          // { forId, round, plan } del turno in corso
-  let aiPaused = false;       // modalità automatica in pausa
-  let aiBusy = false;         // esecuzione in corso (animazione)
-  let aiTimer = null;
   const aiHistory = IA.turnHistory(); // annulla/ripeti: un intero turno IA = una sola azione
   const aiOn = () => Boolean(combat() && combat().ai && combat().ai.simulated);
   function aiState() {
@@ -419,11 +425,11 @@
     const cur = c.currentId ? byId(c.currentId) : null;
     if (!cur || cur.control !== 'ia' || R.isDown(cur)) return null;
     const sig = aiSignature(c);
-    const target = force ? force.targetId || null : aiPlan && aiPlan.forId === cur.id && aiPlan.round === c.round ? aiPlan.targetId : null;
-    if (force || !aiPlan || aiPlan.sig !== sig) {
-      aiPlan = { forId: cur.id, round: c.round, sig, targetId: target, plan: IA.pianificaTurno(aiState(), cur, target ? { forceTargetId: target } : {}) };
+    const target = force ? force.targetId || null : S.aiPlan && S.aiPlan.forId === cur.id && S.aiPlan.round === c.round ? S.aiPlan.targetId : null;
+    if (force || !S.aiPlan || S.aiPlan.sig !== sig) {
+      S.aiPlan = { forId: cur.id, round: c.round, sig, targetId: target, plan: IA.pianificaTurno(aiState(), cur, target ? { forceTargetId: target } : {}) };
     }
-    return aiPlan.plan;
+    return S.aiPlan.plan;
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // Animazione dello spostamento: la pedina avanza cella per cella (solo in memoria, poi si salva una volta).
@@ -432,17 +438,17 @@
       const x = byId(id);
       if (!x) return;
       x.pos = { x: p.x, y: p.y };
-      if (grid) grid.requestDraw();
+      if (S.grid) S.grid.requestDraw();
       await sleep(ms);
     }
   }
   // Esegue il piano: spostamento, riga di log con la motivazione (e i punteggi per "Perché?"), poi l'azione
   // con le funzioni esistenti; infine passa al turno successivo. Tutto il turno si annulla in un colpo.
   async function executePlan(plan, animate) {
-    if (aiBusy || !plan || !combat()) return;
+    if (S.aiBusy || !plan || !combat()) return;
     const x = byId(plan.combatantId);
     if (!x) return;
-    aiBusy = true;
+    S.aiBusy = true;
     const before = clone(combat());
     try {
       const end = plan.path[plan.path.length - 1];
@@ -480,19 +486,19 @@
         performCreatureAction(x.id, a.id, steps, a.mode);
       } else if (a.kind === 'incantesimo') performCast(x.id, a.id, a.slotLevel, a.targetIds, a.mode);
     } finally {
-      aiBusy = false;
+      S.aiBusy = false;
     }
-    aiPlan = null;
+    S.aiPlan = null;
     nextTurn();
     aiHistory.push(before, clone(combat()));
     render();
   }
   function restoreCombat(state, text) {
     if (!state) return;
-    aiPaused = true;
-    clearTimeout(aiTimer);
+    S.aiPaused = true;
+    clearTimeout(S.aiTimer);
     DnD.store.update((st) => { session(st).combat = clone(state); });
-    aiPlan = null;
+    S.aiPlan = null;
     render();
     toast(text);
   }
@@ -500,28 +506,28 @@
     const before = clone(combat());
     const cur = byId(combat().currentId);
     mutate((c) => log(c, 'ia', '🤖 ' + cur.name + ' salta il turno (scelta del master).'));
-    aiPlan = null;
+    S.aiPlan = null;
     nextTurn();
     aiHistory.push(before, clone(combat()));
   }
   // Modalità automatica: il turno IA parte da solo dopo il ritardo; si ferma al turno di un combattente
   // manuale, con la Pausa, o quando non ci sono più avversari.
   function scheduleAuto() {
-    clearTimeout(aiTimer);
-    aiTimer = null;
+    clearTimeout(S.aiTimer);
+    S.aiTimer = null;
     const c = combat();
-    if (!c || c.phase !== 'attivo' || !aiOn() || c.ai.mode !== 'auto' || aiPaused || aiBusy) return;
+    if (!c || c.phase !== 'attivo' || !aiOn() || c.ai.mode !== 'auto' || S.aiPaused || S.aiBusy) return;
     const plan = currentAiPlan();
     if (!plan) return;
     if (plan.action.kind === 'nessuna' && /nessun avversario/.test(plan.reason)) {
-      aiPaused = true;
+      S.aiPaused = true;
       toast('Combattimento simulato in pausa: nessun avversario rimasto.');
       render();
       return;
     }
-    aiTimer = setTimeout(() => {
-      aiTimer = null;
-      if (root && root.isConnected && !aiPaused && combat() && combat().ai.mode === 'auto') executePlan(currentAiPlan(), true);
+    S.aiTimer = setTimeout(() => {
+      S.aiTimer = null;
+      if (S.root && S.root.isConnected && !S.aiPaused && combat() && combat().ai.mode === 'auto') executePlan(currentAiPlan(), true);
     }, c.ai.delay * 1000);
   }
 
@@ -531,14 +537,14 @@
     const ai = c.ai;
     const setAi = (patch) => { mutate((cc) => Object.assign(cc.ai, patch)); };
     const head = el('div', { class: 'ai-controls' },
-      el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: ai.simulated, onchange: (e) => { aiPaused = false; aiPlan = null; setAi({ simulated: e.target.checked }); } }), ' Combattimento simulato'),
-      ai.simulated ? el('select', { 'aria-label': 'Modalità', onchange: (e) => { aiPaused = false; setAi({ mode: e.target.value }); } },
+      el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: ai.simulated, onchange: (e) => { S.aiPaused = false; S.aiPlan = null; setAi({ simulated: e.target.checked }); } }), ' Combattimento simulato'),
+      ai.simulated ? el('select', { 'aria-label': 'Modalità', onchange: (e) => { S.aiPaused = false; setAi({ mode: e.target.value }); } },
         KI.MODES.map((m) => el('option', { value: m, text: KI.MODE_NAMES[m], selected: m === ai.mode }))) : null,
       ai.simulated && ai.mode === 'auto' ? el('label', { class: 'inline small' }, 'Ritardo',
         el('input', { type: 'range', min: 0, max: 3, step: 0.5, value: String(ai.delay), 'aria-label': 'Ritardo (secondi)',
           onchange: (e) => setAi({ delay: Number(e.target.value) }) }), ai.delay + ' s') : null,
-      ai.simulated && ai.mode === 'auto' ? el('button', { type: 'button', class: 'btn small', text: aiPaused ? '▶ Riprendi' : '⏸ Pausa',
-        onclick: () => { aiPaused = !aiPaused; render(); } }) : null,
+      ai.simulated && ai.mode === 'auto' ? el('button', { type: 'button', class: 'btn small', text: S.aiPaused ? '▶ Riprendi' : '⏸ Pausa',
+        onclick: () => { S.aiPaused = !S.aiPaused; render(); } }) : null,
       ai.simulated ? el('button', { type: 'button', class: 'btn small', text: '↶ Annulla turno IA', disabled: !aiHistory.canUndo(), onclick: () => restoreCombat(aiHistory.undo(), 'Turno IA annullato.') }) : null,
       ai.simulated ? el('button', { type: 'button', class: 'btn small', text: '↷ Ripeti', disabled: !aiHistory.canRedo(), onclick: () => restoreCombat(aiHistory.redo(), 'Turno IA ripetuto.') }) : null);
     if (!ai.simulated) return el('section', { class: 'panel ai-panel' }, head);
@@ -550,10 +556,10 @@
         el('p', { class: 'ai-reason', text: (ai.mode === 'manuale' ? '💡 Suggerimento: ' : '🤖 ') + plan.reason }),
         plan.reminders.length ? el('ul', { class: 'muted small' }, plan.reminders.map((r) => el('li', { text: r }))) : null,
         el('div', { class: 'head-actions' },
-          ai.mode !== 'manuale' ? el('button', { type: 'button', class: 'btn small primary', text: '▶ Esegui', disabled: aiBusy, onclick: () => executePlan(plan, ai.mode === 'auto') }) : null,
+          ai.mode !== 'manuale' ? el('button', { type: 'button', class: 'btn small primary', text: '▶ Esegui', disabled: S.aiBusy, onclick: () => executePlan(plan, ai.mode === 'auto') }) : null,
           el('button', { type: 'button', class: 'btn small', text: '🎯 Cambia bersaglio', onclick: () => {
-            if (!grid) return;
-            grid.pickTarget((id) => { if (id && byId(id) && id !== plan.combatantId) { currentAiPlan({ targetId: id }); render(); } });
+            if (!S.grid) return;
+            S.grid.pickTarget((id) => { if (id && byId(id) && id !== plan.combatantId) { currentAiPlan({ targetId: id }); render(); } });
           } }),
           ai.mode !== 'manuale' ? el('button', { type: 'button', class: 'btn small', text: 'Salta turno', onclick: skipTurn }) : null,
           el('button', { type: 'button', class: 'btn small', text: '↻ Ricalcola', onclick: () => { currentAiPlan({}); render(); } }),
@@ -604,14 +610,14 @@
   }
 
   function getGrid() {
-    if (!grid) {
-      vision = DnD.uiVisione.create({ getDoc: () => combat(), widget: () => grid, mode: 'combattimento' });
-      grid = DnD.uiGriglia.create({
+    if (!S.grid) {
+      S.vision = DnD.uiVisione.create({ getDoc: () => combat(), widget: () => S.grid, mode: 'combattimento' });
+      S.grid = DnD.uiGriglia.create({
         getDoc: combat,
         // Spostamenti e strumenti della griglia: la nebbia dei giocatori si aggiorna subito.
         update: (fn) => DnD.store.update(() => { fn(combat()); visionAfter(combat()); }),
-        painter: vision.painter,
-        vision,
+        painter: S.vision.painter,
+        vision: S.vision,
         tools: ['seleziona', 'misura'],
         showCombatants: true,
         onSelect: (id) => selectCombatant(id, 'grid'),
@@ -624,9 +630,9 @@
           const c = combat();
           const cur = c && c.currentId ? byId(c.currentId) : null;
           if (cur && cur.pos && limited(cur)) DnD.uiIa.drawBadge(ctx, view, s, cur, '🦶 ' + Mv.left(cur, rules(), fpc()));
-          if (!c || !aiOn() || !aiPlan || aiPlan.forId !== c.currentId) return;
+          if (!c || !aiOn() || !S.aiPlan || S.aiPlan.forId !== c.currentId) return;
           const col = DnD.uiTileset.colors();
-          DnD.uiIa.drawPlan(ctx, view, s, aiPlan.plan, c.combatants, { current: col.accent, bad: '#d4453a' });
+          DnD.uiIa.drawPlan(ctx, view, s, S.aiPlan.plan, c.combatants, { current: col.accent, bad: '#d4453a' });
         },
         onObject: (id) => DnD.uiOggettiMappa.openPanel({
           // Copie degli NPC: Attacca (diventa ostile, entra al round successivo) o Entra nell'iniziativa (neutrale).
@@ -642,7 +648,7 @@
                 const probe = { id: '__party', faction: partyFaction(st), kind: 'player' };
                 for (const l of provocationFor(c, st, probe, [x])) log(c, 'sistema', l);
                 if (c.phase === 'attivo') { x.joinRound = c.round + 1; log(c, 'sistema', x.name + ' tira l\'iniziativa (' + x.initiative + ') ed entra al round ' + x.joinRound + '.'); }
-                aiPlan = null;
+                S.aiPlan = null;
               });
               endDice('Iniziativa', '');
               document.querySelectorAll('dialog[open]').forEach((d) => d.close());
@@ -679,22 +685,22 @@
           updateOriginalBtn,
           el('button', { type: 'button', class: 'btn small', text: 'Carica griglia…', onclick: () => DnD.uiGriglia.savedGridsDialog(loadGrid) }),
           el('label', { class: 'check small', title: 'Nessun limite di velocità (eventi, teletrasporti)' }, freeBox, ' Movimento libero'),
-          vision.quickBar(),
+          S.vision.quickBar(),
         ],
       });
     }
     updateOriginalBtn.hidden = !originalGrid();
     freeBox.checked = Boolean(combat() && combat().freeMovement);
-    return grid;
+    return S.grid;
   }
 
   // Seleziona un combattente evidenziando scheda e pedina. source: 'card' | 'grid' | 'list'.
   function selectCombatant(id, source) {
-    selectedId = id;
-    for (const card of root.querySelectorAll('.combatant')) card.classList.toggle('selected', card.dataset.id === id);
-    if (source !== 'grid' && grid) grid.setSelectedCombatant(id);
+    S.selectedId = id;
+    for (const card of S.root.querySelectorAll('.combatant')) card.classList.toggle('selected', card.dataset.id === id);
+    if (source !== 'grid' && S.grid) S.grid.setSelectedCombatant(id);
     if (source !== 'card' && id) {
-      const card = root.querySelector('.combatant[data-id="' + id + '"]');
+      const card = S.root.querySelector('.combatant[data-id="' + id + '"]');
       if (card) card.scrollIntoView({ behavior: DnD.ui.scrollBehavior(), block: 'nearest' });
     }
   }
@@ -732,14 +738,14 @@
       { text: x.control === 'ia' ? '👤 Controllo: passa a Manuale' : '🤖 Controllo: passa all\'IA', onclick: () => mutate((c) => {
         const t = c.combatants.find((y) => y.id === id);
         t.control = t.control === 'ia' ? 'manuale' : 'ia';
-        aiPlan = null;
+        S.aiPlan = null;
         log(c, 'sistema', t.name + ': controllo ' + (t.control === 'ia' ? 'IA' : 'manuale') + '.');
       }) },
       { text: '⚑ Fazione: ' + factionName(x.faction) + '…', onclick: () => factionDialog(byId(id)) },
       x.prevFaction ? { text: '↶ Torna a ' + factionName(x.prevFaction), onclick: () => undoFaction(id) } : null,
       x.npc && x.hostileTo && x.hostileTo.length ? { text: '🕊 Calma ' + x.name + '…', onclick: () => calmDialog(byId(id)) } : null,
       x.npc && x.hostileTo && x.hostileTo.length ? { text: '↶ Annulla la provocazione', onclick: () => revertProvocation(byId(id)) } : null,
-      { text: x.hidden ? '👁 Non più nascosto' : '🙈 Nascosto (l\'IA non lo vede)', onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === id); t.hidden = !t.hidden; aiPlan = null; }) },
+      { text: x.hidden ? '👁 Non più nascosto' : '🙈 Nascosto (l\'IA non lo vede)', onclick: () => mutate((c) => { const t = c.combatants.find((y) => y.id === id); t.hidden = !t.hidden; S.aiPlan = null; }) },
     ].filter(Boolean);
   }
 
@@ -777,19 +783,18 @@
   // Danno con le regole della trasformazione leggendaria: a 0 PF della forma si torna normali e il danno in
   // eccesso passa al personaggio (le righe finiscono nel log alla fine dell'azione).
   // Danni a 0 PF (tiri contro la morte) e concentrazione: salvezza su COS con CD max(10, metà del danno).
-  let hurtLines = [];
   function hurt(t, amount, crit) {
     const wasZero = t.hp <= 0;
     // PF temporanei (riposi.js): assorbono il danno per primi.
     const tmp = DnD.riposi.absorbTemp(t, amount);
-    if (tmp.absorbed) hurtLines.push('🛡 ' + t.name + ': i PF temporanei assorbono ' + tmp.absorbed + ' danni (ne restano ' + (t.tempHp || 0) + ').');
-    hurtLines = hurtLines.concat(DnD.leggendario.damage(t, tmp.rest));
+    if (tmp.absorbed) S.hurtLines.push('🛡 ' + t.name + ': i PF temporanei assorbono ' + tmp.absorbed + ' danni (ne restano ' + (t.tempHp || 0) + ').');
+    S.hurtLines = S.hurtLines.concat(DnD.leggendario.damage(t, tmp.rest));
     if (!(amount > 0)) return;
-    if (wasZero) hurtLines.push(...C.damageAtZero(t, crit));
+    if (wasZero) S.hurtLines.push(...C.damageAtZero(t, crit));
     if (t.hp > 0 && t.concentration) {
       const r = C.concentrationCheck(t, amount, dice());
-      hurtLines.push({ type: r.kept ? 'tiro-salvezza' : 'ts-fallito', text: r.line });
-      if (!r.kept) hurtLines.push(...C.endConcentration(t, combat().combatants, 'danno').lines.map((text) => ({ type: 'concentrazione', text })));
+      S.hurtLines.push({ type: r.kept ? 'tiro-salvezza' : 'ts-fallito', text: r.line });
+      if (!r.kept) S.hurtLines.push(...C.endConcentration(t, combat().combatants, 'danno').lines.map((text) => ({ type: 'concentrazione', text })));
     }
   }
   // Dopo ogni azione: chi scende a 0 PF (privo di sensi e tiri contro la morte, o nemico che muore), chi torna
@@ -813,17 +818,17 @@
     let events = [];
     let sounds = [];
     let fast = false;
-    const aggr = pendingAggr;
-    pendingAggr = null;
-    provoked = false;
+    const aggr = S.pendingAggr;
+    S.pendingAggr = null;
+    S.provoked = false;
     DnD.store.update((st) => {
       const prev = session(st).combat;
       const beforeHp = new Map(prev ? prev.combatants.map((x) => [x.id, x.hp]) : []);
       const before = DnD.suoniDati.combatSnapshot(prev);
       const lastLine = prev && prev.log.length ? prev.log[prev.log.length - 1] : null;
       fn(session(st).combat, st);
-      if (hurtLines.length && session(st).combat) for (const line of hurtLines) log(session(st).combat, line.type || 'sistema', line.text || line);
-      hurtLines = [];
+      if (S.hurtLines.length && session(st).combat) for (const line of S.hurtLines) log(session(st).combat, line.type || 'sistema', line.text || line);
+      S.hurtLines = [];
       // Mondo: provocazioni degli NPC neutrali, uccisioni (quest, reputazione) e fine per fazioni.
       const c = session(st).combat;
       if (c) conditionsAfter(c, beforeHp);
@@ -837,10 +842,10 @@
       }
     });
     DnD.audio.suonaTutti(sounds, { veloce: fast });
-    if (provoked) { aiPlan = null; if (DnD.uiMondo) DnD.uiMondoComuni.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
-    if (events.some((e) => e.kind === 'fase')) aiPlan = null;
+    if (S.provoked) { S.aiPlan = null; if (DnD.uiMondo) DnD.uiMondoComuni.sound('ostile'); toast('Un NPC neutrale diventa ostile (vedi il log).'); }
+    if (events.some((e) => e.kind === 'fase')) S.aiPlan = null;
     render();
-    DnD.uiBoss.playEvents(events, root && root.querySelector('.combat-layout'));
+    DnD.uiBoss.playEvents(events, S.root && S.root.querySelector('.combat-layout'));
   }
 
   function log(c, type, text) {
@@ -848,9 +853,9 @@
   }
 
   function render(container) {
-    root = container || root;
-    if (!root) return;
-    clear(root);
+    S.root = container || S.root;
+    if (!S.root) return;
+    clear(S.root);
     if (!combat()) renderSetup();
     else if (combat().phase === 'iniziativa') renderInitiative();
     else renderActive();
@@ -859,11 +864,10 @@
   // ---------- Setup ----------
   // Genera nemici al volo: vengono salvati in Nemici e aggiunti al setup (uno per ciascuno). La difficoltà del
   // generatore parte dalla selezione del setup (setupInput, assegnato da renderSetup).
-  let setupInput = null;
   function generateAndAdd() {
     DnD.uiGeneratore.open({
       saveLabel: 'Salva e aggiungi al combattimento',
-      baseInput: setupInput ? setupInput() : null,
+      baseInput: S.setupInput ? S.setupInput() : null,
       onSaved: (creatures) => {
         for (const c of creatures) setup.npcs[c.id] = 1;
         render();
@@ -876,9 +880,9 @@
     const vPlayers = DnD.sessioni.visible(st, 'players');
     const vNpcs = DnD.sessioni.visible(st, 'npcs');
     const vGrids = DnD.sessioni.visible(st, 'savedGrids');
-    setupInput = null;
+    S.setupInput = null;
     if (!vPlayers.length && !vNpcs.length) {
-      root.append(DnD.ui.emptyState('Nessun personaggio in questa sessione',
+      S.root.append(DnD.ui.emptyState('Nessun personaggio in questa sessione',
         'Per iniziare un combattimento servono nemici o giocatori della sessione «' + session().name + '» (o condivisi con tutte le sessioni).', [
           { text: '🎲 Genera e aggiungi', primary: true, onclick: generateAndAdd },
           { text: '+ Aggiungi nemici', onclick: () => DnD.app.navigate('nemici', 'nuovo') },
@@ -945,7 +949,7 @@
         UD.balanceDialog(input, (i, count) => { setup.npcs[input.creatures[i].id] = count; render(); }, MAX_COPIES);
       },
     });
-    setupInput = encounterInput;
+    S.setupInput = encounterInput;
     const partyNote = el('p', { class: 'muted small' });
     function refreshDifficulty() {
       difficulty.update(encounterInput());
@@ -1018,8 +1022,8 @@
       setup.npcs = {};
       setup.gridId = '';
       aiHistory.clear();
-      aiPlan = null;
-      aiPaused = false;
+      S.aiPlan = null;
+      S.aiPaused = false;
       render();
     }
 
@@ -1037,7 +1041,7 @@
         }) })),
       el('p', { class: 'muted small', text: 'Dalla griglia salvata vengono ripresi strutture, oggetti e posizioni dei combattenti con lo stesso nome; gli altri restano da trascinare.' }));
 
-    root.append(
+    S.root.append(
       el('div', { class: 'section-head' }, el('h1', { text: 'Nuovo combattimento' }),
         el('div', { class: 'head-actions' }, el('button', { class: 'btn', text: '🌐 Online', title: 'Gioco online: ospita i giocatori o unisciti a una sessione', onclick: () => agganci.apriOnline() }))),
       el('section', { class: 'panel diff-panel' }, difficulty.node, partyNote),
@@ -1079,7 +1083,7 @@
         const v = readNumber(inputs[x.id]);
         DnD.validazione.intInRange(errors, 'init.' + x.id, v, -20, 60);
       }
-      if (!showErrors(root, errors)) return;
+      if (!showErrors(S.root, errors)) return;
       mutate((c) => {
         for (const x of c.combatants) x.initiative = readNumber(inputs[x.id]);
         const sorted = R.sortByInitiative(c.combatants);
@@ -1095,7 +1099,7 @@
       if (confirm('Annullare il combattimento?')) mutate((c, st) => { session(st).combat = null; });
     };
 
-    root.append(
+    S.root.append(
       el('div', { class: 'section-head' }, el('h1', { text: 'Iniziativa' }),
         el('div', { class: 'head-actions' },
           el('button', { class: 'btn', text: 'Ritira tutti', onclick: rerollAll }),
@@ -1212,11 +1216,11 @@
     const mode = (value, label) => el('label', { class: 'check' },
       el('input', { type: 'radio', name: 'modo', value, checked: value === (preset.mode || R.MODES.normale) }), ' ' + label);
     const currentMode = () => body.querySelector('input[name="modo"]:checked').value;
-    const pickButton = grid && grid.hasTokens() && grid.node.isConnected
+    const pickButton = S.grid && S.grid.hasTokens() && S.grid.node.isConnected
       ? el('button', { type: 'button', class: 'btn small', text: '🎯 Scegli sulla griglia', onclick: () => {
         const keep = { targetId: target.value, weaponId: weapon.value, mode: currentMode() };
         dialog.dismiss();
-        grid.pickTarget((id) => {
+        S.grid.pickTarget((id) => {
           const a = byId(attacker.id);
           if (!a) return;
           attackDialog(a, Object.assign(keep, id && id !== attacker.id ? { targetId: id } : {}));
@@ -1389,13 +1393,13 @@
     }
     spellSel.addEventListener('change', () => { chosen.clear(); sync(); });
 
-    const pickButton = grid && grid.hasTokens() && grid.node.isConnected
+    const pickButton = S.grid && S.grid.hasTokens() && S.grid.node.isConnected
       ? el('button', { type: 'button', class: 'btn small', text: '🎯 Scegli sulla griglia', onclick: () => {
         const keep = { spellId: spellSel.value, slotLevel: Number(slotSel.value), mode: currentMode() };
         const multi = current().area;
         const picked = multi ? new Set(readTargets()) : new Set();
         dialog.dismiss();
-        grid.pickTarget((id) => {
+        S.grid.pickTarget((id) => {
           const a = byId(caster.id);
           if (!a) return;
           if (id) {
@@ -1733,11 +1737,11 @@
     const modeBox = hasAttack ? el('fieldset', { class: 'radio-row' }, el('legend', { text: 'Tiro per colpire' }), mode('normale', 'Normale'), mode('vantaggio', 'Vantaggio'), mode('svantaggio', 'Svantaggio')) : null;
     const read = () => rows.map((r) => [...r.box.querySelectorAll('input:checked')].map((i) => i.value));
     const currentMode = () => (modeBox ? body.querySelector('input[name="modo-creatura"]:checked').value : 'normale');
-    const pickButton = steps.length === 1 && grid && grid.hasTokens() && grid.node.isConnected
+    const pickButton = steps.length === 1 && S.grid && S.grid.hasTokens() && S.grid.node.isConnected
       ? el('button', { type: 'button', class: 'btn small', text: '🎯 Scegli sulla griglia', onclick: () => {
         const keep = { mode: currentMode() };
         dialog.dismiss();
-        grid.pickTarget((id) => { const xx = byId(x.id); if (xx && id) creatureActionDialog(xx, actionId, Object.assign(keep, { targets: { 0: [id] } })); });
+        S.grid.pickTarget((id) => { const xx = byId(x.id); if (xx && id) creatureActionDialog(xx, actionId, Object.assign(keep, { targets: { 0: [id] } })); });
       } })
       : null;
     const body = el('div', { class: 'form' }, rows.map((r) => r.node), pickButton, modeBox);
@@ -1942,10 +1946,10 @@
     const block = blockedBy(x);
     const blockTitle = block ? block + ' (il master può permetterle da «Condizioni»)' : null;
     return el('article', {
-      class: 'combatant ' + x.kind + (current ? ' current' : '') + (down ? ' down' : '') + (x.id === selectedId ? ' selected' : '') + (x.legend ? ' legendary' : '') + (x.legend && x.legend.form ? ' transformed' : ''),
+      class: 'combatant ' + x.kind + (current ? ' current' : '') + (down ? ' down' : '') + (x.id === S.selectedId ? ' selected' : '') + (x.legend ? ' legendary' : '') + (x.legend && x.legend.form ? ' transformed' : ''),
       'data-id': x.id,
       style: x.legend && DnD.uiLeggendario ? DnD.uiLeggendario.cardStyle(x) : null,
-      onclick: (e) => { if (!e.target.closest('button')) selectCombatant(x.id === selectedId ? null : x.id, 'card'); },
+      onclick: (e) => { if (!e.target.closest('button')) selectCombatant(x.id === S.selectedId ? null : x.id, 'card'); },
     },
       el('div', { class: 'combatant-head' },
         el('div', {},
@@ -1998,7 +2002,7 @@
       e.type === 'round' ? null : el('span', { class: 'log-round', text: 'R' + e.round }), e.text,
       e.why ? el('button', { type: 'button', class: 'btn small why-btn', text: 'Perché?', onclick: () => DnD.uiIa.whyDialog(e.why) }) : null)));
 
-    if (selectedId && !byId(selectedId)) selectedId = null;
+    if (S.selectedId && !byId(S.selectedId)) S.selectedId = null;
     const g = getGrid();
     // Al centro: barre dei boss e ombra restano sull'area della griglia, senza coprire le colonne.
     const center = el('div', { class: 'combat-center' }, ...[DnD.uiBoss.combatHud(c, 'master'), DnD.uiBoss.vignette(c)].filter(Boolean), g.node);
@@ -2026,7 +2030,7 @@
       },
     });
 
-    root.append(
+    S.root.append(
       el('div', { class: 'combat-screen' },
         el('div', { class: 'section-head' },
           el('h1', { text: 'Combattimento' }),
@@ -2038,7 +2042,7 @@
         agganci.bannerEsplorazione ? agganci.bannerEsplorazione() : null,
         cols.layout));
     g.refresh();
-    g.setSelectedCombatant(selectedId);
+    g.setSelectedCombatant(S.selectedId);
     logList.scrollTop = logList.scrollHeight;
     scheduleAuto();
   }
@@ -2048,10 +2052,10 @@
   // dei comandi del master. Ogni funzione restituisce { ok, testo, tiro } (tiro: i dadi tirati dal master, per
   // mostrarli anche ai giocatori).
   function eseguito(fn) {
-    lastTiro = null;
+    S.lastTiro = null;
     const testo = fn();
     const last = combat() && combat().log.length ? combat().log[combat().log.length - 1].text : '';
-    return { ok: true, testo: testo || last, tiro: lastTiro };
+    return { ok: true, testo: testo || last, tiro: S.lastTiro };
   }
   const online = {
     combat: () => combat(),
@@ -2067,11 +2071,11 @@
     attacca: (id, targetId, weaponId, mode) => eseguito(() => performAttack(id, targetId, weaponId, mode)),
     lancia: (id, spellId, slot, targetIds, mode) => eseguito(() => performCast(id, spellId, slot, targetIds, mode)),
     azioneCreatura: (id, actionId, targetIds, mode) => eseguito(() => performCreatureAction(id, actionId, targetIds, mode)),
-    salvezza: (id, ab, dc, mode) => { lastTiro = null; const r = performSave(id, ab, dc, mode); return { ok: true, testo: r.testo, tiro: lastTiro, success: r.success, total: r.total }; },
+    salvezza: (id, ab, dc, mode) => { S.lastTiro = null; const r = performSave(id, ab, dc, mode); return { ok: true, testo: r.testo, tiro: S.lastTiro, success: r.success, total: r.total }; },
     dichiara: (testo, tipo) => eseguito(() => { mutate((c) => log(c, tipo || 'sistema', testo)); return testo; }),
     prossimoTurno: () => eseguito(() => { nextTurn(); return ''; }),
-    dadiDiProva: (rng) => { rngProva = rng || null; },
-    controllo: (id, kind) => eseguito(() => { mutate((c) => { const t = c.combatants.find((y) => y.id === id); if (t) { t.control = kind; if (kind === 'ia') c.ai.simulated = true; aiPlan = null; } }); return ''; }),
+    dadiDiProva: (rng) => { S.rngProva = rng || null; },
+    controllo: (id, kind) => eseguito(() => { mutate((c) => { const t = c.combatants.find((y) => y.id === id); if (t) { t.control = kind; if (kind === 'ia') c.ai.simulated = true; S.aiPlan = null; } }); return ''; }),
   };
 
   DnD.sezioni = DnD.sezioni || {};
@@ -2084,6 +2088,6 @@
    */
   const registraAgganci = (parti) => { Object.assign(agganci, parti); };
 
-  DnD.uiCombattimento = { registraAgganci, selectCombatant: (id, source) => selectCombatant(id, source), getGrid: () => grid,
+  DnD.uiCombattimento = { registraAgganci, selectCombatant: (id, source) => selectCombatant(id, source), getGrid: () => S.grid,
     currentAiPlan, executePlan, undoAiTurn: () => restoreCombat(aiHistory.undo(), 'Turno IA annullato.'), aiHistory, online };
 })(globalThis.DnD = globalThis.DnD || {});
