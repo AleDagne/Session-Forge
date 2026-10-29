@@ -1,7 +1,7 @@
 // Disegno della griglia su <canvas>: colori letti dal tema (con cache, ridisegno al cambio tema) e primitive di
 // disegno (forme, contorni, TileMap, zone, etichette, pedine con condizioni, NPC piazzati, segni degli oggetti,
 // sfondo, coordinate, celle raggiungibili, percorso). Il ciclo di disegno draw() resta in ui-griglia.js.
-// Livello interfaccia. Espone DnD.uiGrigliaDisegno { colors, redrawers, MARGIN, primitive(api) }; usa griglia,
+// Livello interfaccia. Espone DnD.uiGrigliaDisegno { colors, redrawers, MARGIN, DOUBLE_CLICK_MS, DRAG_THRESHOLD, primitive(api) }; usa griglia,
 // regole, icone, tilemap, tileset, immagini.
 (function (DnD) {
   'use strict';
@@ -9,6 +9,8 @@
   const G = DnD.griglia;
   const R = DnD.regole;
   const MARGIN = 22;          // fascia delle coordinate sui bordi
+  const DOUBLE_CLICK_MS = 400; // due clic entro questo tempo = doppio clic
+  const DRAG_THRESHOLD = 4;   // pixel prima che un clic diventi un trascinamento
 
   // Colori del canvas letti dalle variabili CSS del tema; la cache si svuota al cambio tema.
   let palette = null;
@@ -492,5 +494,5 @@
     return { drawShape, outline, questionMark, drawPlacedTiles, drawGridMap, drawZone, drawLabel, drawToken, drawConditions, factionOf, drawNpcItem, drawObjectMarks, drawBackground, drawLabels, drawReach, drawRoute };
   }
 
-  DnD.uiGrigliaDisegno = { colors, redrawers, MARGIN, primitive };
+  DnD.uiGrigliaDisegno = { colors, redrawers, MARGIN, DOUBLE_CLICK_MS, DRAG_THRESHOLD, primitive };
 })(globalThis.DnD = globalThis.DnD || {});
