@@ -7015,6 +7015,206 @@
     }
   });
 
+  // --- Caratterizzazione della griglia (ui-griglia.js): il componente vero su un canvas montato nella pagina ---
+  // Rete di sicurezza prima di dividere ui-griglia.js: descrive il comportamento attuale, non quello ideale.
+  function montaGriglia(doc, extra) {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1000px;height:700px;opacity:0;pointer-events:none;z-index:-1';
+    document.body.append(host);
+    // Il pannello laterale legge le librerie dallo store dell'app: uno stato vuoto, ripristinato alla chiusura.
+    const storePrima = DnD.store;
+    DnD.store = { state: DnD.dati.emptyState(), update(fn) { fn(this.state); } };
+    const salvati = [];
+    const g = DnD.uiGriglia.create(Object.assign({
+      getDoc: () => doc,
+      update: (fn) => { fn(doc); salvati.push(JSON.stringify(doc.grid)); },
+      tools: ['seleziona', 'gomma', 'zona-giocatori', 'zona-nemici', 'misura'],
+      tilesets: () => ({}),
+    }, extra));
+    host.append(g.node);
+    g.refresh();
+    const canvas = host.querySelector('canvas.grid-canvas');
+    canvas.setPointerCapture = () => {}; // eventi sintetici: nessun puntatore reale da catturare
+    canvas.releasePointerCapture = () => {};
+    // Evento del puntatore al centro della cella (x, y).
+    const punta = (tipo, cella, init) => {
+      const r = canvas.getBoundingClientRect();
+      const s = G().CELL_PX * g.view().zoom;
+      const p = G().cellToScreen(g.view(), cella.x, cella.y);
+      canvas.dispatchEvent(new PointerEvent(tipo, Object.assign({ bubbles: true, pointerId: 1, button: 0, buttons: 1, pointerType: 'mouse',
+        clientX: r.left + p.sx + s / 2, clientY: r.top + p.sy + s / 2 }, init)));
+    };
+    const trascina = (da, a) => { punta('pointerdown', da); punta('pointermove', a); punta('pointerup', a); };
+    const tasto = (key, init) => document.dispatchEvent(new KeyboardEvent('keydown', Object.assign({ key, bubbles: true }, init)));
+    return { g, canvas, punta, trascina, tasto, salvati, chiudi: () => { host.remove(); DnD.store = storePrima; } };
+  }
+  const docGriglia = () => ({
+    id: 'doc', currentId: null,
+    grid: { w: 10, h: 8, structures: [Object.assign({ id: 's1', name: 'Muro', x: 6, y: 1 }, G().squareShape(1))], items: [], labels: [], zones: [], tileMap: null },
+    combatants: [{ id: 'c1', name: 'Mira', kind: 'player', faction: 'giocatori', hp: 10, maxHp: 10, w: 1, h: 1, pos: { x: 1, y: 1 }, conditions: [] }],
+  });
+
+  test('Griglia UI: montaggio, vista iniziale e disegno senza errori', () => {
+    const m = montaGriglia(docGriglia());
+    try {
+      ok(m.canvas.getBoundingClientRect().width > 300, 'canvas nel layout');
+      eq([m.g.view().zoom, m.g.hasTokens(), m.g.canUndo()], [1, true, false]);
+      m.g.requestDraw();
+      m.g.refresh();
+    } finally { m.chiudi(); }
+  });
+
+  test('Griglia UI: trascinare una pedina la sposta; Ctrl+Z annulla e Ctrl+Y ripete', () => {
+    const d = docGriglia();
+    const m = montaGriglia(d);
+    try {
+      m.trascina({ x: 1, y: 1 }, { x: 3, y: 4 });
+      eq(d.combatants[0].pos, { x: 3, y: 4 }, 'pedina spostata');
+      ok(m.g.canUndo(), 'mossa nella cronologia');
+      m.tasto('z', { ctrlKey: true });
+      eq(d.combatants[0].pos, { x: 1, y: 1 }, 'annullata');
+      m.tasto('y', { ctrlKey: true });
+      eq(d.combatants[0].pos, { x: 3, y: 4 }, 'ripetuta');
+      // Sopra una struttura la pedina non si posa: resta dov'era.
+      m.trascina({ x: 3, y: 4 }, { x: 6, y: 1 });
+      eq(d.combatants[0].pos, { x: 3, y: 4 }, 'cella occupata dal muro');
+    } finally { m.chiudi(); }
+  });
+
+  test('Griglia UI: gomma, zona dei giocatori, misuratore e sola lettura', () => {
+    const d = docGriglia();
+    const m = montaGriglia(d);
+    try {
+      m.g.setTool('gomma');
+      m.trascina({ x: 6, y: 1 }, { x: 6, y: 1 });
+      eq(d.grid.structures.length, 0, 'struttura cancellata');
+      m.g.setTool('zona-giocatori');
+      m.trascina({ x: 0, y: 5 }, { x: 2, y: 6 });
+      eq(d.grid.zones.map((z) => [z.kind, z.x, z.y, z.w, z.h]), [['giocatori', 0, 5, 3, 2]], 'zona disegnata');
+      const prima = JSON.stringify(d);
+      m.g.setTool('misura');
+      m.trascina({ x: 0, y: 0 }, { x: 4, y: 3 });
+      eq(JSON.stringify(d), prima, 'il misuratore non modifica');
+    } finally { m.chiudi(); }
+    const d2 = docGriglia();
+    const ro = montaGriglia(d2, { readOnly: true });
+    try {
+      ro.trascina({ x: 1, y: 1 }, { x: 3, y: 3 });
+      eq(d2.combatants[0].pos, { x: 1, y: 1 }, 'sola lettura: nessuno spostamento');
+    } finally { ro.chiudi(); }
+  });
+
+  test('Griglia UI: clic su una struttura la seleziona, Canc la toglie, Ctrl+Z la rimette', () => {
+    const d = docGriglia();
+    const m = montaGriglia(d);
+    try {
+      m.trascina({ x: 6, y: 1 }, { x: 6, y: 1 });
+      m.tasto('Delete');
+      eq(d.grid.structures.length, 0, 'struttura tolta');
+      m.tasto('z', { ctrlKey: true });
+      eq(d.grid.structures.map((x) => x.id), ['s1'], 'annullata');
+    } finally { m.chiudi(); }
+  });
+
+  test('Griglia UI: rotella del mouse = zoom intorno al puntatore', () => {
+    const m = montaGriglia(docGriglia());
+    try {
+      const r = m.canvas.getBoundingClientRect();
+      m.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: r.left + 200, clientY: r.top + 150, bubbles: true, cancelable: true }));
+      ok(m.g.view().zoom > 1, 'zoom aumentato: ' + m.g.view().zoom);
+    } finally { m.chiudi(); }
+  });
+
+  // --- Caratterizzazione del combattimento (ui-combattimento.js) nell'app vera (index.html?prova) ---
+  async function conApp(fn) {
+    const preferenze = Object.assign({}, localStorage);
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:0;top:0;width:1280px;height:800px;opacity:0;pointer-events:none';
+    frame.src = 'index.html?prova';
+    const attesa = (ms) => new Promise((r) => setTimeout(r, ms));
+    try {
+      document.body.append(frame);
+      const limite = Date.now() + 120000;
+      while (!(frame.contentWindow && frame.contentWindow.DnD && frame.contentWindow.DnD.store)) {
+        if (Date.now() > limite) throw new Error('tempo scaduto: avvio dell\'app');
+        await attesa(25);
+      }
+      const W = frame.contentWindow;
+      const errori = [];
+      W.addEventListener('error', (e) => errori.push(e.message));
+      W.confirm = () => true;
+      W.alert = () => {};
+      await fn({ W, A: W.DnD, main: W.document.getElementById('main'), attesa, errori });
+      eq(errori, [], 'errori nella pagina');
+    } finally {
+      frame.remove();
+      localStorage.clear();
+      for (const [k, v] of Object.entries(preferenze)) localStorage.setItem(k, v);
+    }
+  }
+  // Combattimento attivo con un giocatore (Mira) e un nemico (Goblin), già posizionati; sessione dell'app di prova.
+  function combattimentoDiProva(A) {
+    A.store.update((st) => {
+      const se = A.sessioni.current(st);
+      st.players.push(Object.assign(A.dati.normalizeCreature({ id: 'pg1', name: 'Mira', classId: 'guerriero', level: 3, maxHp: 25,
+        weapons: [{ id: 'spada', name: 'Spada', toHit: 5, damageDice: '1d8', damageBonus: 3, damageType: 'taglienti' }] }, true), { sessionId: se.id }));
+      se.combat = A.dati.normalizeCombat({ id: 'cmb', phase: 'attivo', round: 1, currentId: 'p1', grid: { w: 10, h: 8 }, log: [],
+        combatants: [
+          { id: 'p1', sourceId: 'pg1', name: 'Mira', kind: 'player', faction: 'giocatori', hp: 25, maxHp: 25, ac: 16, initiative: 15, pos: { x: 1, y: 1 }, w: 1, h: 1,
+            weapons: [{ id: 'spada', name: 'Spada', toHit: 5, damageDice: '1d8', damageBonus: 3, damageType: 'taglienti' }] },
+          { id: 'g1', name: 'Goblin', kind: 'npc', faction: 'nemici', hp: 7, maxHp: 7, ac: 13, initiative: 12, pos: { x: 2, y: 1 }, w: 1, h: 1, control: 'manuale' },
+        ] });
+    });
+  }
+
+  test('Combattimento UI: schermata attiva, ordine dei turni, prossimo turno e nuovo round', async () => {
+    if (location.protocol === 'file:') return;
+    await conApp(async ({ A, main, attesa }) => {
+      combattimentoDiProva(A);
+      A.app.show('combattimento');
+      await attesa(50);
+      const ordine = () => [...main.querySelectorAll('.turn-order li')].map((li) => li.textContent);
+      ok(main.querySelector('.combat-layout'), 'tre colonne');
+      eq(ordine().length, 2, 'due combattenti nell\'ordine');
+      ok(ordine()[0].includes('Mira') && main.querySelector('.turn-order li.current').textContent.includes('Mira'), 'turno di Mira (iniziativa 15)');
+      const prossimo = () => [...main.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Prossimo turno ▶').click();
+      prossimo();
+      await attesa(30);
+      ok(main.querySelector('.turn-order li.current').textContent.includes('Goblin'), 'turno del Goblin');
+      prossimo();
+      await attesa(30);
+      const c = A.sessioni.current(A.store.state).combat;
+      eq([c.round, c.currentId], [2, 'p1'], 'nuovo round');
+      ok(main.querySelector('.round').textContent.includes('2'), 'round mostrato');
+    });
+  });
+
+  test('Combattimento UI: attacco con dadi di prova, registro mostrato e fine del combattimento', async () => {
+    if (location.protocol === 'file:') return;
+    await conApp(async ({ A, main, attesa }) => {
+      combattimentoDiProva(A);
+      A.app.show('combattimento');
+      await attesa(50);
+      const E = A.uiCombattimento.online;
+      E.dadiDiProva(seq(15, 4));
+      const r = E.attacca('p1', 'g1', 'spada', 'normale');
+      E.dadiDiProva(null);
+      eq(r.ok, true, 'attacco eseguito');
+      const c = () => A.sessioni.current(A.store.state).combat;
+      eq(c().combatants.find((x) => x.id === 'g1').hp, 0, '4 + 3 danni: Goblin a 0 PF');
+      ok(c().log.some((l) => l.text.includes('Goblin') && l.text.includes('→ 0 PF')), 'riga del registro');
+      await attesa(30);
+      ok(main.textContent.includes('Goblin'), 'scheda e registro ridisegnati');
+      [...main.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Termina combattimento').click();
+      await attesa(50);
+      // Fine: conferma (se chiesta) e ritorno alla preparazione.
+      const conferma = main.ownerDocument.querySelector('dialog.modal[open]');
+      if (conferma) { [...conferma.querySelectorAll('.modal-actions button')].pop().click(); await attesa(50); }
+      eq(c(), null, 'combattimento chiuso');
+      ok(main.textContent.includes('Nuovo combattimento'), 'di nuovo la preparazione');
+    });
+  });
+
   // solo: facoltativo, esegue solo i test il cui nome contiene questo testo.
   async function runTests(solo) {
     const results = [];
