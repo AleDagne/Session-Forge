@@ -73,16 +73,20 @@
   function create(opts) {
     const onSelect = opts.onSelect || (() => {});
     const tokenActions = opts.tokenActions || (() => []);
-    let view = defaultView();
-    let tool = 'seleziona';
-    let template = null;    // { kind: 'structure' | 'item' | 'equipment', id } per gli strumenti di inserimento
-    let selection = null;   // { kind: 'token' | 'item' | 'structure' | 'label' | 'zone', id }
-    let measure = null;     // { a, b } celle
-    let drag = null;
-    let hover = null;       // anteprima degli strumenti di inserimento
-    let pick = null;        // callback della scelta del bersaglio
-    let docId = null;
-    let lastClick = { key: null, time: 0 };
+    // Stato condiviso del componente (vista, strumento, selezione, trascinamento…): un solo oggetto, così le parti
+    // in altri file (pannello laterale, puntatore) lo leggono e lo modificano come il resto della griglia.
+    const S = {
+      view: defaultView(),
+      tool: 'seleziona',
+      template: null, // { kind: 'structure' | 'item' | 'equipment', id } per gli strumenti di inserimento
+      selection: null, // { kind: 'token' | 'item' | 'structure' | 'label' | 'zone', id }
+      measure: null, // { a, b } celle
+      drag: null,
+      hover: null, // anteprima degli strumenti di inserimento
+      pick: null, // callback della scelta del bersaglio
+      docId: null,
+      lastClick: { key: null, time: 0 },
+    };
     let raf = 0;
     const history = G.createHistory(HISTORY_LIMIT);
 
@@ -111,11 +115,11 @@
     const selBar = el('div', { class: 'grid-selbar' });
     const btn = (text, title, onclick) => el('button', { type: 'button', class: 'btn small', text, title, 'aria-label': title, onclick });
     const toolButtons = {};
-    const toolBar = el('div', { class: 'tool-group', role: 'toolbar', 'aria-label': 'Strumenti' }, opts.tools.map((t) => {
-      toolButtons[t] = el('button', { type: 'button', class: 'btn small tool', text: TOOLS[t], 'aria-pressed': 'false', onclick: () => {
+    const toolBar = el('div', { class: 'S.tool-group', role: 'toolbar', 'aria-label': 'Strumenti' }, opts.tools.map((t) => {
+      toolButtons[t] = el('button', { type: 'button', class: 'btn small S.tool', text: TOOLS[t], 'aria-pressed': 'false', onclick: () => {
         // Uno strumento della griglia disattiva quelli delle tile.
         if (opts.painter && opts.painter.active()) opts.painter.deactivate();
-        setTool(tool === t && t !== 'seleziona' ? 'seleziona' : t);
+        setTool(S.tool === t && t !== 'seleziona' ? 'seleziona' : t);
       } });
       return toolButtons[t];
     }));
@@ -126,7 +130,7 @@
     paletteBtn.setAttribute('aria-controls', palette.id);
     const toolbar = el('div', { class: 'grid-toolbar' },
       ro ? null : paletteBtn,
-      btn('⟲ Reimposta vista', 'Reimposta vista', () => { view = defaultView(); requestDraw(); }),
+      btn('⟲ Reimposta vista', 'Reimposta vista', () => { S.view = defaultView(); requestDraw(); }),
       toolBar,
       ro ? null : el('label', { class: 'check small' }, ignoreBox, ' Ignora collisioni'),
       ro ? null : undoBtn, ro ? null : redoBtn,
@@ -166,7 +170,7 @@
       changed();
     }
     function changed() {
-      if (selection && !entity(selection)) selection = null;
+      if (S.selection && !entity(S.selection)) S.selection = null;
       refreshPalette();
       updateUi();
       requestDraw();
@@ -233,7 +237,7 @@
 
     // ---------- Azioni sulla selezione ----------
     function select(hit) {
-      selection = hit;
+      S.selection = hit;
       onSelect(hit && hit.kind === 'token' ? hit.id : null);
       updateUi();
       requestDraw();
@@ -270,7 +274,7 @@
         if (hit.kind === 'token') d.combatants.find((x) => x.id === hit.id).pos = null;
         else d.grid[LISTS[hit.kind]] = d.grid[LISTS[hit.kind]].filter((x) => x.id !== hit.id);
       });
-      if (selection && selection.id === hit.id) select(null);
+      if (S.selection && S.selection.id === hit.id) select(null);
     }
 
     function editLabel(hit) {
@@ -304,15 +308,15 @@
 
     // ---------- Strumenti di inserimento ----------
     function templateEntity() {
-      if (!template) return null;
+      if (!S.template) return null;
       const st = DnD.store.state;
-      const list = template.kind === 'structure' ? st.structures : template.kind === 'equipment' ? st.equipment : st.mapObjects;
-      return list.find((x) => x.id === template.id) || null;
+      const list = S.template.kind === 'structure' ? st.structures : S.template.kind === 'equipment' ? st.equipment : st.mapObjects;
+      return list.find((x) => x.id === S.template.id) || null;
     }
     function insertFootprint() {
       const t = templateEntity();
-      if (tool === 'struttura' && t && template.kind === 'structure') return G.templateShape(t);
-      if (tool === 'oggetto' && t && template.kind !== 'structure') return template.kind === 'equipment' ? G.squareShape(1) : G.templateShape(t, 'item');
+      if (S.tool === 'struttura' && t && S.template.kind === 'structure') return G.templateShape(t);
+      if (S.tool === 'oggetto' && t && S.template.kind !== 'structure') return S.template.kind === 'equipment' ? G.squareShape(1) : G.templateShape(t, 'item');
       return null;
     }
     function placeStructure(tpl, p) {
@@ -339,31 +343,31 @@
       commit((d) => d.grid.items.push(placed));
       return placed;
     }
-    const blocksOf = (t) => (template && template.kind === 'equipment' ? false : G.objectBlocks(t));
-    const canInsertAt = (fp, x, y) => (tool === 'struttura' ? G.canPlaceStructure(board(), fp, x, y) : G.canPlaceItem(board(), fp, blocksOf(templateEntity()), x, y));
+    const blocksOf = (t) => (S.template && S.template.kind === 'equipment' ? false : G.objectBlocks(t));
+    const canInsertAt = (fp, x, y) => (S.tool === 'struttura' ? G.canPlaceStructure(board(), fp, x, y) : G.canPlaceItem(board(), fp, blocksOf(templateEntity()), x, y));
     function insertAt(cell) {
       const t = templateEntity();
-      if (!t || (tool === 'struttura') !== (template.kind === 'structure')) {
-        toast(TOOL_HINTS[tool], 'error');
+      if (!t || (S.tool === 'struttura') !== (S.template.kind === 'structure')) {
+        toast(TOOL_HINTS[S.tool], 'error');
         return;
       }
       const fp = insertFootprint();
       const p = { x: cell.x - Math.floor(fp.w / 2), y: cell.y - Math.floor(fp.h / 2) };
       if (!canInsertAt(fp, p.x, p.y)) { toast('Posizione non valida.', 'error'); return; }
-      if (tool === 'struttura') select({ kind: 'structure', id: placeStructure(t, p).id });
-      else if (template.kind === 'equipment') select({ kind: 'item', id: placeGround(t, p).id });
+      if (S.tool === 'struttura') select({ kind: 'structure', id: placeStructure(t, p).id });
+      else if (S.template.kind === 'equipment') select({ kind: 'item', id: placeGround(t, p).id });
       else select({ kind: 'item', id: placeItem(t, p).id });
     }
     function finishRect(rect) {
-      if (tool === 'riempi') {
+      if (S.tool === 'riempi') {
         const t = templateEntity();
-        if (!t || template.kind !== 'structure') { toast(TOOL_HINTS.riempi, 'error'); return; }
+        if (!t || S.template.kind !== 'structure') { toast(TOOL_HINTS.riempi, 'error'); return; }
         const filled = G.shapeFrom(rect.w, rect.h, () => true);
         if (!G.canPlaceStructure(board(), filled, rect.x, rect.y)) { toast('L\'area coprirebbe una pedina.', 'error'); return; }
         select({ kind: 'structure', id: placeStructure(Object.assign({}, t, filled, { mode: 'custom', tiles: null }), rect).id });
         return;
       }
-      const zone = DnD.dati.normalizeZone(Object.assign({ id: DnD.dadi.uid(), kind: tool === 'zona-nemici' ? 'nemici' : 'giocatori' }, rect), dims());
+      const zone = DnD.dati.normalizeZone(Object.assign({ id: DnD.dadi.uid(), kind: S.tool === 'zona-nemici' ? 'nemici' : 'giocatori' }, rect), dims());
       commit((d) => d.grid.zones.push(zone));
       select({ kind: 'zone', id: zone.id });
     }
@@ -389,9 +393,9 @@
     }
 
     function setTool(t) {
-      tool = t;
-      if (t !== 'misura') measure = null;
-      hover = null;
+      S.tool = t;
+      if (t !== 'misura') S.measure = null;
+      S.hover = null;
       for (const [k, b] of Object.entries(toolButtons)) {
         b.setAttribute('aria-pressed', String(k === t));
         b.classList.toggle('active', k === t);
@@ -408,7 +412,7 @@
 
     // Primitive di disegno (forme, pedine, zone, etichette, TileMap…): in ui-griglia-disegno.js.
     const { drawShape, outline, questionMark, drawPlacedTiles, drawGridMap, drawZone, drawLabel, drawToken, drawConditions, factionOf, drawNpcItem, drawObjectMarks, drawBackground, drawLabels, drawReach, drawRoute } = DnD.uiGrigliaDisegno.primitive({
-      view: () => view, requestDraw: () => requestDraw(), tsIndex: () => tsIndex(), dims: () => dims(), wrap,
+      view: () => S.view, requestDraw: () => requestDraw(), tsIndex: () => tsIndex(), dims: () => dims(), wrap,
     });
 
     function draw() {
@@ -423,7 +427,7 @@
       }
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const s = G.CELL_PX * view.zoom;
+      const s = G.CELL_PX * S.view.zoom;
       const N = dims();
       const known = missingSources();
       ctx.fillStyle = colors().bg;
@@ -453,7 +457,7 @@
         drawShape(ctx, st, missing ? colors().missing : st.color, st.x, st.y, s, 1);
         if (missing) {
           const i = st.cells.indexOf('1');
-          questionMark(ctx, view.panX + (st.x + (i % st.w) + 0.5) * s, view.panY + (st.y + Math.floor(i / st.w) + 0.5) * s, s);
+          questionMark(ctx, S.view.panX + (st.x + (i % st.w) + 0.5) * s, S.view.panY + (st.y + Math.floor(i / st.w) + 0.5) * s, s);
         }
       }
       for (const it of d.grid.items) {
@@ -464,8 +468,8 @@
         if (it.tiles) {
           drawTilesOf(it);
         } else {
-          const cx = view.panX + (it.x + 0.5) * s;
-          const cy = view.panY + (it.y + 0.5) * s;
+          const cx = S.view.panX + (it.x + 0.5) * s;
+          const cy = S.view.panY + (it.y + 0.5) * s;
           if (isMissing(known.items, it)) {
             DnD.icone.drawIcon(ctx, { kind: 'shape', shape: 'cerchio', color: colors().missing }, cx, cy, s * 0.3);
             questionMark(ctx, cx, cy, s * 0.8);
@@ -483,10 +487,10 @@
         ctx.beginPath();
         for (let i = 0; i <= Math.max(N.w, N.h); i++) {
           if ((i % 5 === 0) !== strong) continue;
-          const x = Math.round(view.panX + i * s) + 0.5;
-          const y = Math.round(view.panY + i * s) + 0.5;
-          if (i <= N.w && x >= 0 && x <= W) { ctx.moveTo(x, Math.max(0, view.panY)); ctx.lineTo(x, Math.min(H, view.panY + N.h * s)); }
-          if (i <= N.h && y >= 0 && y <= H) { ctx.moveTo(Math.max(0, view.panX), y); ctx.lineTo(Math.min(W, view.panX + N.w * s), y); }
+          const x = Math.round(S.view.panX + i * s) + 0.5;
+          const y = Math.round(S.view.panY + i * s) + 0.5;
+          if (i <= N.w && x >= 0 && x <= W) { ctx.moveTo(x, Math.max(0, S.view.panY)); ctx.lineTo(x, Math.min(H, S.view.panY + N.h * s)); }
+          if (i <= N.h && y >= 0 && y <= H) { ctx.moveTo(Math.max(0, S.view.panX), y); ctx.lineTo(Math.min(W, S.view.panX + N.w * s), y); }
         }
         ctx.strokeStyle = strong ? colors().line5 : colors().line;
         ctx.lineWidth = 1;
@@ -494,49 +498,49 @@
       }
 
       for (const l of d.grid.labels) drawLabel(ctx, l, s);
-      if (opts.underlay) opts.underlay(ctx, view, s, W, H);
-      if (drag && drag.type === 'move' && drag.moved && drag.mv) drawReach(ctx, drag.mv, s);
+      if (opts.underlay) opts.underlay(ctx, S.view, s, W, H);
+      if (S.drag && S.drag.type === 'move' && S.drag.moved && S.drag.mv) drawReach(ctx, S.drag.mv, s);
 
       // Pedine: prima quelle a terra, per ultima quella di turno.
       const tokens = d.combatants.filter((t) => t.pos && !(opts.vision && opts.vision.hideToken(t)))
         .sort((a, b) => (R.isDown(b) - R.isDown(a)) || ((a.id === d.currentId) - (b.id === d.currentId)));
       for (const t of tokens) {
-        const moving = drag && drag.type === 'move' && drag.moved && drag.hit.kind === 'token' && drag.hit.id === t.id;
+        const moving = S.drag && S.drag.type === 'move' && S.drag.moved && S.drag.hit.kind === 'token' && S.drag.hit.id === t.id;
         drawToken(ctx, t, t.pos.x, t.pos.y, s, {
-          current: t.id === d.currentId, selected: selection && selection.kind === 'token' && selection.id === t.id, ghost: moving,
+          current: t.id === d.currentId, selected: S.selection && S.selection.kind === 'token' && S.selection.id === t.id, ghost: moving,
         });
       }
       // Immagini "sopra le pedine" (tetti, rami): semitrasparenti se c'è una pedina sotto, se richiesto.
       for (const e of above) drawPlacedTiles(ctx, e, s, true, tokensOn(e), W, H);
       if (d.grid.tileMap) drawGridMap(ctx, d.grid.tileMap, s, true, tokenCells, W, H);
       // Luce, buio e nebbia di guerra: livello a parte, ricalcolato solo quando cambia qualcosa.
-      if (opts.vision) opts.vision.draw(ctx, view, s, W, H);
+      if (opts.vision) opts.vision.draw(ctx, S.view, s, W, H);
 
-      if (selection && selection.kind !== 'token' && entity(selection)) {
-        const p = entityPos(selection);
-        const e = entity(selection);
+      if (S.selection && S.selection.kind !== 'token' && entity(S.selection)) {
+        const p = entityPos(S.selection);
+        const e = entity(S.selection);
         // Per le immagini si vede l'area intera, più marcate le celle selezionate dell'ingombro.
         if (e.tiles) outline(ctx, G.shapeFrom(e.w, e.h, () => true), p.x, p.y, s, colors().line5, true);
-        outline(ctx, footprint(selection), p.x, p.y, s, colors().selected, true);
+        outline(ctx, footprint(S.selection), p.x, p.y, s, colors().selected, true);
       }
 
       // Anteprime: trascinamento (verde = valida, rosso = bloccata), inserimento e rettangoli.
-      const ghost = drag && drag.target && (drag.type === 'palette' || (drag.type === 'move' && drag.moved)) ? drag : null;
+      const ghost = S.drag && S.drag.target && (S.drag.type === 'palette' || (S.drag.type === 'move' && S.drag.moved)) ? S.drag : null;
       if (ghost && ghost.mv) drawRoute(ctx, ghost, s);
       else if (ghost) drawShape(ctx, ghost.footprint, ghost.valid ? colors().ok : colors().bad, ghost.target.x, ghost.target.y, s, 1);
-      if (hover && !drag) drawShape(ctx, hover.footprint, hover.valid ? colors().ok : colors().bad, hover.x, hover.y, s, 0.8);
-      if (drag && drag.type === 'rect' && drag.b) {
-        const r = G.rectBetween(drag.a, drag.b, d.grid);
-        if (tool === 'riempi') drawShape(ctx, G.shapeFrom(r.w, r.h, () => true), colors().ok, r.x, r.y, s, 1);
-        else drawZone(ctx, Object.assign({ kind: tool === 'zona-nemici' ? 'nemici' : 'giocatori' }, r), s, 0.8);
+      if (S.hover && !S.drag) drawShape(ctx, S.hover.footprint, S.hover.valid ? colors().ok : colors().bad, S.hover.x, S.hover.y, s, 0.8);
+      if (S.drag && S.drag.type === 'rect' && S.drag.b) {
+        const r = G.rectBetween(S.drag.a, S.drag.b, d.grid);
+        if (S.tool === 'riempi') drawShape(ctx, G.shapeFrom(r.w, r.h, () => true), colors().ok, r.x, r.y, s, 1);
+        else drawZone(ctx, Object.assign({ kind: S.tool === 'zona-nemici' ? 'nemici' : 'giocatori' }, r), s, 0.8);
       }
 
       // Misuratore.
-      if (measure) {
-        const ax = view.panX + (measure.a.x + 0.5) * s;
-        const ay = view.panY + (measure.a.y + 0.5) * s;
-        const bx = view.panX + (measure.b.x + 0.5) * s;
-        const by = view.panY + (measure.b.y + 0.5) * s;
+      if (S.measure) {
+        const ax = S.view.panX + (S.measure.a.x + 0.5) * s;
+        const ay = S.view.panY + (S.measure.a.y + 0.5) * s;
+        const bx = S.view.panX + (S.measure.b.x + 0.5) * s;
+        const by = S.view.panY + (S.measure.b.y + 0.5) * s;
         ctx.save();
         ctx.strokeStyle = colors().current;
         ctx.fillStyle = colors().current;
@@ -548,7 +552,7 @@
         ctx.stroke();
         ctx.setLineDash([]);
         for (const [x, y] of [[ax, ay], [bx, by]]) { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
-        const label = doc().grid.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(measure.a, measure.b), doc().grid.scale) : G.formatDistance(measureCells(measure.a, measure.b), feet());
+        const label = doc().grid.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(S.measure.a, S.measure.b), doc().grid.scale) : G.formatDistance(measureCells(S.measure.a, S.measure.b), feet());
         ctx.font = 'bold 12px system-ui, sans-serif';
         const tw = ctx.measureText(label).width + 12;
         ctx.fillStyle = colors().labelBg;
@@ -561,9 +565,9 @@
       }
 
       // Anteprima e selezione degli strumenti delle tile.
-      if (opts.painter) opts.painter.draw(ctx, view, s, W, H);
+      if (opts.painter) opts.painter.draw(ctx, S.view, s, W, H);
       // Sovrapposizioni di chi usa la griglia (es. anteprima del piano dell'IA nel combattimento).
-      if (opts.overlay) opts.overlay(ctx, view, s);
+      if (opts.overlay) opts.overlay(ctx, S.view, s);
 
       drawLabels(ctx, W, H, s);
     }
@@ -573,7 +577,7 @@
       const r = canvas.getBoundingClientRect();
       return { sx: e.clientX - r.left, sy: e.clientY - r.top };
     };
-    const cellOf = (p) => G.screenToCell(view, p.sx, p.sy);
+    const cellOf = (p) => G.screenToCell(S.view, p.sx, p.sy);
     const inGrid = (cell) => cell.x >= 0 && cell.y >= 0 && cell.x < dims().w && cell.y < dims().h;
     const clampCell = (c) => ({ x: Math.max(0, Math.min(dims().w - 1, c.x)), y: Math.max(0, Math.min(dims().h - 1, c.y)) });
 
@@ -585,33 +589,33 @@
       canvas.setPointerCapture(e.pointerId);
       if (e.button === 1) {
         e.preventDefault();
-        drag = { type: 'pan', p0: p, view0: view, moved: true };
+        S.drag = { type: 'pan', p0: p, view0: S.view, moved: true };
         return;
       }
-      if (pick) {
+      if (S.pick) {
         const hit = inGrid(cell) ? hitTest(cell, false) : null;
-        if (hit && hit.kind === 'token') pick(hit.id);
+        if (hit && hit.kind === 'token') S.pick(hit.id);
         return;
       }
       if (painting()) {
-        drag = { type: 'paint' };
+        S.drag = { type: 'paint' };
         opts.painter.down(cell, e);
         return;
       }
       if (!inGrid(cell)) {
-        drag = { type: 'pan', p0: p, view0: view, moved: false };
+        S.drag = { type: 'pan', p0: p, view0: S.view, moved: false };
         return;
       }
-      if (tool === 'misura') {
-        measure = { a: cell, b: cell };
-        drag = { type: 'measure' };
-      } else if (tool === 'gomma') {
-        drag = { type: 'erase', before: G.gridSnapshot(doc()), erased: eraseAt(cell) };
+      if (S.tool === 'misura') {
+        S.measure = { a: cell, b: cell };
+        S.drag = { type: 'S.measure' };
+      } else if (S.tool === 'gomma') {
+        S.drag = { type: 'erase', before: G.gridSnapshot(doc()), erased: eraseAt(cell) };
         changed();
-      } else if (tool === 'riempi' || tool === 'zona-giocatori' || tool === 'zona-nemici') {
-        drag = { type: 'rect', a: cell, b: cell };
-      } else if (tool === 'struttura' || tool === 'oggetto' || tool === 'etichetta') {
-        drag = { type: 'click-tool', p0: p, view0: view, cell, moved: false };
+      } else if (S.tool === 'riempi' || S.tool === 'zona-giocatori' || S.tool === 'zona-nemici') {
+        S.drag = { type: 'rect', a: cell, b: cell };
+      } else if (S.tool === 'struttura' || S.tool === 'oggetto' || S.tool === 'etichetta') {
+        S.drag = { type: 'click-S.tool', p0: p, view0: S.view, cell, moved: false };
       } else if (ro) {
         // Sola vista: un clic seleziona la pedina, il trascinamento sposta solo la vista (o la propria pedina, con canDrag).
         const hit = hitTest(cell);
@@ -619,16 +623,16 @@
         const mv = hit && hit.kind === 'token' && opts.canDrag && opts.canDrag(hit.id) && opts.movement ? opts.movement.begin(hit.id) : null;
         if (mv) {
           const at = entityPos(hit);
-          drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p, mv };
-        } else drag = { type: 'pan', p0: p, view0: view, moved: false, keep: Boolean(hit) };
+          S.drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p, mv };
+        } else S.drag = { type: 'pan', p0: p, view0: S.view, moved: false, keep: Boolean(hit) };
       } else {
         const hit = hitTest(cell);
         if (hit) {
           const at = entityPos(hit);
-          drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p,
+          S.drag = { type: 'move', hit, p0: p, off: { x: cell.x - at.x, y: cell.y - at.y }, start: at, footprint: footprint(hit), moved: false, cursor: p,
             mv: hit.kind === 'token' && opts.movement ? opts.movement.begin(hit.id) : null };
         } else {
-          drag = { type: 'pan', p0: p, view0: view, moved: false };
+          S.drag = { type: 'pan', p0: p, view0: S.view, moved: false };
         }
       }
       updateUi();
@@ -638,58 +642,58 @@
     canvas.addEventListener('pointermove', (e) => {
       const p = local(e);
       const cell = cellOf(p);
-      if (painting() && (!drag || drag.type === 'paint')) {
-        opts.painter.move(cell, e, Boolean(drag));
+      if (painting() && (!S.drag || S.drag.type === 'paint')) {
+        opts.painter.move(cell, e, Boolean(S.drag));
         canvas.style.cursor = 'crosshair';
         return;
       }
-      if (!drag) {
+      if (!S.drag) {
         const fp = insertFootprint();
         if (fp && inGrid(cell)) {
           const x = cell.x - Math.floor(fp.w / 2);
           const y = cell.y - Math.floor(fp.h / 2);
-          hover = { footprint: fp, x, y, valid: canInsertAt(fp, x, y) };
+          S.hover = { footprint: fp, x, y, valid: canInsertAt(fp, x, y) };
           requestDraw();
-        } else if (hover) {
-          hover = null;
+        } else if (S.hover) {
+          S.hover = null;
           requestDraw();
         }
-        canvas.style.cursor = pick || tool !== 'seleziona' ? 'crosshair' : inGrid(cell) && hitTest(cell) ? 'grab' : 'default';
+        canvas.style.cursor = S.pick || S.tool !== 'seleziona' ? 'crosshair' : inGrid(cell) && hitTest(cell) ? 'grab' : 'default';
         return;
       }
-      const far = drag.p0 && Math.hypot(p.sx - drag.p0.sx, p.sy - drag.p0.sy) >= DRAG_THRESHOLD;
-      if (drag.type === 'pan' || drag.type === 'click-tool') {
-        if (!drag.moved && !far) return;
-        drag.moved = true;
+      const far = S.drag.p0 && Math.hypot(p.sx - S.drag.p0.sx, p.sy - S.drag.p0.sy) >= DRAG_THRESHOLD;
+      if (S.drag.type === 'pan' || S.drag.type === 'click-S.tool') {
+        if (!S.drag.moved && !far) return;
+        S.drag.moved = true;
         canvas.style.cursor = 'grabbing';
-        view = { zoom: drag.view0.zoom, panX: drag.view0.panX + p.sx - drag.p0.sx, panY: drag.view0.panY + p.sy - drag.p0.sy };
-      } else if (drag.type === 'measure') {
-        measure.b = clampCell(cell);
+        S.view = { zoom: S.drag.view0.zoom, panX: S.drag.view0.panX + p.sx - S.drag.p0.sx, panY: S.drag.view0.panY + p.sy - S.drag.p0.sy };
+      } else if (S.drag.type === 'S.measure') {
+        S.measure.b = clampCell(cell);
         updateUi();
-      } else if (drag.type === 'rect') {
-        drag.b = clampCell(cell);
-      } else if (drag.type === 'erase') {
-        if (inGrid(cell) && eraseAt(cell)) { drag.erased = true; changed(); }
-      } else if (drag.type === 'move') {
-        if (!drag.moved && !far) return;
-        drag.moved = true;
+      } else if (S.drag.type === 'rect') {
+        S.drag.b = clampCell(cell);
+      } else if (S.drag.type === 'erase') {
+        if (inGrid(cell) && eraseAt(cell)) { S.drag.erased = true; changed(); }
+      } else if (S.drag.type === 'move') {
+        if (!S.drag.moved && !far) return;
+        S.drag.moved = true;
         canvas.style.cursor = 'grabbing';
-        drag.target = { x: cell.x - drag.off.x, y: cell.y - drag.off.y };
-        drag.cursor = p;
-        if (drag.mv) {
+        S.drag.target = { x: cell.x - S.drag.off.x, y: cell.y - S.drag.off.y };
+        S.drag.cursor = p;
+        if (S.drag.mv) {
           // Movimento limitato: percorso minimo fino al residuo (la pedina si ferma all'ultima cella raggiungibile).
-          drag.route = drag.mv.route(drag.target);
-          drag.valid = Boolean(drag.route.end);
+          S.drag.route = S.drag.mv.route(S.drag.target);
+          S.drag.valid = Boolean(S.drag.route.end);
         } else {
-          drag.valid = isValidAt(drag.hit, drag.target.x, drag.target.y);
+          S.drag.valid = isValidAt(S.drag.hit, S.drag.target.x, S.drag.target.y);
         }
       }
       requestDraw();
     });
 
     canvas.addEventListener('pointerup', (e) => {
-      const d = drag;
-      drag = null;
+      const d = S.drag;
+      S.drag = null;
       canvas.style.cursor = 'default';
       if (!d) return;
       if (d.type === 'paint') {
@@ -725,18 +729,18 @@
           const key = d.hit.kind + ':' + d.hit.id;
           const now = performance.now();
           select(d.hit);
-          if (lastClick.key === key && now - lastClick.time < DOUBLE_CLICK_MS && (d.hit.kind === 'token' || (d.hit.kind === 'item' && opts.onObject))) {
-            lastClick = { key: null, time: 0 };
+          if (S.lastClick.key === key && now - S.lastClick.time < DOUBLE_CLICK_MS && (d.hit.kind === 'token' || (d.hit.kind === 'item' && opts.onObject))) {
+            S.lastClick = { key: null, time: 0 };
             if (d.hit.kind === 'token') openMenu(e.clientX, e.clientY, tokenActions(d.hit.id));
             else opts.onObject(d.hit.id);
           } else {
-            lastClick = { key, time: now };
+            S.lastClick = { key, time: now };
           }
         }
       } else if (d.type === 'pan' && !d.moved && !d.keep) {
         select(null);
-      } else if (d.type === 'click-tool' && !d.moved) {
-        if (tool === 'etichetta') labelAt(d.cell);
+      } else if (d.type === 'click-S.tool' && !d.moved) {
+        if (S.tool === 'etichetta') labelAt(d.cell);
         else insertAt(d.cell);
       } else if (d.type === 'rect') {
         finishRect(G.rectBetween(d.a, d.b, doc().grid));
@@ -748,13 +752,13 @@
     });
 
     canvas.addEventListener('pointercancel', (e) => {
-      if (drag && drag.type === 'paint') opts.painter.up(cellOf(local(e)), e);
-      drag = null;
+      if (S.drag && S.drag.type === 'paint') opts.painter.up(cellOf(local(e)), e);
+      S.drag = null;
       requestDraw();
     });
     canvas.addEventListener('pointerleave', () => {
-      if (hover) { hover = null; requestDraw(); }
-      if (opts.painter && !drag) opts.painter.move(null);
+      if (S.hover) { S.hover = null; requestDraw(); }
+      if (opts.painter && !S.drag) opts.painter.move(null);
     });
 
     canvas.addEventListener('contextmenu', (e) => {
@@ -770,7 +774,7 @@
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const p = local(e);
-      view = G.zoomAt(view, p.sx, p.sy, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+      S.view = G.zoomAt(S.view, p.sx, p.sy, e.deltaY < 0 ? 1.15 : 1 / 1.15);
       requestDraw();
     }, { passive: false });
 
@@ -779,26 +783,26 @@
       const t = e.target;
       if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
       const k = e.key.toLowerCase();
-      if (ro) { if (e.key === 'Escape' && selection) select(null); return; }
+      if (ro) { if (e.key === 'Escape' && S.selection) select(null); return; }
       if ((e.ctrlKey || e.metaKey) && e.altKey && k === 'b') { e.preventDefault(); getPaletteToggle().toggle(); }
       else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-      else if (e.key === 'Delete' && selection) { e.preventDefault(); removeEntity(selection); }
+      else if (e.key === 'Delete' && S.selection) { e.preventDefault(); removeEntity(S.selection); }
       else if (e.key === 'Escape') {
-        if (pick) finishPick(null);
-        else if (tool !== 'seleziona') setTool('seleziona');
-        else if (selection) select(null);
+        if (S.pick) finishPick(null);
+        else if (S.tool !== 'seleziona') setTool('seleziona');
+        else if (S.selection) select(null);
       }
     });
 
     // ---------- Pannello laterale: trascinamento e scelta dei modelli ----------
     function startPaletteDrag(e, spec) {
-      if (e.button !== 0 || pick) return;
+      if (e.button !== 0 || S.pick) return;
       if (e.pointerType === 'mouse') e.preventDefault();
       const item = e.currentTarget;
       item.setPointerCapture(e.pointerId);
-      const ghostEl = el('div', { class: 'drag-ghost', text: spec.name });
-      drag = { type: 'palette', spec, footprint: spec.footprint, target: null, valid: false };
+      const ghostEl = el('div', { class: 'S.drag-ghost', text: spec.name });
+      S.drag = { type: 'palette', spec, footprint: spec.footprint, target: null, valid: false };
       let shown = false;
       const start = { x: e.clientX, y: e.clientY };
       const move = (ev) => {
@@ -808,11 +812,11 @@
         const r = canvas.getBoundingClientRect();
         const inside = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
         if (inside) {
-          const cell = G.screenToCell(view, ev.clientX - r.left, ev.clientY - r.top);
-          drag.target = { x: cell.x - Math.floor(spec.footprint.w / 2), y: cell.y - Math.floor(spec.footprint.h / 2) };
-          drag.valid = spec.isValid(drag.target.x, drag.target.y);
+          const cell = G.screenToCell(S.view, ev.clientX - r.left, ev.clientY - r.top);
+          S.drag.target = { x: cell.x - Math.floor(spec.footprint.w / 2), y: cell.y - Math.floor(spec.footprint.h / 2) };
+          S.drag.valid = spec.isValid(S.drag.target.x, S.drag.target.y);
         } else {
-          drag.target = null;
+          S.drag.target = null;
         }
         requestDraw();
       };
@@ -821,8 +825,8 @@
         item.removeEventListener('pointerup', end);
         item.removeEventListener('pointercancel', end);
         ghostEl.remove();
-        const d = drag;
-        drag = null;
+        const d = S.drag;
+        S.drag = null;
         if (ev.type === 'pointerup' && d && d.target) {
           if (d.valid) spec.place(d.target);
           else toast('Posizione non valida: lo spazio è occupato o fuori dalla griglia.', 'error');
@@ -846,8 +850,8 @@
 
     const canInsert = (kind) => opts.tools.includes(kind === 'structure' ? 'struttura' : 'oggetto');
     function chooseTemplate(kind, id) {
-      template = { kind, id };
-      if (kind === 'structure' && tool !== 'riempi') setTool('struttura');
+      S.template = { kind, id };
+      if (kind === 'structure' && S.tool !== 'riempi') setTool('struttura');
       else if (kind !== 'structure') setTool('oggetto');
       else refreshPalette();
     }
@@ -859,7 +863,7 @@
       const group = (title, entries, empty, open) => el('details', { class: 'palette-group', open: open !== false },
         el('summary', { text: title }),
         entries.length ? el('ul', {}, entries) : el('p', { class: 'muted small', text: empty }));
-      const chosen = (kind, id) => (template && template.kind === kind && template.id === id ? 'chosen' : '');
+      const chosen = (kind, id) => (S.template && S.template.kind === kind && S.template.id === id ? 'chosen' : '');
       clear(palette).append(...[
         opts.showCombatants ? group('Combattenti', R.sortByInitiative(d.combatants).map((t) => paletteEntry(
           DnD.icone.iconCanvas(t.icon, 22), t.name,
@@ -922,16 +926,16 @@
         (d.grid.tileMap && DnD.uiTileset.missingTilesets(d.grid.tileMap, () => updateUi(), tsIndex()) ? 1 : 0);
       const cur = d.combatants.find((x) => x.id === d.currentId);
       let text;
-      if (measure) {
+      if (S.measure) {
         // Mappe di esplorazione: distanza nella scala della mappa (km, miglia…).
         const g = doc().grid;
-        text = '📏 ' + G.cellLabel(measure.a.x, measure.a.y) + ' → ' + G.cellLabel(measure.b.x, measure.b.y) + ': ' +
-          (g.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(measure.a, measure.b), g.scale) : G.formatDistance(measureCells(measure.a, measure.b), feet()));
+        text = '📏 ' + G.cellLabel(S.measure.a.x, S.measure.a.y) + ' → ' + G.cellLabel(S.measure.b.x, S.measure.b.y) + ': ' +
+          (g.kind === 'esplorazione' ? DnD.esplorazione.formatDistance(G.cellDistance(S.measure.a, S.measure.b), g.scale) : G.formatDistance(measureCells(S.measure.a, S.measure.b), feet()));
       } else if (painting()) {
         text = opts.painter.hint();
-      } else if (tool !== 'seleziona') {
+      } else if (S.tool !== 'seleziona') {
         const t = templateEntity();
-        text = TOOL_HINTS[tool] + (t && (tool === 'struttura' || tool === 'oggetto' || tool === 'riempi') ? ' Scelto: ' + t.name + '.' : '');
+        text = TOOL_HINTS[S.tool] + (t && (S.tool === 'struttura' || S.tool === 'oggetto' || S.tool === 'riempi') ? ' Scelto: ' + t.name + '.' : '');
       } else if (cur) {
         text = 'Turno di ' + cur.name + (opts.turnInfo ? ' · ' + opts.turnInfo(cur) : '');
       } else {
@@ -941,12 +945,12 @@
       }
       info.textContent = text + (missing ? ' · ⚠ ' + missing + (missing === 1 ? ' elemento proviene' : ' elementi provengono') + ' da strutture/oggetti eliminati' : '') +
         (missingImages ? ' · ⚠ ' + missingImages + (missingImages === 1 ? ' elemento (o la TileMap) con tile mancanti' : ' elementi con tile mancanti') + ' (segnaposto grigio)' : '');
-      const ent = entity(selection);
+      const ent = entity(S.selection);
       clear(selBar);
-      if (ent && ro) selBar.append(el('span', { class: 'muted small', text: entityName(selection) }));
+      if (ent && ro) selBar.append(el('span', { class: 'muted small', text: entityName(S.selection) }));
       else if (ent) {
-        selBar.append(el('span', { class: 'muted small', text: entityName(selection) + ':' }),
-          ...actionsFor(selection).map((a) => el('button', {
+        selBar.append(el('span', { class: 'muted small', text: entityName(S.selection) + ':' }),
+          ...actionsFor(S.selection).map((a) => el('button', {
             type: 'button', class: 'btn small' + (a.danger ? ' danger' : ''), text: a.text, disabled: a.disabled, onclick: a.onclick,
           })));
       }
@@ -955,8 +959,8 @@
     // ---------- Scelta dei bersagli dalla griglia ----------
     // cb(id) viene chiamata a ogni pedina cliccata; cb(null) quando si chiude (Fine o Esc).
     function pickTarget(cb, multiple) {
-      pick = (id) => { cb(id); if (!multiple) finishPick(undefined); };
-      pick.done = cb;
+      S.pick = (id) => { cb(id); if (!multiple) finishPick(undefined); };
+      S.pick.done = cb;
       banner.firstChild.textContent = multiple ? '🎯 Clicca le pedine dei bersagli, poi «Fine»' : '🎯 Clicca la pedina del bersaglio';
       banner.lastChild.textContent = multiple ? 'Fine' : 'Annulla';
       banner.hidden = false;
@@ -964,8 +968,8 @@
       node.scrollIntoView({ behavior: DnD.ui.scrollBehavior(), block: 'nearest' });
     }
     function finishPick(value) {
-      const p = pick;
-      pick = null;
+      const p = S.pick;
+      S.pick = null;
       banner.hidden = true;
       if (p && value !== undefined) p.done(value);
     }
@@ -974,22 +978,22 @@
     function refresh() {
       const d = doc();
       if (!d) return;
-      if (d.id !== docId) {
-        docId = d.id;
+      if (d.id !== S.docId) {
+        S.docId = d.id;
         history.clear();
-        view = defaultView();
-        selection = null;
-        measure = null;
-        if (tool !== 'seleziona') setTool('seleziona');
+        S.view = defaultView();
+        S.selection = null;
+        S.measure = null;
+        if (S.tool !== 'seleziona') setTool('seleziona');
       }
-      if (selection && !entity(selection)) selection = null;
+      if (S.selection && !entity(S.selection)) S.selection = null;
       refreshPalette();
       updateUi();
       requestDraw();
     }
 
     function setSelectedCombatant(id) {
-      selection = id && entity({ kind: 'token', id }) ? { kind: 'token', id } : null;
+      S.selection = id && entity({ kind: 'token', id }) ? { kind: 'token', id } : null;
       updateUi();
       requestDraw();
     }
@@ -1007,7 +1011,7 @@
     setTool('seleziona');
     return {
       node, refresh, setSelectedCombatant, pickTarget, requestDraw, tileSnapshot, commitTiles, undo, redo,
-      view: () => view,
+      view: () => S.view,
       setTool: (t) => setTool(t),
       hasTokens: () => doc().combatants.some((x) => x.pos),
       canUndo: () => history.canUndo(),
