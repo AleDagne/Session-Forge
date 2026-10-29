@@ -50,14 +50,14 @@
       }
       if (S.tool === 'misura') {
         S.measure = { a: cell, b: cell };
-        S.drag = { type: 'S.measure' };
+        S.drag = { type: 'measure' };
       } else if (S.tool === 'gomma') {
         S.drag = { type: 'erase', before: G.gridSnapshot(doc()), erased: eraseAt(cell) };
         changed();
       } else if (S.tool === 'riempi' || S.tool === 'zona-giocatori' || S.tool === 'zona-nemici') {
         S.drag = { type: 'rect', a: cell, b: cell };
       } else if (S.tool === 'struttura' || S.tool === 'oggetto' || S.tool === 'etichetta') {
-        S.drag = { type: 'click-S.tool', p0: p, view0: S.view, cell, moved: false };
+        S.drag = { type: 'click-tool', p0: p, view0: S.view, cell, moved: false };
       } else if (ro) {
         // Sola vista: un clic seleziona la pedina, il trascinamento sposta solo la vista (o la propria pedina, con canDrag).
         const hit = hitTest(cell);
@@ -104,12 +104,12 @@
         return;
       }
       const far = S.drag.p0 && Math.hypot(p.sx - S.drag.p0.sx, p.sy - S.drag.p0.sy) >= DRAG_THRESHOLD;
-      if (S.drag.type === 'pan' || S.drag.type === 'click-S.tool') {
+      if (S.drag.type === 'pan' || S.drag.type === 'click-tool') {
         if (!S.drag.moved && !far) return;
         S.drag.moved = true;
         canvas.style.cursor = 'grabbing';
         S.view = { zoom: S.drag.view0.zoom, panX: S.drag.view0.panX + p.sx - S.drag.p0.sx, panY: S.drag.view0.panY + p.sy - S.drag.p0.sy };
-      } else if (S.drag.type === 'S.measure') {
+      } else if (S.drag.type === 'measure') {
         S.measure.b = clampCell(cell);
         updateUi();
       } else if (S.drag.type === 'rect') {
@@ -181,7 +181,7 @@
         }
       } else if (d.type === 'pan' && !d.moved && !d.keep) {
         select(null);
-      } else if (d.type === 'click-S.tool' && !d.moved) {
+      } else if (d.type === 'click-tool' && !d.moved) {
         if (S.tool === 'etichetta') labelAt(d.cell);
         else insertAt(d.cell);
       } else if (d.type === 'rect') {

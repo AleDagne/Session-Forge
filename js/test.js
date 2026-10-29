@@ -7059,6 +7059,8 @@
     try {
       ok(m.canvas.getBoundingClientRect().width > 300, 'canvas nel layout');
       eq([m.g.view().zoom, m.g.hasTokens(), m.g.canUndo()], [1, true, false]);
+      // Classi CSS della barra degli strumenti (una sostituzione automatica le aveva rovinate: «S.tool-group»).
+      eq([...m.g.node.querySelectorAll('.tool-group .tool')].length, 5, 'pulsanti degli strumenti con le classi giuste');
       m.g.requestDraw();
       m.g.refresh();
     } finally { m.chiudi(); }

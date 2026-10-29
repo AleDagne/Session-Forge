@@ -113,8 +113,8 @@
     const selBar = el('div', { class: 'grid-selbar' });
     const btn = (text, title, onclick) => el('button', { type: 'button', class: 'btn small', text, title, 'aria-label': title, onclick });
     const toolButtons = {};
-    const toolBar = el('div', { class: 'S.tool-group', role: 'toolbar', 'aria-label': 'Strumenti' }, opts.tools.map((t) => {
-      toolButtons[t] = el('button', { type: 'button', class: 'btn small S.tool', text: TOOLS[t], 'aria-pressed': 'false', onclick: () => {
+    const toolBar = el('div', { class: 'tool-group', role: 'toolbar', 'aria-label': 'Strumenti' }, opts.tools.map((t) => {
+      toolButtons[t] = el('button', { type: 'button', class: 'btn small tool', text: TOOLS[t], 'aria-pressed': 'false', onclick: () => {
         // Uno strumento della griglia disattiva quelli delle tile.
         if (opts.painter && opts.painter.active()) opts.painter.deactivate();
         setTool(S.tool === t && t !== 'seleziona' ? 'seleziona' : t);

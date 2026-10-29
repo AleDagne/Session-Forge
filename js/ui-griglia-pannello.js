@@ -20,7 +20,7 @@
       if (e.pointerType === 'mouse') e.preventDefault();
       const item = e.currentTarget;
       item.setPointerCapture(e.pointerId);
-      const ghostEl = el('div', { class: 'S.drag-ghost', text: spec.name });
+      const ghostEl = el('div', { class: 'drag-ghost', text: spec.name });
       S.drag = { type: 'palette', spec, footprint: spec.footprint, target: null, valid: false };
       let shown = false;
       const start = { x: e.clientX, y: e.clientY };
