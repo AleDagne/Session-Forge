@@ -138,5 +138,148 @@
     return inizioTurno(c, sorted, prev, c.currentId, newRound, rng);
   }
 
-  DnD.combattimento = { danno, dopoAzione, attacco, inizioTurno, prossimoTurno, rollText };
+  // ---------- Incantesimi e tiri salvezza ----------
+  // Incantesimo innato di una creatura (senza slot): { freq, left } oppure null.
+  const innatoDi = (sc, sp) => (sc && sc.innate && sp && sc.innate[sp.id]) || null;
+
+  // Spende l'uso: innato «N al giorno» (anche nel Percorso del leggendario) o slot (anche nella scheda del giocatore).
+  function spendiLancio(st, a, sp, slotLevel) {
+    const sc = a.spellcasting;
+    const inn = innatoDi(sc, sp);
+    if (inn) {
+      if (inn.freq === 'giorno') inn.left = Math.max(0, inn.left - 1);
+      const source = a.kind === 'player' && a.legend ? st.players.find((p) => p.id === a.sourceId) : null;
+      if (source && source.legend && inn.freq === 'giorno') source.legend.spellUses[sp.id] = (source.legend.spellUses[sp.id] || 0) + 1;
+    } else if (sp.level > 0) {
+      sc.slotsUsed = DnD.magie.consumeSlot(sc.slotsUsed, sc.slotsTotal, slotLevel);
+      const source = a.kind === 'player' ? st.players.find((p) => p.id === a.sourceId) : null;
+      if (source) source.spellcasting.slotsUsed[slotLevel - 1] = sc.slotsUsed[slotLevel - 1];
+    }
+    return inn;
+  }
+
+  // Parte della riga del log per un bersaglio, secondo il tipo di effetto.
+  function testoBersaglio(o, t, r, before, defNote) {
+    const { sp, sc, tmods, diceText, dmgType } = o;
+    const e = sp.effect;
+    const hpText = (before === t.hp ? '' : ' (' + before + ' → ' + t.hp + ' PF)') + defNote;
+    const why = C.modsText(tmods.get(t.id));
+    if (e.type === 'attacco') {
+      const outcome = r.fumble ? '1 NATURALE, mancato' : r.crit ? 'CRITICO, ' + r.amount + ' danni' + dmgType + ' (' + diceText(r.roll) + ')'
+        : r.hit ? 'colpito, ' + r.amount + ' danni' + dmgType + ' (' + diceText(r.roll) + ')' : 'mancato';
+      return t.name + (why ? ' (' + why + ')' : '') + ': ' + testoD20(tmods.get(t.id).mode, r) + ' ' + R.formatModifier(sc.attack) + ' = ' + r.total + ' contro CA ' + t.ac + ' → ' + outcome + hpText + '.';
+    }
+    if (e.type === 'salvezza') return t.name + ': salvezza ' + e.saveAbility + ' ' + (r.autoFail ? 'fallita in automatico (' + why + ')' : r.saveTotal + ' vs CD ' + sc.dc + (why ? ' (' + why + ')' : '') + ' → ' + (r.success ? 'riesce' : 'fallisce')) + ', ' + r.amount + ' danni' + hpText + '.';
+    if (e.type === 'cura') return t.name + ' recupera ' + (t.hp - before) + ' PF' + hpText + (before === 0 && t.hp > 0 ? ', torna in piedi' : '') + '.';
+    return o.res.roll ? t.name + ': ' + r.amount + ' danni' + hpText + '.' : null;
+  }
+
+  // Effetto su ogni bersaglio: cura o danno (con difese), Resistenza leggendaria in sospeso, testo.
+  function applicaBersagli(o, parts, danni) {
+    const { c, sp, res } = o;
+    const e = sp.effect;
+    const downed = [];
+    for (const r of res.targets) {
+      const t = c.combatants.find((x) => x.id === r.id);
+      const before = t.hp;
+      let defNote = '';
+      if (e.type === 'cura') t.hp = R.heal(t.hp, t.maxHp, r.amount);
+      else if (r.amount) {
+        const def = M.applyDefenses(r.amount, M.damageTypeOf(e.damageType), t.defenses, true);
+        defNote = def.note ? ' (' + def.note + ')' : '';
+        danni.push(...danno(t, def.amount, r.crit, c.combatants, o.rng));
+        r.amount = def.amount;
+      }
+      // Tiro salvezza fallito: la Resistenza leggendaria può trasformarlo in un successo.
+      if (e.type === 'salvezza' && !r.success && t.creature && t.creature.legendaryResistance.left > 0) {
+        t.pendingSave = { full: [{ amount: res.roll ? Math.max(0, res.roll.total) : 0, type: M.damageTypeOf(e.damageType) }], half: e.halfOnSave, applied: before - t.hp, magical: true, text: sp.name };
+      }
+      const line = testoBersaglio(o, t, r, before, defNote);
+      if (line) parts.push(line);
+      if (before > 0 && t.hp === 0) downed.push(t.name);
+    }
+    return downed;
+  }
+
+  // Condizione inflitta: a chi fallisce la salvezza, a chi è colpito, o (senza tiro) a tutti salvo la salvezza propria.
+  function infliggiCondizioni(o) {
+    const { c, sp, sc, res } = o;
+    const e = sp.effect;
+    if (!sp.inflict || !sp.inflict.type) return;
+    for (const r of res.targets) {
+      const t = c.combatants.find((x) => x.id === r.id);
+      if (!t || (e.type === 'salvezza' && r.success) || (e.type === 'attacco' && !r.hit)) continue;
+      if (e.type !== 'salvezza' && e.type !== 'attacco' && sp.inflict.save) {
+        const sm = C.saveMods(t, sp.inflict.save.ability);
+        const dc = sp.inflict.save.dc || sc.dc;
+        const s2 = sm.autoFail ? { success: false, total: '—' } : R.rollSave({ bonus: t.saves[sp.inflict.save.ability] || 0, mode: sm.mode, dc }, o.rng);
+        log(c, s2.success ? 'tiro-salvezza' : 'ts-fallito', t.name + ': salvezza su ' + sp.inflict.save.ability + ' contro ' + sp.name + ' ' + s2.total + ' vs CD ' + dc + ' → ' + (s2.success ? 'riesce.' : 'fallisce.'));
+        if (s2.success) continue;
+      }
+      o.infliggi(t, sp.inflict, sp);
+    }
+  }
+
+  /**
+   * Lancio di un incantesimo: spende slot o uso innato, risolve attacchi/salvezze/cure (magie.resolveSpell), avvia la
+   * concentrazione e la luce, applica danni e condizioni, scrive il log.
+   * @param {{c: object, st: object, a: object, sp: object, slotLevel: number, targets: object[], tmods: Map, mode: string,
+   *   rng: Function, infliggi: Function}} o tmods: modificatori delle condizioni per bersaglio (calcolati da chi chiama);
+   *   infliggi(t, inflict, sp): applica una condizione
+   * @returns {{danno: Array, summary: string}} righe del danno da scrivere alla fine dell'azione, riepilogo
+   */
+  function lancio(o) {
+    const { c, a, sp, slotLevel, targets, tmods, mode } = o;
+    const sc = a.spellcasting;
+    const inn = spendiLancio(o.st, a, sp, slotLevel);
+    const res = DnD.magie.resolveSpell({
+      spell: sp, slotLevel, mode, caster: { attack: sc.attack, dc: sc.dc, mod: sc.mod },
+      targets: targets.map((t) => { const m = tmods.get(t.id); return { id: t.id, ac: t.ac, saves: t.saves, mode: m.mode, autoCrit: Boolean(m.autoCrit), saveMode: m.mode, autoFail: Boolean(m.autoFail) }; }),
+    }, o.rng);
+    // Concentrazione: inizia prima di applicare gli effetti (quella precedente finisce con i suoi).
+    const concLines = sp.concentration ? C.startConcentration(a, sp, c.combatants, c.round) : [];
+    // Luce e Oscurità (riconosciuti dal nome): la sorgente nasce sul primo bersaglio o su chi lancia.
+    const lightAt = (targets[0] && targets[0].pos) || a.pos;
+    if (lightAt && DnD.visione.spellEffect(sp)) concLines.push(DnD.visione.castLight(c.grid, a, sp, lightAt));
+    const e = sp.effect;
+    const dmgType = e.damageType ? ' ' + e.damageType : '';
+    const diceText = (r) => (r ? DnD.dadi.formatExpr(r.count, r.sides, r.modifier) + ': ' + rollText(r.rolls, r.modifier) + ' = ' + Math.max(0, r.total) : '');
+    const parts = [a.name + ' lancia ' + sp.name + (inn ? ' (innato' + (inn.freq === 'giorno' ? ', ' + inn.left + ' usi rimasti' : ', a volontà') + ')' : sp.level ? ' (slot ' + slotLevel + '°)' : ' (trucchetto)') +
+      (targets.length ? ' su ' + targets.map((t) => t.name).join(', ') : '') + '.'];
+    if (res.roll) parts.push((e.type === 'cura' ? 'Cura ' : 'Danni ') + diceText(res.roll) + (e.type === 'cura' ? '' : dmgType) + '.');
+    const ctx = Object.assign({}, o, { sc, res, diceText, dmgType });
+    const danni = [];
+    const downed = applicaBersagli(ctx, parts, danni);
+    log(c, 'magia', parts.join(' '));
+    for (const line of concLines) log(c, line.includes('perde') ? 'concentrazione' : 'sistema', line);
+    infliggiCondizioni(ctx);
+    for (const n of downed) log(c, 'a-terra', n + ' è a terra!');
+    return { danno: danni, summary: a.name + ' lancia ' + sp.name + (downed.length ? ' · a terra: ' + downed.join(', ') : '') };
+  }
+
+  /**
+   * Tiro salvezza richiesto dal master: d20 + salvezza, condizioni (fallimento automatico, vantaggio/svantaggio), CD.
+   * @param {object} c combattimento  @param {object} t combattente  @param {string} ab caratteristica
+   * @param {number|null} dcValue CD (null: solo il totale)  @param {string} m modo scelto  @param {Function} rng
+   * @returns {{esito: {success: boolean|null, total: number|null}, summary: string, summaryType: string}}
+   */
+  function tiroSalvezza(c, t, ab, dcValue, m, rng) {
+    const sm = C.saveMods(t, ab, m);
+    if (sm.autoFail) {
+      log(c, 'ts-fallito', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + ': fallito in automatico (' + sm.autoFail + ').');
+      return { esito: { success: false, total: null }, summary: t.name + ': TS ' + ab + ' fallito in automatico (' + sm.autoFail + ')', summaryType: 'error' };
+    }
+    const r = R.rollSave({ bonus: t.saves[ab], mode: sm.mode, dc: dcValue }, rng);
+    const why = C.modsText(sm);
+    const outcome = r.success === null ? '' : r.success ? ' contro CD ' + dcValue + ' → riuscito.' : ' contro CD ' + dcValue + ' → fallito.';
+    log(c, r.success === false ? 'ts-fallito' : 'tiro-salvezza', t.name + ' tiro salvezza su ' + R.ABILITY_NAMES[ab] + (why ? ' (' + why + ')' : '') + ': ' + testoD20(sm.mode, r) + ' ' +
+      R.formatModifier(t.saves[ab]) + ' = ' + r.total + (outcome || '.'));
+    return {
+      esito: r,
+      summary: t.name + ': TS ' + ab + ' = ' + r.total + (r.success === null ? '' : r.success ? ' (riuscito)' : ' (fallito)'),
+      summaryType: r.success === false ? 'error' : r.success ? 'success' : 'info',
+    };
+  }
+
+  DnD.combattimento = { danno, dopoAzione, attacco, inizioTurno, prossimoTurno, lancio, tiroSalvezza, innatoDi, rollText };
 })(globalThis.DnD = globalThis.DnD || {});

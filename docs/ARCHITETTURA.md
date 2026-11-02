@@ -81,7 +81,7 @@ condiviso è un unico oggetto **`S`**, così le parti lo leggono e lo modificano
   `-mondo.js`, più `ui-colonne.js` (tre colonne, condivisa con Esplorazione e Online). L'ordine delle chiamate alle
   fabbriche conta: chi riceve una funzione di un'altra parte va chiamato dopo, oppure la riceve con un rimando
   `(...a) => funzione(...a)`. Le regole del combattimento attivo stanno sotto, in `combattimento.js` (livello regole,
-  `DnD.combattimento`: `danno`, `dopoAzione`, `attacco`, `inizioTurno`, `prossimoTurno`); l'interfaccia apre
+  `DnD.combattimento`: `danno`, `dopoAzione`, `attacco`, `lancio`, `tiroSalvezza`, `inizioTurno`, `prossimoTurno`); l'interfaccia apre
   `mutate`, tira i dadi con il registratore e mostra avvisi e suoni.
 - **Stato** (`dati.js`, facciata): `stato/normalizza.js`, `stato/esempi.js`, `stato/migrazioni.js`, `stato/archivio.js`.
 

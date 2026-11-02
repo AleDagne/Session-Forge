@@ -6266,6 +6266,11 @@
     eq([t.hp, t.tempHp, /assorbono 5 danni/.test(righe[0])], [8, 0, true], 'i PF temporanei assorbono per primi');
     const c = { combatants: [mkC({ id: 'x', name: 'Primo', initiative: 15 }), mkC({ id: 'y', name: 'Secondo', initiative: 10 })], round: 1, currentId: 'x', log: [] };
     eq([CB.prossimoTurno(c, seq()), c.currentId, c.round, c.log.some((l) => l.text === 'Turno di Secondo.')], [{ tana: false }, 'y', 1, true]);
+    // Tiro salvezza: riuscito contro la CD, fallito in automatico da paralizzato.
+    const ts = CB.tiroSalvezza(c, c.combatants[0], 'DES', 12, 'normale', seq(14));
+    eq([ts.esito.success, ts.summaryType, c.log[c.log.length - 1].type], [true, 'success', 'tiro-salvezza']);
+    DnD.condizioni.apply(c.combatants[0], { type: 'paralizzato' });
+    eq(CB.tiroSalvezza(c, c.combatants[0], 'DES', 12, 'normale', seq()).esito, { success: false, total: null }, 'fallimento automatico');
   });
 
   test('Online 2: percorso verificato cella per cella (terreno difficile, angoli, salti)', () => {
