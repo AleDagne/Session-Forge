@@ -2098,6 +2098,31 @@
     cleanup();
   });
 
+  test('Editor delle note: allineamento, stato dei pulsanti, barra delle tabelle e cancella formattazione (caratterizzazione)', () => {
+    if (!hasDom()) return;
+    const { ed, area, cleanup } = mountEditor('<p>Il drago rosso</p>');
+    const btn = (label) => ed.toolbar.querySelector('[aria-label="' + label + '"]');
+    selectText(area.querySelector('p').firstChild, 0, 2);
+    ed.align('center');
+    eq([area.querySelector('p').style.textAlign, btn('Centra').getAttribute('aria-pressed'), btn('Allinea a sinistra').getAttribute('aria-pressed')], ['center', 'true', 'false']);
+    ed.toggleList('ul');
+    eq([Boolean(area.querySelector('ul > li')), btn('Elenco puntato').getAttribute('aria-pressed'), btn('Elenco numerato').getAttribute('aria-pressed')], [true, 'true', 'false']);
+    const barra = ed.toolbar.querySelector('.note-table-tools');
+    eq(barra.hidden, true, 'barra delle tabelle nascosta fuori da una tabella');
+    ed.insertTable(2, 3);
+    eq([area.querySelectorAll('table tr').length, area.querySelectorAll('table tr:first-child > *').length, barra.hidden], [2, 3, false]);
+    eq(ed.toolbar.querySelectorAll('button.note-btn').length, 29, 'pulsanti della barra');
+    ed.setHtml('<p><span style="color: red">rosso</span> e <span style="font-size: 20px">grande</span></p>');
+    const r = document.createRange();
+    r.selectNodeContents(area.querySelector('p'));
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    ed.clearFormat();
+    eq([area.querySelectorAll('span').length, area.textContent], [0, 'rosso e grande']);
+    cleanup();
+  });
+
   test('Editor delle note: elenchi puntati e numerati con rientro', () => {
     if (!hasDom()) return;
     const { ed, area, cleanup } = mountEditor('<p>uno</p><p>due</p><p>tre</p>');
