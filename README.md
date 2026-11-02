@@ -1705,6 +1705,12 @@ leggibili dopo il cambio di nome.
 ## Test
 
 Apri `test.html` nel browser: esegue i test automatici della logica e mostra i risultati a schermo.
+Va servito (`python .claude/servi.py 5617`, che disattiva la cache del browser) e aperto in una finestra visibile.
+**Reti di sicurezza** aggiunte con il riordino: «Migrazione: l'archivio di esempio…» (l'archivio salvato prima del
+riordino, `test/fixture/archivio-v18.json`, deve normalizzarsi esattamente come `atteso-v18.json`), «Fumo: …»
+(l'app vera in un iframe con `index.html?prova`: apre ogni sezione, crea giocatore, nemico, griglia e sessione,
+gioca un combattimento breve, esporta e reimporta), «Griglia UI: …» e «Combattimento UI: …» (comportamento attuale
+dell'interfaccia) ed «Elenchi dei file» (`index.html`, `test.html` e `sw.js` allineati).
 Coprono regole, dadi, classi, incantesimi, generatore di nemici, sessioni, esportazione e importazione;
 l'**esplorazione** (costo di movimento e ore per bioma, ritmo, modalità e scala, sottobiomi, mappa dei biomi con
 pennello, riempi, ridimensionamento e generazione con seme, percorso che evita le celle impraticabili, inneschi
@@ -1880,6 +1886,25 @@ con viste diverse, spettatori del tavolo e «come», barra dei partecipanti e se
 priorità, client lento e accorpamento; riconnessione col gettone, richieste in sospeso annullate, master che riprende
 la sessione; carico simulato (6 client, 200 eventi), messaggi oltre i limiti, espulsione per frequenza, diagnostica e
 riepilogo. `DnD.runTests('testo')` esegue solo i test il cui nome contiene il testo (utile per isolarne uno).
+
+## Architettura e convenzioni
+
+La struttura del codice, i livelli e le loro regole, i punti di aggancio e la procedura per aggiungere una funzione,
+un test o una migrazione sono descritti in **`docs/ARCHITETTURA.md`**. In breve:
+
+- **Livelli** (dipendenze solo verso il basso, nessun ciclo): `js/dati/` (tabelle) → regole pure (`regole.js`,
+  `statistiche.js`, mappa, entità, Mondo) → stato (`modello.js`, `js/stato/`, `dati.js`, `sessioni.js`) → rete
+  (`js/rete/`) e interfaccia (`ui-*.js`) → `app.js`.
+- **Un solo punto** per ogni regola condivisa (tabella in `docs/ARCHITETTURA.md`), per la scrittura su disco
+  (`stato/archivio.js`) e per i dati inviati ai giocatori (`rete/filtro.js`).
+- **Nomi**: `camelCase` per funzioni e variabili, `MAIUSCOLO_SNAKE` per le costanti, file in minuscolo con il
+  trattino. Termini di gioco in italiano (`tiroSalvezza`, `puntiFerita`), termini tecnici generici in inglese.
+  Il codice delle prime versioni usa ancora nomi inglesi (`derivedStats`, `normalizeCreature`): non sono stati
+  rinominati per non cambiare l'interfaccia dei moduli; il codice nuovo segue la regola.
+- **Commenti** in italiano: intestazione di 3-8 righe per ogni file (scopo, livello, cosa espone, da cosa dipende,
+  cosa non deve fare); nel codice si spiega il *perché* (regole non ovvie, casi limite, compatibilità).
+- **Rilascio**: test verdi, `CACHE` in `sw.js` aumentata, liste dei file allineate in `index.html`, `test.html` e
+  `sw.js`.
 
 ## Struttura
 

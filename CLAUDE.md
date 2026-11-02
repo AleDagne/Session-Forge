@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Session Forge: Italian-language D&D 5e session planner/player (maps, characters, creatures, combat, exploration, dice). Pure HTML/CSS/vanilla JS — no build step, no package manager, no dependencies, works offline (PWA). All UI text, comments, identifiers in data and commit messages are in **Italian**; keep to that. `README.md` (long, ~890 lines) is the detailed feature/data-model reference; `RIPRESA-LAVORO.md` is a work-resume log of the last development phase.
+Session Forge: Italian-language D&D 5e session planner/player (maps, characters, creatures, combat, exploration, dice). Pure HTML/CSS/vanilla JS — no build step, no package manager, no dependencies, works offline (PWA). All UI text, comments, identifiers in data and commit messages are in **Italian**; keep to that. `README.md` (long, ~890 lines) is the detailed feature/data-model reference; `RIPRESA-LAVORO.md` is a work-resume log of the last development phase. `docs/ARCHITETTURA.md` describes the layers, their rules, the `registra…` hooks and how to add code without breaking them; `docs/AUDIT.md` is the code audit with the post-refactor status of every issue.
 
 ## Commands
 

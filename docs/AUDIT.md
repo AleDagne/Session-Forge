@@ -684,3 +684,95 @@ Interfacce pubbliche previste (esempi): `DnD.stato.store.{state, update, saved, 
 9. `RIPRESA-LAVORO.md` va aggiornato, archiviato o eliminato?
 10. Il test della vignettatura dei boss va ripetuto in finestra visibile da te, o preferisci che lo renda indipendente
     dalla visibilità nella fase 2?
+
+---
+
+## 20. Stato dopo il riordino (Riordino 2/2, novembre 2026)
+
+51 commit dopo l'audit (da `7cf3990` a oggi), ognuno con tutti i test verdi (321 alla fine). Comportamento invariato
+salvo la correzione concordata di A1; due regressioni introdotte durante il riordino sono state trovate e corrette
+(vedi 20.3).
+
+### 20.1 Confronto prima/dopo
+
+| Misura | Prima (`0da0f03`) | Dopo |
+|---|---|---|
+| File JavaScript (senza test) | 107 | 129 |
+| Righe JavaScript (senza test) | 39 499 | 40 216 (+1,8%: intestazioni e chiamate delle parti) |
+| Righe di `js/test.js` / test | 6 860 / 309 | 7 237 / 321 |
+| Coppie di moduli in ciclo | 46 | **0** |
+| Moduli nel blocco fortemente connesso più grande | 73 | **0** (nessun ciclo, anche lungo) |
+| File oltre 600 righe | 17 | 18 (ma nessuno oltre 1 520; prima 4 oltre 1 300) |
+| `ui-combattimento.js` / `ui-griglia.js` / `dati.js` | 2 157 / 1 579 / 1 344 righe | 781 / 797 / 151 righe |
+| Funzioni oltre 60 righe (stima per graffe) | 87 | 95 |
+| File con intestazione del livello | 0 | 59 su 129 |
+
+Le funzioni lunghe sono aumentate perché le «fabbriche» che contengono le parti spostate (`primitive(api)`,
+`creature(api)`…) contano come funzioni lunghe; le funzioni interne non sono state accorciate. L'obiettivo «funzioni
+sotto le 40 righe» **non è raggiunto**.
+
+### 20.2 Stato di ogni problema
+
+| Id | Stato | Note |
+|---|---|---|
+| A1 | **risolto** | `bcfc3f2`: l'esito delle intenzioni passa da `filtro.testoEsito`; test aggiunto |
+| A2 | rimandato | tiri del master e `rivela.immagine` fuori dal filtro: da decidere (vedi 20.4) |
+| A3 | rimandato | bug: copia dei dati danneggiati con errore ignorato (20.4) |
+| A4 | rimandato | bug: ripiego silenzioso da IndexedDB a localStorage (20.4) |
+| A5 | rimandato | «Cancella tutti i dati»: decisione aperta (domanda 1) |
+| A6 | **risolto** | nessun ciclo; regole senza letture di `DnD.store` (passano da `modello.statoCorrente`) |
+| A7 | rimandato | `rete/sessione` esegue ancora tramite `DnD.uiCombattimento.online`: serve prima A8 |
+| A8 | rimandato | le regole di combattimento sono ora in file separati (`ui-combattimento-*.js`) ma restano nell'interfaccia |
+| A9 | **risolto in parte** | `ui-griglia.js` 797 e `ui-combattimento.js` 781 righe, divisi in parti con `api` |
+| A10 | rimandato | `rete/sessione.master`, `note-editor.create`, `ui-scheda.editor`, `ui-percorso.create`, `ui-visione.create`, `ui-pannello-tile.create`, `ui-tile.cutter` |
+| A11 | **risolto** | `dati.js` diviso in `js/stato/` (normalizza, esempi, migrazioni, archivio) |
+| A12 | **risolto in parte** | migrazioni dello stato in `stato/migrazioni.js`, delle tile in `migrazioni-tile.js`; restano quelle delle preferenze (audio, layout) e il completamento dei TileSet legacy all'avvio |
+| A13 | rimandato | modi di tiro ripetuti nelle interfacce |
+| A14 | rimandato | segno meno: decisione aperta (domanda 4) |
+| A15 | rimandato | `esc` locali in `note.js` e `ui-note.js` |
+| A16 | **risolto** | `dati/misure.js` (caselle, piedi, metri, scala delle mappe) |
+| A17 | **risolto** | `movimento.distance` usa `griglia.cellDistance` senza la regola 5-10-5; la gittata resta da verificare (20.4) |
+| A18 | rimandato | `Math.random` in due interfacce |
+| A19 | rimandato | nessun export cancellato: serve una verifica uno per uno (domanda 6) |
+| A20 | **risolto** | export doppio tolto |
+| A21 | rimandato | classi CSS probabilmente inutilizzate non cancellate |
+| A22 | rimandato | `catch` silenziosi non rivisti |
+| A23 | rimandato | listener e timer non rivisti |
+| A24 | rimandato | ricalcolo della vista filtrata a ogni salvataggio |
+| A25 | rimandato | colori letterali nei canvas |
+| A26 | non necessario | nomi delle prime versioni lasciati com'erano (interfaccia dei moduli invariata); convenzione per il codice nuovo nel README |
+| A27 | **risolto in parte** | aggiunti test di fumo, migrazione, griglia e combattimento nell'interfaccia; restano scoperte le altre sezioni |
+| A28 | non necessario | documentato in `CLAUDE.md` (serve una finestra di dimensione reale) |
+| A29 | **risolto** | test «Elenchi dei file» |
+| A30 | rimandato | `RIPRESA-LAVORO.md` e due titoli del README ancora superati |
+| A31 | rimandato | `alert`/`confirm`/`prompt` nativi |
+| A32 | rimandato | preferenze senza versione (documentato in `docs/ARCHITETTURA.md`) |
+
+### 20.3 Problemi introdotti durante il riordino (corretti)
+
+- `f18464d` → corretto in `57b3120`: «Esporta JSON» degli incantesimi usava `download` tramite un alias non
+  aggiornato; si sarebbe interrotto.
+- `ae0e7c9` → corretto in `14c20ed`: la conversione dello stato della griglia aveva cambiato anche alcune stringhe
+  (classi CSS della barra degli strumenti e del trascinamento, due tipi di trascinamento). Ora ogni spostamento
+  confronta in automatico le stringhe prima e dopo.
+- Ambiente: il server di sviluppo lasciava al browser file vecchi; sostituito da `.claude/servi.py` (senza cache).
+
+### 20.4 Bug trovati e non corretti (per una fase separata, dal più grave)
+
+1. **A2 (alta, da verificare)**: i tiri del master (`dado`) e l'immagine di `rivela` partono senza passare dal
+   filtro; le etichette dei tiri possono nominare combattenti o CD.
+2. **A3 (alta)**: se la copia dei dati danneggiati non si salva, l'errore è ignorato e il primo salvataggio
+   sovrascrive con uno stato vuoto.
+3. **A4 (alta)**: se IndexedDB non si apre una volta, l'app riparte su localStorage senza avvisare; i dati
+   IndexedDB restano ma non si vedono.
+4. **A5 (media, decisione)**: «Cancella tutti i dati» lascia gettoni, profilo e note del gioco online.
+5. **Gittata e regola 5-10-5 (media, da verificare)**: la distanza per gittata e portata non applica la regola delle
+   diagonali alternate, il movimento sì.
+6. **A22 (media)**: `audio.js` non esporta un file audio mancante senza avvisare; altri `catch` silenziosi.
+
+### 20.5 Limiti residui
+
+- Le funzioni non sono state accorciate e la documentazione JSDoc riguarda solo le funzioni nuove o spostate.
+- 70 file su 129 non hanno ancora l'intestazione del livello (soprattutto `ui-*.js` e `rete/*`).
+- Restano nell'interfaccia le regole del combattimento (A8) e quindi la dipendenza della rete dall'interfaccia (A7).
+- CSS non toccato (variabili per spaziature, colori letterali residui, classi da verificare).
