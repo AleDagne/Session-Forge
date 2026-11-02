@@ -1937,6 +1937,7 @@ js/ui-biomi.js, js/ui-eventi.js  Asset › Biomi ed Eventi (editor a blocchi, Pr
 js/ui-mappa-esplorazione.js  disegno di biomi ed eventi; strumenti Bioma ed Evento sulla griglia
 js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cache), strumenti, pannello «Luce e visione», «Vedi come»
 js/ui-combattimento-incantesimi.js Combattimento: lancio degli incantesimi, tiri salvezza, cure, modifica e rimozione di un combattente
+js/ui-combattimento-creature.js Combattimento: azioni di mostri e boss, schede dei combattenti con risorse, schermata del combattimento in corso
 js/ui-colonne.js      disposizione a tre colonne delle schermate di gioco (Combattimento, Esplorazione, Online)
 js/ui-griglia-disegno.js colori del canvas dal tema e primitive di disegno della griglia (pedine, strutture, zone, TileMap, percorsi)
 js/ui-griglia-pannello.js pannello laterale della griglia: combattenti, strutture, oggetti, NPC e Attrezzatura da scegliere o trascinare
