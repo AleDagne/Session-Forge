@@ -2019,6 +2019,7 @@ js/ui-scene.js        Scene: scaletta, linea, editor di scene e incontri, librer
 js/dati/ia.js         IA dei nemici (dati): pesi dei punteggi, archetipi, fazioni, costanti del pianificatore
 js/ia-comportamento.js comportamento dei nemici (temperamento, archetipo, fuga…), controllo e fazione di partenza
 js/ia.js              IA dei nemici (logica pura): archetipo, punteggi, visibilità, percorso, pianificazione del turno
+js/combattimento.js   regole del combattimento attivo (pure): danno, effetti dopo l'azione, attacco con arma, passaggio del turno
 js/ui-ia.js           comportamento nei form, anteprima del piano sulla griglia, finestra «Perché?»
 js/note.js            note del master (logica pura): sanificazione, testo, pagine, salvataggio automatico
 js/note-editor.js     editor di testo ricco delle note (contenteditable, tabelle, elenchi, colori)

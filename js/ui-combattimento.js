@@ -14,6 +14,7 @@
   const R = DnD.regole;
   const M = DnD.creature;
   const G = DnD.griglia;
+  const CB = DnD.combattimento;
   const MAX_COPIES = 50;
   // Funzioni dei moduli sopra il combattimento (vedi registraAgganci in fondo).
   const agganci = { bannerEsplorazione: null, fineCombattimento: null, apriOnline: () => {}, disegnaPing: null };
@@ -437,39 +438,11 @@
     ]);
   }
 
-  // Danno con le regole della trasformazione leggendaria: a 0 PF della forma si torna normali e il danno in
-  // eccesso passa al personaggio (le righe finiscono nel log alla fine dell'azione).
-  // Danni a 0 PF (tiri contro la morte) e concentrazione: salvezza su COS con CD max(10, metà del danno).
+  // Danno e conseguenze dopo l'azione: regole in combattimento.js; le righe del danno vanno nel log alla fine.
   function hurt(t, amount, crit) {
-    const wasZero = t.hp <= 0;
-    // PF temporanei (riposi.js): assorbono il danno per primi.
-    const tmp = DnD.riposi.absorbTemp(t, amount);
-    if (tmp.absorbed) S.hurtLines.push('🛡 ' + t.name + ': i PF temporanei assorbono ' + tmp.absorbed + ' danni (ne restano ' + (t.tempHp || 0) + ').');
-    S.hurtLines = S.hurtLines.concat(DnD.leggendario.damage(t, tmp.rest));
-    if (!(amount > 0)) return;
-    if (wasZero) S.hurtLines.push(...C.damageAtZero(t, crit));
-    if (t.hp > 0 && t.concentration) {
-      const r = C.concentrationCheck(t, amount, dice());
-      S.hurtLines.push({ type: r.kept ? 'tiro-salvezza' : 'ts-fallito', text: r.line });
-      if (!r.kept) S.hurtLines.push(...C.endConcentration(t, combat().combatants, 'danno').lines.map((text) => ({ type: 'concentrazione', text })));
-    }
+    S.hurtLines = S.hurtLines.concat(CB.danno(t, amount, crit, combat().combatants, dice()));
   }
-  // Dopo ogni azione: chi scende a 0 PF (privo di sensi e tiri contro la morte, o nemico che muore), chi torna
-  // sopra 0 e le concentrazioni che finiscono da sole (0 PF, incapacitato).
-  function conditionsAfter(c, beforeHp) {
-    for (const x of c.combatants) {
-      const before = beforeHp.has(x.id) ? beforeHp.get(x.id) : x.hp;
-      if (before > 0 && x.hp <= 0) for (const line of C.dropToZero(x, combatRules())) log(c, 'sistema', line);
-      const ds = C.normalizeDeathSaves(x.deathSaves);
-      if (x.hp > 0 && (ds.active || ds.stable || x.dead || C.normalizeList(x.conditions).some((e) => e.auto === 'zero'))) {
-        C.revive(x);
-        x.dead = false;
-        if (ds.active || ds.stable) log(c, 'sistema', x.name + ' torna cosciente.');
-      }
-      const why = C.concentrationBreaker(x);
-      if (why) for (const line of C.endConcentration(x, c.combatants, why).lines) log(c, 'concentrazione', line);
-    }
-  }
+  const conditionsAfter = (c, beforeHp) => CB.dopoAzione(c, beforeHp, combatRules());
 
   function mutate(fn) {
     let events = [];
@@ -526,44 +499,16 @@
   });
 
   // ---------- Combattimento attivo ----------
-  // Inizio del turno di un combattente: promemoria delle azioni di tana (a iniziativa 20), poi per le creature
-  // tiro di ricarica e ripristino dei punti azione leggendaria.
+  // Inizio e passaggio del turno: regole in combattimento.js; qui l'avviso delle azioni di tana e i dadi.
   function startTurnOf(c, sorted, prevId, nextId, newRound) {
-    const lairs = sorted.filter((x) => x.creature && x.creature.lair.length && !R.isDown(x));
-    if (lairs.length && M.crossesLair(sorted, prevId, nextId, newRound)) {
-      for (const x of lairs) log(c, 'sistema', '🏰 Iniziativa 20 — azioni di tana di ' + x.name + ': ' + x.creature.lair.map((a) => a.name).join(', ') + ' (promemoria).');
-      toast('Iniziativa 20: azioni di tana disponibili.');
-    }
-    const cur = byId(nextId);
-    Mv.resetTurn(cur);
-    log(c, 'turno', 'Turno di ' + cur.name + '.');
-    // Condizioni «fino all'inizio del turno di…», tiri contro la morte e promemoria delle azioni bloccate.
-    for (const line of C.startTurn(c.combatants, nextId)) log(c, 'sistema', line);
-    if (C.dying(cur)) log(c, 'sistema', C.deathSave(cur, dice()).line);
-    else if (C.actionBlock(cur) && cur.hp > 0) log(c, 'sistema', '⚠ ' + cur.name + ': ' + C.actionBlock(cur) + (cur.forceActions ? ' (il master le permette).' : '.'));
-    // Trasformazione leggendaria: la durata scende all'inizio del turno.
-    for (const line of DnD.leggendario.tick(cur)) log(c, 'sistema', line);
-    if (cur.creature) for (const line of M.startTurn(cur.creature, dice())) log(c, 'sistema', line);
+    if (CB.inizioTurno(c, sorted, prevId, nextId, newRound, dice()).tana) toast('Iniziativa 20: azioni di tana disponibili.');
   }
 
   function nextTurn() {
     beginDice();
     mutate((c) => {
-      const sorted = R.sortByInitiative(c.combatants);
-      const res = R.nextTurn(sorted, c.currentId, c.round);
-      if (res.currentId === c.currentId && res.round === c.round) return;
-      const newRound = res.round !== c.round;
-      // Fine del turno di chi ha appena giocato: durate in round, salvezze ripetute, «fino alla fine del turno di…».
-      if (c.currentId) for (const line of C.endTurn(c.combatants, c.currentId, dice())) log(c, 'sistema', line);
-      if (newRound) log(c, 'round', '— Round ' + res.round + ' —');
-      // Torce e sorgenti a durata: un round = 6 secondi di gioco.
-      if (newRound) for (const line of V.tickLights(c.grid, c.combatants, DnD.visioneDati.ROUND_MINUTES)) log(c, 'sistema', '🔥 ' + line);
-      // NPC diventati ostili: entrano nell'ordine di iniziativa da questo round.
-      if (newRound) for (const x of c.combatants.filter((y) => y.joinRound && y.joinRound <= res.round)) { x.joinRound = 0; log(c, 'sistema', x.name + ' entra nell\'ordine di iniziativa.'); }
-      const prev = c.currentId;
-      c.round = res.round;
-      c.currentId = res.currentId;
-      startTurnOf(c, sorted, prev, c.currentId, newRound);
+      const r = CB.prossimoTurno(c, dice());
+      if (r && r.tana) toast('Iniziativa 20: azioni di tana disponibili.');
     });
     const cur = combat() && combat().currentId ? byId(combat().currentId) : null;
     endDice(cur ? 'Ricarica di ' + cur.name : 'Ricarica', '');
@@ -601,9 +546,7 @@
     ]);
   }
 
-  function rollText(rolls, flat) {
-    return '[' + rolls.join(', ') + ']' + (flat ? ' ' + R.formatModifier(flat) : '');
-  }
+  const rollText = CB.rollText;
 
   // preset: { targetId, weaponId, mode } per riaprire la finestra dopo la scelta del bersaglio sulla griglia.
   function attackDialog(attacker, preset) {
@@ -672,40 +615,11 @@
       const w = a && a.weapons.find((x) => x.id === weaponId);
       if (!a || !t || !w) return;
       // Condizioni: vantaggio e svantaggio da più fonti, critico automatico, attacco impossibile (affascinato).
-      const mods = attackModsFor(a, t, weaponRanged(w), mode);
-      if (mods.blocked) { log(c, 'sistema', a.name + ' non attacca ' + t.name + ': ' + mods.blocked + '.'); summary = a.name + ': ' + mods.blocked + '.'; return; }
-      const res = R.resolveAttack({ toHit: w.toHit, targetAC: t.ac, damageDice: w.damageDice, damageBonus: w.damageBonus, mode: mods.mode, autoCrit: Boolean(mods.autoCrit) }, dice());
-      const why = C.modsText(mods);
-      const d20 = mods.mode === R.MODES.normale
-        ? 'd20 = ' + res.natural
-        : 'd20 con ' + mods.mode + ' [' + res.d20Rolls.join(', ') + '] → ' + res.natural;
-      let text = a.name + ' attacca ' + t.name + ' con ' + w.name + (why ? ' (' + why + ')' : '') + ': ' + d20 + ' ' + R.formatModifier(w.toHit) + ' = ' + res.total + ' contro CA ' + t.ac;
-      if (res.fumble) {
-        text += '. 1 NATURALE: fallimento automatico.';
-        summary = a.name + ': fallimento automatico!';
-        log(c, 'mancato', text);
-        return;
-      }
-      if (!res.hit) {
-        text += ' → mancato.';
-        summary = a.name + ' manca ' + t.name + '.';
-        log(c, 'mancato', text);
-        return;
-      }
-      const before = t.hp;
-      const def = M.applyDefenses(res.damage, M.damageTypeOf(w.damageType), t.defenses, w.magical);
-      hurt(t, def.amount, res.crit);
-      const dmgExpr = res.damageDiceCount + 'd' + res.damageSides;
-      text += res.crit ? (res.natural === 20 ? '. 20 NATURALE, COLPO CRITICO! ' : '. COLPO CRITICO (' + mods.autoCrit + ')! ') : ' → colpito. ';
-      text += 'Danni ' + dmgExpr + (res.crit ? ' (dadi raddoppiati)' : '') + ': ' + rollText(res.damageRolls, res.damageFlat) +
-        ' = ' + res.damage + (w.damageType ? ' ' + w.damageType : '') + (def.note ? ' (' + def.note + ')' : '') + '. ' + t.name + ': ' + before + ' → ' + t.hp + ' PF.';
-      log(c, res.crit ? 'critico' : 'colpito', text);
-      summary = (res.crit ? 'CRITICO! ' : '') + t.name + ' subisce ' + def.amount + ' danni.';
-      summaryType = res.crit ? 'success' : 'info';
-      if (before > 0 && t.hp === 0) {
-        log(c, 'a-terra', t.name + ' è a terra!');
-        summary += ' ' + t.name + ' è a terra!';
-      }
+      const r = CB.attacco({ a, t, w, mods: attackModsFor(a, t, weaponRanged(w), mode), combatants: c.combatants, rng: dice() });
+      for (const line of r.righe) log(c, line.type, line.text);
+      S.hurtLines = S.hurtLines.concat(r.danno);
+      summary = r.summary;
+      summaryType = r.summaryType;
     });
     endDice(names[0] + ' attacca ' + names[1], summary);
     if (summary) toast(summary, summaryType);

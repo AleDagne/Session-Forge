@@ -6249,6 +6249,25 @@
     });
   });
 
+  test('Combattimento (regole): attacco colpito, mancato e 1 naturale; danno con PF temporanei; turno successivo', () => {
+    const CB = DnD.combattimento;
+    const mods = (a, t) => DnD.condizioni.attackMods(a, t, { melee: true, base: 'normale' });
+    const a = mkC({ id: 'a', name: 'Orco' });
+    const t = mkC({ id: 't', name: 'Goblin' });
+    let r = CB.attacco({ a, t, w: AXE, mods: mods(a, t), combatants: [a, t], rng: seq(15, 6) });
+    eq([r.righe.map((x) => x.type), t.hp, r.summary, r.summaryType], [['colpito'], 11, 'Goblin subisce 9 danni.', 'info']);
+    ok(r.righe[0].text.endsWith('Danni 1d8: [6] +3 = 9 tagliente. Goblin: 20 → 11 PF.'), r.righe[0].text);
+    r = CB.attacco({ a, t, w: AXE, mods: mods(a, t), combatants: [a, t], rng: seq(2) });
+    eq([r.righe[0].type, r.summary, t.hp], ['mancato', 'Orco manca Goblin.', 11]);
+    r = CB.attacco({ a, t, w: AXE, mods: mods(a, t), combatants: [a, t], rng: seq(1) });
+    eq([r.righe[0].text.endsWith('1 NATURALE: fallimento automatico.'), r.summary], [true, 'Orco: fallimento automatico!']);
+    t.tempHp = 5;
+    const righe = CB.danno(t, 8, false, [a, t], seq());
+    eq([t.hp, t.tempHp, /assorbono 5 danni/.test(righe[0])], [8, 0, true], 'i PF temporanei assorbono per primi');
+    const c = { combatants: [mkC({ id: 'x', name: 'Primo', initiative: 15 }), mkC({ id: 'y', name: 'Secondo', initiative: 10 })], round: 1, currentId: 'x', log: [] };
+    eq([CB.prossimoTurno(c, seq()), c.currentId, c.round, c.log.some((l) => l.text === 'Turno di Secondo.')], [{ tana: false }, 'y', 1, true]);
+  });
+
   test('Online 2: percorso verificato cella per cella (terreno difficile, angoli, salti)', () => {
     const m = mkC({ id: 'm', pos: { x: 0, y: 0 } });
     const st = aiState([m]);
