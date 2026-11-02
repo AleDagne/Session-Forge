@@ -80,21 +80,23 @@
   // opts: { getDoc(), widget(), mode: 'editor' | 'combattimento' | 'esplorazione', env() -> { hour, biomeLight },
   //   playersView(ctx, doc) -> { cells, seenIds } (di base: le pedine dei giocatori), onChange() }
   function create(opts) {
+    const S = {
+      tool: null,
+      brush: 'cerchio',
+      lightKind: 'torcia',
+      selectedLight: null,
+      selectedRoom: null,
+      viewAs: 'master', // 'master' | 'giocatori' | 'pedina:<id>' | 'punto'
+      probe: { pos: null, kind: 'normale' },
+      drag: null,
+      hover: null,
+      cache: null,
+      flickerTimer: 0,
+    };
     const mode = opts.mode || 'editor';
-    let tool = null;
-    let brush = 'cerchio';
-    let lightKind = 'torcia';
-    let selectedLight = null;
-    let selectedRoom = null;
-    let viewAs = 'master';      // 'master' | 'giocatori' | 'pedina:<id>' | 'punto'
-    let probe = { pos: null, kind: 'normale' };
-    let drag = null;
-    let hover = null;
-    let cache = null;
-    let flickerTimer = 0;
     const doc = () => opts.getDoc();
     const W = () => opts.widget();
-    const changed = () => { cache = null; if (opts.onChange) opts.onChange(); if (W()) W().requestDraw(); refreshPanels(); };
+    const changed = () => { S.cache = null; if (opts.onChange) opts.onChange(); if (W()) W().requestDraw(); refreshPanels(); };
     // Modifica annullabile della griglia (stessa cronologia degli altri strumenti).
     function edit(fn) {
       const d = doc();
@@ -114,8 +116,8 @@
       const g = V.ensure(d.grid);
       const env = opts.env ? opts.env() : {};
       const p = palette();
-      const key = V.signature(g, d.combatants, [env, viewAs, probe, p.theme]);
-      if (cache && cache.key === key) return cache;
+      const key = V.signature(g, d.combatants, [env, S.viewAs, S.probe, p.theme]);
+      if (S.cache && S.cache.key === key) return S.cache;
       const t0 = performance.now();
       const ctx = V.context(g, d.combatants, Object.assign({ tilesets: tilesets() }, env));
       const fogOn = g.fog.enabled;
@@ -123,13 +125,13 @@
       // Celle e pedine dell'anteprima: giocatori, una pedina o un punto scelto (editor).
       let view = null;
       let seen = null;
-      if (viewAs === 'giocatori') {
+      if (S.viewAs === 'giocatori') {
         view = fogOn ? V.cellStates(g, pv.cells) : pv.cells.map((x) => (x ? 2 : 0));
         seen = pv.seenIds;
-      } else if (viewAs.startsWith('pedina:') || viewAs === 'punto') {
-        const viewer = viewAs === 'punto'
-          ? (probe.pos ? { id: '__punto', pos: probe.pos, w: 1, h: 1, hp: 1, conditions: [], senses: (K.PROBES.find((x) => x.id === probe.kind) || K.PROBES[0]).senses } : null)
-          : d.combatants.find((c) => c.id === viewAs.slice(7));
+      } else if (S.viewAs.startsWith('pedina:') || S.viewAs === 'punto') {
+        const viewer = S.viewAs === 'punto'
+          ? (S.probe.pos ? { id: '__punto', pos: S.probe.pos, w: 1, h: 1, hp: 1, conditions: [], senses: (K.PROBES.find((x) => x.id === S.probe.kind) || K.PROBES[0]).senses } : null)
+          : d.combatants.find((c) => c.id === S.viewAs.slice(7));
         const cells = viewer ? V.viewOf(ctx, viewer) : new Uint8Array(ctx.n);
         view = cells.map((x) => (x ? 2 : 0));
         seen = new Set(viewer ? d.combatants.filter((c) => c.id === viewer.id || V.canSee(ctx, viewer, c).seen).map((c) => c.id) : []);
@@ -171,13 +173,13 @@
         cv.getContext('2d').putImageData(new ImageData(data, ctx.w, ctx.h), 0, 0);
         return cv;
       };
-      cache = {
+      S.cache = {
         key, ctx, pv, view, seen, states, ms: performance.now() - t0,
         tint: tinted ? toCanvas(tint) : null, shade: toCanvas(shade),
         flicker: lm.emitters.some((e) => e.flicker && !e.dark),
         known: view || states,
       };
-      return cache;
+      return S.cache;
     }
 
     // ---- Disegno ----
@@ -197,13 +199,13 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = flick ? 0.82 + 0.1 * Math.sin(t * 9) + 0.08 * Math.sin(t * 23.7) : 1;
         ctx.drawImage(c.tint, view.panX, view.panY, wpx, hpx);
-        if (flick && !flickerTimer) flickerTimer = setTimeout(() => { flickerTimer = 0; if (W()) W().requestDraw(); }, 110);
+        if (flick && !S.flickerTimer) S.flickerTimer = setTimeout(() => { S.flickerTimer = 0; if (W()) W().requestDraw(); }, 110);
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
       ctx.drawImage(c.shade, view.panX, view.panY, wpx, hpx);
       ctx.restore();
-      const preview = viewAs !== 'master';
+      const preview = S.viewAs !== 'master';
       // Fantasmi: ultime posizioni note dei nemici (anteprima dei giocatori).
       if (preview && g.fog.enabled && g.fog.ghosts) {
         for (const [id, pos] of Object.entries(g.fog.lastKnown)) {
@@ -233,25 +235,25 @@
         ctx.arc(cx, cy, Math.max(4, s * 0.16), 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        if (l.id === selectedLight) {
+        if (l.id === S.selectedLight) {
           ctx.setLineDash([5, 4]);
           ctx.strokeStyle = palette().mark;
           for (const r of [l.bright, l.bright + l.dim]) if (r > 0) { ctx.beginPath(); ctx.arc(cx, cy, (r / V.feetPerCell(g)) * s, 0, Math.PI * 2); ctx.stroke(); }
         }
         ctx.restore();
       }
-      const room = g.vision.rooms.find((r) => r.id === selectedRoom);
-      if (tool === 'v-stanza' || room) {
+      const room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
+      if (S.tool === 'v-stanza' || room) {
         const rc = palette().room;
         for (const r of g.vision.rooms) {
-          if (tool !== 'v-stanza' && r !== room) continue;
+          if (S.tool !== 'v-stanza' && r !== room) continue;
           ctx.save();
           ctx.fillStyle = 'rgba(' + rc.join(',') + ',' + (r === room ? 0.32 : 0.14) + ')';
           for (const cell of r.cells) ctx.fillRect(view.panX + cell.x * s, view.panY + cell.y * s, s, s);
           ctx.restore();
         }
       }
-      if (tool === 'v-blocco') {
+      if (S.tool === 'v-blocco') {
         ctx.save();
         const cols = palette().sight;
         for (let i = 0; i < g.vision.sight.length; i++) {
@@ -267,12 +269,12 @@
 
     // Anteprima «Vedi come»: pedine e oggetti che non si vedono restano nascosti.
     function hideToken(t) {
-      if (viewAs === 'master') return false;
+      if (S.viewAs === 'master') return false;
       const c = compute();
       return Boolean(c && c.seen && !c.seen.has(t.id));
     }
     function hideItem(it) {
-      if (viewAs === 'master') return false;
+      if (S.viewAs === 'master') return false;
       if (it.hidden) return true;
       const c = compute();
       if (!c || !c.known) return false;
@@ -286,7 +288,7 @@
 
     // ---- Strumenti (pittore della griglia) ----
     function setTool(t) {
-      tool = t;
+      S.tool = t;
       if (t && opts.otherPainter) opts.otherPainter().deactivate();
       refreshPanels();
       if (W()) { W().updateUi(); W().requestDraw(); }
@@ -296,127 +298,127 @@
       const d = doc();
       const n = edit((g) => {
         g.fog.enabled = true;
-        return V.paintFog(g, V.brushCells(g, brush, a, b, brush === 'riempi' ? V.sightMap(g, tilesets()) : null), tool === 'v-rivela');
+        return V.paintFog(g, V.brushCells(g, S.brush, a, b, S.brush === 'riempi' ? V.sightMap(g, tilesets()) : null), S.tool === 'v-rivela');
       });
       if (d && !n) toast('Nessuna cella cambiata.');
     }
     const painter = {
-      active: () => Boolean(tool),
-      deactivate: () => { if (tool) { tool = null; drag = null; refreshPanels(); } },
+      active: () => Boolean(S.tool),
+      deactivate: () => { if (S.tool) { S.tool = null; S.drag = null; refreshPanels(); } },
       down(cell) {
         const d = doc();
         if (!d || !inGrid(d.grid, cell)) return;
         const g = d.grid;
-        if (tool === 'v-luce') {
+        if (S.tool === 'v-luce') {
           const hit = g.vision.lights.find((l) => l.x === cell.x && l.y === cell.y);
-          if (hit) { selectedLight = hit.id; changed(); return; }
+          if (hit) { S.selectedLight = hit.id; changed(); return; }
           edit((gr) => {
-            const dark = lightKind === 'oscurita';
-            const src = V.sourceById(lightKind);
+            const dark = S.lightKind === 'oscurita';
+            const src = V.sourceById(S.lightKind);
             const l = V.normalizeLight(dark ? { name: K.DARKNESS.name, dark: true, x: cell.x, y: cell.y, minutes: null }
               : { name: src.name, kind: src.id, bright: src.bright, dim: src.dim, color: src.color, flicker: src.flicker, x: cell.x, y: cell.y, minutes: null }, gr);
             gr.vision.lights.push(l);
-            selectedLight = l.id;
+            S.selectedLight = l.id;
           });
           return;
         }
-        if (tool === 'v-blocco') {
-          drag = { value: K.SIGHT_CYCLE[g.vision.sight[cell.y * g.w + cell.x]], before: W().tileSnapshot(), cells: new Set() };
+        if (S.tool === 'v-blocco') {
+          S.drag = { value: K.SIGHT_CYCLE[g.vision.sight[cell.y * g.w + cell.x]], before: W().tileSnapshot(), cells: new Set() };
           setSight(cell);
           return;
         }
-        if (tool === 'v-stanza') {
-          let room = g.vision.rooms.find((r) => r.id === selectedRoom);
+        if (S.tool === 'v-stanza') {
+          let room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
           const before = W().tileSnapshot();
           if (!room) {
             room = V.normalizeRoom({ name: 'Stanza ' + (g.vision.rooms.length + 1) }, g);
             g.vision.rooms.push(room);
-            selectedRoom = room.id;
+            S.selectedRoom = room.id;
           }
-          drag = { before, adding: !room.cells.some((c) => c.x === cell.x && c.y === cell.y) };
+          S.drag = { before, adding: !room.cells.some((c) => c.x === cell.x && c.y === cell.y) };
           toggleRoomCell(cell);
           return;
         }
-        if (tool === 'v-rivela' || tool === 'v-nascondi') {
-          if (brush === 'riempi') { applyBrush(cell); return; }
-          drag = { a: cell, b: cell };
+        if (S.tool === 'v-rivela' || S.tool === 'v-nascondi') {
+          if (S.brush === 'riempi') { applyBrush(cell); return; }
+          S.drag = { a: cell, b: cell };
           return;
         }
-        if (tool === 'v-vedi') {
-          probe = { pos: { x: cell.x, y: cell.y }, kind: probe.kind };
-          viewAs = 'punto';
+        if (S.tool === 'v-vedi') {
+          S.probe = { pos: { x: cell.x, y: cell.y }, kind: S.probe.kind };
+          S.viewAs = 'punto';
           changed();
         }
       },
       move(cell, e, dragging) {
-        hover = cell;
+        S.hover = cell;
         const d = doc();
-        if (drag && dragging && cell && d && inGrid(d.grid, cell)) {
-          if (tool === 'v-blocco') setSight(cell);
-          else if (tool === 'v-stanza') toggleRoomCell(cell);
-          else if (drag.a) drag.b = cell;
+        if (S.drag && dragging && cell && d && inGrid(d.grid, cell)) {
+          if (S.tool === 'v-blocco') setSight(cell);
+          else if (S.tool === 'v-stanza') toggleRoomCell(cell);
+          else if (S.drag.a) S.drag.b = cell;
         }
         if (W()) W().requestDraw();
       },
       up(cell) {
-        const dr = drag;
-        drag = null;
+        const dr = S.drag;
+        S.drag = null;
         if (!dr) return;
-        if (tool === 'v-blocco' || tool === 'v-stanza') { W().commitTiles(dr.before); changed(); return; }
+        if (S.tool === 'v-blocco' || S.tool === 'v-stanza') { W().commitTiles(dr.before); changed(); return; }
         if (dr.a) applyBrush(dr.a, cell || dr.b);
       },
       draw(ctx, view, s) {
         const d = doc();
-        if (!d || !tool) return;
+        if (!d || !S.tool) return;
         ctx.save();
         ctx.strokeStyle = palette().mark;
         ctx.setLineDash([5, 4]);
-        if (drag && drag.a && drag.b) {
-          if (brush === 'rettangolo') {
-            const r = G.rectBetween(drag.a, drag.b, d.grid);
+        if (S.drag && S.drag.a && S.drag.b) {
+          if (S.brush === 'rettangolo') {
+            const r = G.rectBetween(S.drag.a, S.drag.b, d.grid);
             ctx.strokeRect(view.panX + r.x * s, view.panY + r.y * s, r.w * s, r.h * s);
           } else {
-            const r = Math.hypot(drag.b.x - drag.a.x, drag.b.y - drag.a.y) + 0.5;
+            const r = Math.hypot(S.drag.b.x - S.drag.a.x, S.drag.b.y - S.drag.a.y) + 0.5;
             ctx.beginPath();
-            ctx.arc(view.panX + (drag.a.x + 0.5) * s, view.panY + (drag.a.y + 0.5) * s, r * s, 0, Math.PI * 2);
+            ctx.arc(view.panX + (S.drag.a.x + 0.5) * s, view.panY + (S.drag.a.y + 0.5) * s, r * s, 0, Math.PI * 2);
             ctx.stroke();
           }
-        } else if (hover) ctx.strokeRect(view.panX + hover.x * s + 0.5, view.panY + hover.y * s + 0.5, s - 1, s - 1);
+        } else if (S.hover) ctx.strokeRect(view.panX + S.hover.x * s + 0.5, view.panY + S.hover.y * s + 0.5, s - 1, s - 1);
         ctx.restore();
       },
-      hint: () => (tool ? HINTS[tool] : ''),
+      hint: () => (S.tool ? HINTS[S.tool] : ''),
     };
     function setSight(cell) {
       const g = doc().grid;
       const k = cell.y * g.w + cell.x;
-      if (drag.cells.has(k)) return;
-      drag.cells.add(k);
-      g.vision.sight = g.vision.sight.slice(0, k) + drag.value + g.vision.sight.slice(k + 1);
-      cache = null;
+      if (S.drag.cells.has(k)) return;
+      S.drag.cells.add(k);
+      g.vision.sight = g.vision.sight.slice(0, k) + S.drag.value + g.vision.sight.slice(k + 1);
+      S.cache = null;
       W().requestDraw();
     }
     function toggleRoomCell(cell) {
       const g = doc().grid;
-      const room = g.vision.rooms.find((r) => r.id === selectedRoom);
+      const room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
       if (!room) return;
       const has = room.cells.some((c) => c.x === cell.x && c.y === cell.y);
-      if (drag.adding && !has && room.cells.length < K.MAX_ROOM_CELLS) room.cells.push({ x: cell.x, y: cell.y });
-      else if (!drag.adding && has) room.cells = room.cells.filter((c) => c.x !== cell.x || c.y !== cell.y);
+      if (S.drag.adding && !has && room.cells.length < K.MAX_ROOM_CELLS) room.cells.push({ x: cell.x, y: cell.y });
+      else if (!S.drag.adding && has) room.cells = room.cells.filter((c) => c.x !== cell.x || c.y !== cell.y);
       W().requestDraw();
     }
 
     // ---- Pannelli ----
     const panels = new Set();
     function refreshPanels() { for (const p of panels) p(); }
-    const toolBtn = (t) => el('button', { type: 'button', class: 'btn small tool' + (tool === t ? ' active' : ''), 'aria-pressed': String(tool === t), text: TOOLS[t], onclick: () => setTool(tool === t ? null : t) });
+    const toolBtn = (t) => el('button', { type: 'button', class: 'btn small tool' + (S.tool === t ? ' active' : ''), 'aria-pressed': String(S.tool === t), text: TOOLS[t], onclick: () => setTool(S.tool === t ? null : t) });
     const btn = (text, onclick, title) => el('button', { type: 'button', class: 'btn small', text, title, 'aria-label': title || text, onclick });
 
     function viewSelect() {
       const d = doc();
-      const sel = el('select', { 'aria-label': 'Vedi come', onchange: (e) => { viewAs = e.target.value; if (viewAs === 'punto' && !probe.pos) setTool('v-vedi'); changed(); } },
-        opt('master', '👁 Master (tutto)', viewAs === 'master'), opt('giocatori', 'Come i giocatori', viewAs === 'giocatori'),
-        d ? d.combatants.filter((c) => c.pos).map((c) => opt('pedina:' + c.id, 'Come ' + c.name, viewAs === 'pedina:' + c.id)) : [],
-        mode === 'editor' ? opt('punto', 'Da un punto scelto…', viewAs === 'punto') : null);
+      const sel = el('select', { 'aria-label': 'Vedi come', onchange: (e) => { S.viewAs = e.target.value; if (S.viewAs === 'punto' && !S.probe.pos) setTool('v-vedi'); changed(); } },
+        opt('master', '👁 Master (tutto)', S.viewAs === 'master'), opt('giocatori', 'Come i giocatori', S.viewAs === 'giocatori'),
+        d ? d.combatants.filter((c) => c.pos).map((c) => opt('pedina:' + c.id, 'Come ' + c.name, S.viewAs === 'pedina:' + c.id)) : [],
+        mode === 'editor' ? opt('punto', 'Da un punto scelto…', S.viewAs === 'punto') : null);
       return sel;
     }
     function fogControls(g) {
@@ -424,8 +426,8 @@
         el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.enabled, onchange: (e) => edit((gr) => { gr.fog.enabled = e.target.checked; }) }), ' Nebbia di guerra'),
         el('label', { class: 'inline small' }, 'Modalità', el('select', { onchange: (e) => edit((gr) => { gr.fog.mode = e.target.value; }) },
           K.FOG_MODES.map((m) => opt(m, K.FOG_MODE_NAMES[m], g.fog.mode === m)))),
-        el('label', { class: 'inline small' }, 'Pennello', el('select', { onchange: (e) => { brush = e.target.value; refreshPanels(); } },
-          K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], brush === b)))),
+        el('label', { class: 'inline small' }, 'Pennello', el('select', { onchange: (e) => { S.brush = e.target.value; refreshPanels(); } },
+          K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b)))),
         toolBtn('v-rivela'), toolBtn('v-nascondi'),
         btn('Rivela tutto', () => edit((gr) => { gr.fog.enabled = true; V.revealAll(gr); })),
         btn('Nascondi tutto', () => { if (confirm('Nascondere tutta la mappa e dimenticare le celle esplorate?')) edit((gr) => { gr.fog.enabled = true; V.hideAll(gr); }); }));
@@ -441,9 +443,9 @@
         const g = V.ensure(d.grid);
         const v = g.vision;
         const lights = v.lights;
-        const sel = lights.find((l) => l.id === selectedLight);
-        const room = v.rooms.find((r) => r.id === selectedRoom);
-        const c = cache;
+        const sel = lights.find((l) => l.id === S.selectedLight);
+        const room = v.rooms.find((r) => r.id === S.selectedRoom);
+        const c = S.cache;
         node.append(
           el('div', { class: 'explore-tools-head' }, el('h3', { text: '🔦 Luce e visione' }),
             el('span', { class: 'muted small', text: c ? 'ricalcolo ' + Math.round(c.ms) + ' ms' : '' })),
@@ -454,11 +456,11 @@
                   K.AMBIENTS.filter((a) => a !== 'auto' || g.kind === 'esplorazione').map((a) => opt(a, K.AMBIENT_NAMES[a], v.ambient === a)))),
                 el('label', { class: 'check small', title: 'Celle nette invece del gradiente morbido (più veloce)' }, el('input', { type: 'checkbox', checked: v.stepped, onchange: (e) => edit((gr) => { gr.vision.stepped = e.target.checked; }) }), ' Luce a gradini')),
               el('div', { class: 'explore-tool-row' },
-                el('select', { 'aria-label': 'Sorgente da piazzare', onchange: (e) => { lightKind = e.target.value; setTool('v-luce'); } },
-                  K.SOURCES.map((s) => opt(s.id, s.icon + ' ' + s.name, lightKind === s.id)), opt('oscurita', K.DARKNESS.icon + ' ' + K.DARKNESS.name, lightKind === 'oscurita')),
+                el('select', { 'aria-label': 'Sorgente da piazzare', onchange: (e) => { S.lightKind = e.target.value; setTool('v-luce'); } },
+                  K.SOURCES.map((s) => opt(s.id, s.icon + ' ' + s.name, S.lightKind === s.id)), opt('oscurita', K.DARKNESS.icon + ' ' + K.DARKNESS.name, S.lightKind === 'oscurita')),
                 toolBtn('v-luce')),
-              lights.length ? el('ul', { class: 'placed-events' }, lights.map((l) => el('li', { class: l.id === selectedLight ? 'selected' : '' },
-                el('button', { type: 'button', class: 'link-btn', text: (l.dark ? '🌑 ' : '💡 ') + l.name + ' · ' + G.cellLabel(l.x, l.y), onclick: () => { selectedLight = l.id === selectedLight ? null : l.id; changed(); } }),
+              lights.length ? el('ul', { class: 'placed-events' }, lights.map((l) => el('li', { class: l.id === S.selectedLight ? 'selected' : '' },
+                el('button', { type: 'button', class: 'link-btn', text: (l.dark ? '🌑 ' : '💡 ') + l.name + ' · ' + G.cellLabel(l.x, l.y), onclick: () => { S.selectedLight = l.id === S.selectedLight ? null : l.id; changed(); } }),
                 el('span', { class: 'muted small', text: (l.on ? '' : 'spenta · ') + (l.minutes === null ? '' : Math.round(l.minutes) + ' min') + (l.link ? ' · concentrazione' : '') }),
                 el('span', { class: 'action-tools' },
                   el('button', { type: 'button', class: 'icon-btn', text: l.on ? '🌑' : '🔥', title: l.on ? 'Spegni' : 'Accendi', 'aria-label': l.on ? 'Spegni ' + l.name : 'Accendi ' + l.name,
@@ -468,14 +470,14 @@
               sel ? lightForm(sel) : null),
             el('fieldset', {}, el('legend', { text: 'Vista e stanze' }),
               el('div', { class: 'explore-tool-row' }, toolBtn('v-blocco'), toolBtn('v-stanza'),
-                btn('+ Stanza', () => edit((gr) => { const r = V.normalizeRoom({ name: 'Stanza ' + (gr.vision.rooms.length + 1) }, gr); gr.vision.rooms.push(r); selectedRoom = r.id; tool = 'v-stanza'; }))),
-              v.rooms.length ? el('ul', { class: 'placed-events' }, v.rooms.map((r) => el('li', { class: r.id === selectedRoom ? 'selected' : '' },
-                el('button', { type: 'button', class: 'link-btn', text: r.name + ' · ' + r.cells.length + ' celle', onclick: () => { selectedRoom = r.id === selectedRoom ? null : r.id; changed(); } }),
+                btn('+ Stanza', () => edit((gr) => { const r = V.normalizeRoom({ name: 'Stanza ' + (gr.vision.rooms.length + 1) }, gr); gr.vision.rooms.push(r); S.selectedRoom = r.id; S.tool = 'v-stanza'; }))),
+              v.rooms.length ? el('ul', { class: 'placed-events' }, v.rooms.map((r) => el('li', { class: r.id === S.selectedRoom ? 'selected' : '' },
+                el('button', { type: 'button', class: 'link-btn', text: r.name + ' · ' + r.cells.length + ' celle', onclick: () => { S.selectedRoom = r.id === S.selectedRoom ? null : r.id; changed(); } }),
                 el('span', { class: 'muted small', text: r.revealed ? 'rivelata' : 'da rivelare' }),
                 el('span', { class: 'action-tools' },
                   el('button', { type: 'button', class: 'icon-btn', text: '✎', title: 'Rinomina', 'aria-label': 'Rinomina ' + r.name, onclick: () => { const n = prompt('Nome della stanza', r.name); if (n && n.trim()) edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).name = n.trim().slice(0, 60); }); } }),
                   el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Torna «da rivelare»', 'aria-label': 'Azzera ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).revealed = false; }) }),
-                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Elimina', 'aria-label': 'Elimina ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms = gr.vision.rooms.filter((x) => x.id !== r.id); if (selectedRoom === r.id) selectedRoom = null; }) })))))
+                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Elimina', 'aria-label': 'Elimina ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms = gr.vision.rooms.filter((x) => x.id !== r.id); if (S.selectedRoom === r.id) S.selectedRoom = null; }) })))))
                 : el('p', { class: 'muted small', text: 'Una stanza si rivela tutta quando un giocatore ci entra o si apre una porta che la tocca.' }),
               room ? el('p', { class: 'muted small', text: 'Stanza selezionata: «' + room.name + '». Usa 🚪 Stanza per aggiungere o togliere celle.' }) : null,
               legend()),
@@ -486,10 +488,10 @@
                 el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.ghosts, onchange: (e) => edit((gr) => { gr.fog.ghosts = e.target.checked; }) }), ' Ultime posizioni note (fantasmi)'))),
             el('fieldset', {}, el('legend', { text: 'Vedi come' }),
               el('div', { class: 'input-row' }, viewSelect(),
-                mode === 'editor' ? el('select', { 'aria-label': 'Sensi del punto scelto', onchange: (e) => { probe = { pos: probe.pos, kind: e.target.value }; changed(); } },
-                  K.PROBES.map((pr) => opt(pr.id, pr.name, probe.kind === pr.id))) : null,
+                mode === 'editor' ? el('select', { 'aria-label': 'Sensi del punto scelto', onchange: (e) => { S.probe = { pos: S.probe.pos, kind: e.target.value }; changed(); } },
+                  K.PROBES.map((pr) => opt(pr.id, pr.name, S.probe.kind === pr.id))) : null,
                 mode === 'editor' ? toolBtn('v-vedi') : null),
-              el('p', { class: 'muted small', text: viewAs === 'master' ? 'Il master vede tutto: le zone non rivelate hanno un velo.' : 'Anteprima: celle e pedine fuori vista coperte, come le vedrebbero i giocatori.' }))));
+              el('p', { class: 'muted small', text: S.viewAs === 'master' ? 'Il master vede tutto: le zone non rivelate hanno un velo.' : 'Anteprima: celle e pedine fuori vista coperte, come le vedrebbero i giocatori.' }))));
       };
       panels.add(render);
       render();
@@ -531,7 +533,7 @@
           el('button', { type: 'button', class: 'btn small', 'aria-pressed': String(g.fog.enabled), text: g.fog.enabled ? '🌫 Nebbia attiva' : '🌫 Nebbia spenta',
             onclick: () => edit((gr) => { gr.fog.enabled = !gr.fog.enabled; }) }),
           toolBtn('v-rivela'), toolBtn('v-nascondi'),
-          el('select', { 'aria-label': 'Pennello della nebbia', onchange: (e) => { brush = e.target.value; refreshPanels(); } }, K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], brush === b))),
+          el('select', { 'aria-label': 'Pennello della nebbia', onchange: (e) => { S.brush = e.target.value; refreshPanels(); } }, K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b))),
           viewSelect(),
           btn('🔦 Luce e visione…', () => {
             const p = panel();
@@ -547,11 +549,11 @@
 
     return {
       painter, draw, compute, hideToken, hideItem, levelAt, panel, quickBar, emitterEditor,
-      reset: () => { tool = null; selectedLight = null; selectedRoom = null; viewAs = 'master'; probe = { pos: null, kind: 'normale' }; cache = null; },
-      invalidate: () => { cache = null; },
-      viewAs: () => viewAs,
-      setViewAs: (v) => { viewAs = v; changed(); },
-      tool: () => tool,
+      reset: () => { S.tool = null; S.selectedLight = null; S.selectedRoom = null; S.viewAs = 'master'; S.probe = { pos: null, kind: 'normale' }; S.cache = null; },
+      invalidate: () => { S.cache = null; },
+      viewAs: () => S.viewAs,
+      setViewAs: (v) => { S.viewAs = v; changed(); },
+      tool: () => S.tool,
     };
   }
 
