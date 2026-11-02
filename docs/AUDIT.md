@@ -724,7 +724,7 @@ sotto le 40 righe» **non è raggiunto**.
 | A7 | non necessario | `rete/sessione` non chiama l'interfaccia: riceve l'esecutore come opzione (`esecutore`, passato da `ui-online.js`); con A8 le regole che esegue sono in `combattimento.js` |
 | A8 | **risolto** | `eb57dc8`, `7803964`: danno, effetti dopo l'azione, attacco, incantesimi, tiro salvezza e turno in `combattimento.js` (regole pure, testate); l'interfaccia tiene `mutate`, dadi animati, avvisi e suoni |
 | A9 | **risolto in parte** | `ui-griglia.js` 797 e `ui-combattimento.js` 781 righe, divisi in parti con `api` |
-| A10 | **risolto in parte** | `9f41c0c`: la valutazione delle intenzioni (~220 righe) esce da `sessione.master` in `rete/valutazione.js`, un gestore per tipo; restano lunghi `note-editor.create`, `ui-scheda.editor`, `ui-percorso.create`, `ui-visione.create`, `ui-pannello-tile.create`, `ui-tile.cutter` (interfaccia senza test: prima servono test di caratterizzazione) |
+| A10 | **risolto in parte** | `9f41c0c` valutazione delle intenzioni fuori da `sessione.master`; `eb71c22` editor delle note (`create` ~635 → 356: stile, elenchi, tabelle); `fff9b11` `ui-visione` (~474 → 223: strumenti, pannelli); `6f031ec` `ui-percorso` (~560 → 364: disegno). Ognuno preceduto da test di caratterizzazione (anche un'impronta dei pixel del Percorso). Restano `ui-scheda.editor`, `ui-pannello-tile.create`, `ui-tile.cutter`: servono test con TileSet e immagini, e la procedura della scheda |
 | A11 | **risolto** | `dati.js` diviso in `js/stato/` (normalizza, esempi, migrazioni, archivio) |
 | A12 | **risolto in parte** | migrazioni dello stato in `stato/migrazioni.js`, delle tile in `migrazioni-tile.js`; restano quelle delle preferenze (audio, layout) e il completamento dei TileSet legacy all'avvio |
 | A13 | **risolto** | `5d15feb`: `regole.MODI_TIRO` unica fonte (eventi, intenzioni, interfacce) |
@@ -790,7 +790,9 @@ domanda 8), A32 (preferenze senza versione), intestazioni mancanti in circa 70 f
 
 ### 20.4.3 Terza tornata (novembre 2026)
 
-A24 (`4c92ad7`), A23 (`88703e9`), A25 (`2252be3`), A10 in parte (`9f41c0c`); **330** test verdi dopo ogni commit.
+A24 (`4c92ad7`), A23 (`88703e9`), A25 (`2252be3`), A10 in parte (`9f41c0c`, `eb71c22`, `fff9b11`, `6f031ec`); **333** test verdi
+dopo ogni commit. Per le divisioni con lo stato in un oggetto si usa uno script che controlla che nessuna stringa cambi
+(due chiamate convertite male in `ui-visione` sono state trovate e corrette prima del commit).
 
 ### 20.5 Limiti residui
 
