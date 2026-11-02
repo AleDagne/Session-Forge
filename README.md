@@ -2031,6 +2031,7 @@ js/rete/segnalazione.js  segnalazione manuale e WebRTC (STUN modificabili), cand
 js/rete/filtro.js     punto unico del filtro sul master: statoPerGiocatore / eventoPerGiocatore con whitelist dei campi, sezioni (combattimento, esplorazione, scene, Mondo), Vedi come giocatore, differenze con le celle cambiate e applicazione
 js/rete/immagini.js   immagini a pezzi da 16 KB con impronta e limiti
 js/rete/intenzioni.js intenzioni del giocatore: schemi, permessi, economia del turno, verifiche di movimento, attacco e incantesimo, delta della scheda, scambi, esplorazione, mercanti, dialoghi, riposo, registro
+js/rete/valutazione.js valutazione delle intenzioni sul lato del master: un gestore per tipo (permessi, turno, economia, regole), da sessione.master
 js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, spettatori, coda di invio con priorità e accorpamento, intenzioni convalidate, conferma manuale, permessi, gettoni e ripresa, dialoghi, diagnostica, eventi, chat, dadi, immagini, battito) e giocatore (riconnessione, riepilogo)
 js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master (permessi, richieste, rivelazioni, registro, visibilità, Vedi come, Mondo, dialoghi, scene, ripresa), schermata del giocatore (azioni, scheda, ping, esplorazione, Mondo e mercanti, dialoghi, Rientra), Test connessione con diagnostica
 

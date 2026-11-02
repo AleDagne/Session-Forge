@@ -28,7 +28,7 @@ regole          funzioni pure di gioco, nessun DOM, disco o rete               d
   ↑               Mondo: fazioni → party/città/quest/npc → esplorazione, scene
 stato           modello, normalizzazione, esempi, migrazioni, archivio su disco
   ↑               modello.js (base, caricato presto) … stato/normalizza → esempi → migrazioni → dati.js → stato/archivio
-rete            protocollo, trasporto, codici, segnalazione, filtro, immagini, intenzioni, sessione (js/rete/)
+rete            protocollo, trasporto, codici, segnalazione, filtro, immagini, intenzioni, valutazione, sessione (js/rete/)
   ↑
 interfaccia     DOM e canvas (ui-*.js, note-editor.js)                          base: ui-comune.js
   ↑
