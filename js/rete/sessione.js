@@ -576,7 +576,7 @@
       for (const id of ids) {
         if (!lecite.has(id) || g.stato !== 'attivo') { g.invia('immagineNo', { id, motivo: 'immagine non disponibile' }); continue; }
         let data = icone.get(id) || null;
-        if (!data) { try { data = await o.immagine(id); } catch (e) { data = null; } }
+        if (!data) { try { data = await o.immagine(id); } catch (e) { console.warn('Sessione: immagine non letta', id, e); data = null; } }
         let pezzi;
         try {
           if (!data) throw new Error('immagine non trovata nell\'archivio del master');
@@ -917,7 +917,7 @@
       for (const id of ids || []) {
         if (s.inArrivo.has(id)) continue;
         let ha = false;
-        try { ha = await o.archivio.ha(id); } catch (e) { ha = false; }
+        try { ha = await o.archivio.ha(id); } catch (e) { console.warn('Sessione: archivio delle immagini non leggibile', id, e); ha = false; }
         if (!ha) mancanti.push(id);
       }
       if (!mancanti.length) return;
@@ -1005,7 +1005,7 @@
           const av = ricevitore.avanzamento();
           o.suAvanzamento({ ricevuti: av.ricevuti, totali: av.totali, immagini: s.inArrivo.size });
           if (fatta) {
-            Promise.resolve(o.archivio.metti(fatta.id, fatta.data)).catch(() => {}).then(() => {
+            Promise.resolve(o.archivio.metti(fatta.id, fatta.data)).catch((e) => { console.warn('Sessione: immagine ricevuta non salvata (resta in memoria)', fatta.id, e); }).then(() => {
               s.inArrivo.delete(fatta.id);
               o.suAvanzamento({ ricevuti: 1, totali: 1, immagini: s.inArrivo.size, pronta: fatta.id });
             });

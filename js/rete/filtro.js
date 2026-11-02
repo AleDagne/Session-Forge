@@ -121,7 +121,7 @@
         caratteristiche: R.ABILITIES.map((ab) => ({ nome: ab, valore: d.abilities[ab], mod: R.modifier(d.abilities[ab]), ts: d.saveTotals[ab], competente: d.saves.includes(ab) })),
         percezione: DnD.scheda.passive(p, 'Percezione', d, fx, st),
       });
-    } catch (e) { /* riassunto parziale */ }
+    } catch (e) { console.warn('Filtro: riassunto parziale', e); }
     const status = DnD.riposi ? DnD.riposi.normalizeStatus(p.status) : obj(p.status);
     out.pf = combattente ? combattente.hp : status.hp === null || status.hp === undefined ? p.maxHp : status.hp;
     if (combattente) out.pfMax = combattente.maxHp;
@@ -232,14 +232,14 @@
     const E = DnD.esplorazione;
     const w = { st, ex, grid };
     let vis;
-    try { vis = E.discoveryView(w); } catch (e) { vis = undefined; }
+    try { vis = E.discoveryView(w); } catch (e) { console.warn('Filtro: vista di scoperta non calcolata', e); vis = undefined; }
     const gruppi = arr(ex.parties).map((p) => ({ id: p.id, name: p.name, icon: p.icon, pos: p.pos, kind: 'player', faction: 'giocatori', w: 1, h: 1 }));
     const vg = DnD.visione.visioneGiocatore({ grid: grigliaNpcRivelati(grid), combatants: gruppi }, { tilesets: DnD.tilemap.tilesetIndex(st.tilesets), visible: vis, seenIds: new Set() });
     const griglia = Object.assign({}, vg);
     delete griglia.combatants;
     const att = E.activeParty(ex);
     let b = null;
-    try { b = att ? E.biomeAt(w, att.pos.x, att.pos.y) : null; } catch (e) { b = null; }
+    try { b = att ? E.biomeAt(w, att.pos.x, att.pos.y) : null; } catch (e) { console.warn('Filtro: bioma non trovato', e); b = null; }
     return {
       griglia, tilesets: tilesetUsati(griglia, st.tilesets),
       gruppi: arr(ex.parties).map((p) => ({ id: p.id, nome: p.name, icona: icona(p.icon, raccolta), pos: { x: p.pos.x, y: p.pos.y }, attivo: p === att })),
@@ -350,10 +350,10 @@
       io: { giocatoreId: o.giocatoreId || '', combattenteId: mio ? mio.id : '', personaggioId: pers ? pers.id : '', spettatore: Boolean(o.spettatore) },
       regole: o.regole || null, altri: altri(st, c, pers, o) };
     if (c) vista.combattimento = combattimento(st, c, o, mio, raccolta);
-    try { vista.esplorazione = esplorazione(st, sess, raccolta); } catch (e) { vista.esplorazione = null; }
+    try { vista.esplorazione = esplorazione(st, sess, raccolta); } catch (e) { console.error('Filtro: esplorazione esclusa dalla vista dei giocatori', e); vista.esplorazione = null; }
     const npcVisti = [];
     for (const g of [vista.combattimento, vista.esplorazione]) if (g) for (const it of g.griglia.items) if (it.otype === 'npc') npcVisti.push(it.id);
-    try { vista.mondo = mondo(st, sess, o, raccolta, npcVisti); } catch (e) { vista.mondo = null; }
+    try { vista.mondo = mondo(st, sess, o, raccolta, npcVisti); } catch (e) { console.error('Filtro: Mondo escluso dalla vista dei giocatori', e); vista.mondo = null; }
     // Spettatore: sola vista, senza azioni proprie.
     if (o.spettatore && vista.combattimento) for (const p of vista.combattimento.pedine) { delete p.proprie; p.mia = false; }
     vista.immagini = immaginiDi(vista);

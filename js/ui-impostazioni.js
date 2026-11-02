@@ -20,8 +20,10 @@
   // L'archivio porta anche le impostazioni dei suoni e i file che sostituiscono i suoni predefiniti.
   async function exportArchive() {
     const images = await imagesOf(DnD.store.state);
-    download(DnD.dati.exportJSON(DnD.store.state, images, { suoni: await DnD.audio.esporta() }), slug(DnD.config.APP_NAME) + '-archivio-' + today() + '.json');
-    toast('Archivio esportato.', 'success');
+    const mancanti = [];
+    download(DnD.dati.exportJSON(DnD.store.state, images, { suoni: await DnD.audio.esporta(mancanti) }), slug(DnD.config.APP_NAME) + '-archivio-' + today() + '.json');
+    if (mancanti.length) toast('Archivio esportato, ma senza ' + mancanti.length + ' file audio non trovati (' + mancanti.join(', ') + '): quei suoni torneranno a quelli predefiniti.', 'error');
+    else toast('Archivio esportato.', 'success');
   }
 
   async function exportSession() {

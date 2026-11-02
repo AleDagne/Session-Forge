@@ -336,13 +336,20 @@
     const ripristina = (id) => impostaEvento(id, { file: null });
 
     // ---------- Esporta / Importa / Cancella ----------
-    async function esporta() {
+    // mancanti (facoltativo): riceve i nomi dei file che non si sono potuti leggere, per avvisare l'utente.
+    async function esporta(mancanti) {
       const file = {};
+      const nomi = {};
+      for (const ev of Object.values(settings.eventi)) if (ev.file) nomi[ev.file.id] = ev.file.nome;
       for (const fid of new Set(Object.values(S().filesOf(settings)))) {
+        let data = null;
         try {
-          const data = blobs ? await blobs.get('snd:' + fid) : null;
-          if (isAudioDataUrl(data)) file[fid] = data;
-        } catch (err) { /* file mancante: non si esporta */ }
+          data = blobs ? await blobs.get('snd:' + fid) : null;
+        } catch (err) {
+          console.error('Audio: file del suono non leggibile in esportazione', fid, err);
+        }
+        if (isAudioDataUrl(data)) file[fid] = data;
+        else if (mancanti) mancanti.push(nomi[fid] || fid);
       }
       return { impostazioni: JSON.parse(JSON.stringify(settings)), file };
     }

@@ -77,7 +77,7 @@
       const entry = cache.get(id);
       if (entry && entry.data) return entry.data;
       let data = null;
-      try { data = await backend.get(key(id)); } catch (e) { data = null; }
+      try { data = await backend.get(key(id)); } catch (e) { console.warn('Immagini: lettura non riuscita', id, e); data = null; }
       if (isStoredImageUrl(data)) {
         cache.set(id, Object.assign(cache.get(id) || { img: null, waiters: [] }, { status: 'ok', data }));
         return data;

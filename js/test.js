@@ -3807,6 +3807,12 @@
     // Esporta: impostazioni e file usati, dentro l'archivio; Importa su un altro browser.
     const exp = await f.a.esporta();
     eq([exp.impostazioni.volume, Object.keys(exp.file).length], [40, 1]);
+    // File sparito dall'archivio: non si esporta, ma il nome finisce tra i mancanti (A22).
+    const fid = Object.keys(exp.file)[0];
+    f.data.delete('snd:' + fid);
+    const mancanti = [];
+    eq([Object.keys((await f.a.esporta(mancanti)).file).length, mancanti], [0, ['gong.wav']], 'file mancante segnalato');
+    f.data.set('snd:' + fid, exp.file[fid]);
     const text = DnD.dati.exportJSON(DnD.dati.emptyState(), {}, { suoni: exp });
     eq(JSON.parse(text).suoni.impostazioni.volume, 40, 'nell\'archivio esportato');
     eq(DnD.dati.importJSON(text).sessions.length, 1, 'l\'archivio con i suoni si importa');
