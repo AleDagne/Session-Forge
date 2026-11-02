@@ -5836,6 +5836,44 @@
     eq(ui.levelAt(2, 2), 2, 'indicatore della luce sulla pedina');
   });
 
+  test('Visione UI: pennelli di luce, blocco della vista, stanze e nebbia dal pannello (caratterizzazione)', () => {
+    const g = vGrid({ w: 12, h: 10, fog: { enabled: false, mode: 'manuale' }, vision: { ambient: 'notte' } });
+    const doc = { grid: g, combatants: [] };
+    let snap = 0;
+    let commit = 0;
+    const fake = { requestDraw() {}, tileSnapshot: () => { snap++; return G().gridSnapshot(doc); }, commitTiles() { commit++; }, updateUi() {} };
+    let modifiche = 0;
+    const ui = DnD.uiVisione.create({ getDoc: () => doc, widget: () => fake, mode: 'editor', onChange: () => { modifiche++; } });
+    const p = ui.panel();
+    const T = DnD.uiVisione.TOOLS;
+    const strumento = (id) => [...p.node.querySelectorAll('button.tool')].find((b) => b.textContent === T[id]);
+    eq([...p.node.querySelectorAll('button.tool')].map((b) => b.textContent), Object.values(T), 'strumenti del pannello (editor)');
+    strumento('v-luce').click();
+    eq([ui.tool(), strumento('v-luce').getAttribute('aria-pressed'), ui.painter.active(), ui.painter.hint().length > 0], ['v-luce', 'true', true, true]);
+    ui.painter.down({ x: 3, y: 3 });
+    eq([g.vision.lights.length, g.vision.lights[0].x, g.vision.lights[0].kind], [1, 3, 'torcia'], 'torcia piazzata');
+    ui.painter.down({ x: 3, y: 3 });
+    eq(g.vision.lights.length, 1, 'clic su una sorgente: la seleziona');
+    ok(p.node.querySelector('li.selected'), 'sorgente selezionata nel pannello');
+    strumento('v-blocco').click();
+    ui.painter.down({ x: 1, y: 1 });
+    ui.painter.move({ x: 2, y: 1 }, null, true);
+    ui.painter.move({ x: 2, y: 1 }, null, true);
+    ui.painter.up({ x: 2, y: 1 });
+    eq([g.vision.sight[1 * 12 + 1], g.vision.sight[1 * 12 + 2], g.vision.sight[1 * 12 + 3]], ['1', '1', '0'], 'blocco della vista su due celle');
+    strumento('v-stanza').click();
+    ui.painter.down({ x: 5, y: 5 });
+    ui.painter.move({ x: 6, y: 5 }, null, true);
+    ui.painter.up({ x: 6, y: 5 });
+    eq([g.vision.rooms.length, g.vision.rooms[0].name, g.vision.rooms[0].cells], [1, 'Stanza 1', [{ x: 5, y: 5 }, { x: 6, y: 5 }]], 'stanza nuova con due celle');
+    ui.painter.deactivate();
+    eq([ui.tool(), ui.painter.active()], [null, false]);
+    ui.reset();
+    eq(ui.viewAs(), 'master');
+    ok(modifiche > 0 && commit >= 3 && snap >= 3, 'modifiche annullabili (' + commit + ' passi)');
+    p.dispose();
+  });
+
   test('Visione: prestazioni su una griglia 100×100', () => {
     const structures = [];
     for (let i = 0; i < 12; i++) structures.push(vWall('m' + i, 8 * i + 4, (i * 13) % 60, 1, 30));
