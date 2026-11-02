@@ -47,15 +47,19 @@
   //   onUnlock(nodeId) -> bool, getTransformations() -> [{ id, name }] (per l'effetto «Sblocca trasformazione»)
   // }
   function create(opts) {
+    const stato = {
+      view: { zoom: 1, panX: 0, panY: 0 },
+      tool: 'sposta',
+      selected: [],
+      drag: null,
+      snap: false,
+      query: '',
+      anim: null, // { from, to, t0 } luce che corre lungo la linea allo sblocco
+      raf: 0,
+      starField: null,
+      preview: null, // posizioni provvisorie durante lo spostamento
+    };
     const mode = opts.mode || 'editor';
-    let view = { zoom: 1, panX: 0, panY: 0 };
-    let tool = 'sposta';
-    let selected = [];
-    let drag = null;
-    let snap = false;
-    let query = '';
-    let anim = null;          // { from, to, t0 } luce che corre lungo la linea allo sblocco
-    let raf = 0;
     const hist = P.history(50);
     const canvas = el('canvas', { class: 'path-canvas', tabindex: 0, 'aria-label': mode === 'editor' ? 'Mappa del percorso: modifica dei nodi' : 'Percorso leggendario: scegli un nodo da sbloccare' });
     const wrap = el('div', { class: 'path-canvas-wrap' }, canvas);
@@ -63,7 +67,6 @@
     const side = el('aside', { class: 'path-side' });
     const toolbar = el('div', { class: 'path-toolbar' });
     const node = el('div', { class: 'path-editor path-' + mode }, toolbar, el('div', { class: 'path-body' }, wrap, side), info);
-    let starField = null;
 
     const path = () => opts.getPath();
     const unlocked = () => new Set(P.withCore(opts.getUnlocked ? opts.getUnlocked() : []));
@@ -75,8 +78,8 @@
 
     // ---------- Coordinate ----------
     const size = () => ({ W: wrap.clientWidth || 600, H: wrap.clientHeight || 420 });
-    const toScreen = (x, y) => { const s = size(); return { x: s.W / 2 + view.panX + x * view.zoom, y: s.H / 2 + view.panY + y * view.zoom }; };
-    const toWorld = (sx, sy) => { const s = size(); return { x: (sx - s.W / 2 - view.panX) / view.zoom, y: (sy - s.H / 2 - view.panY) / view.zoom }; };
+    const toScreen = (x, y) => { const s = size(); return { x: s.W / 2 + stato.view.panX + x * stato.view.zoom, y: s.H / 2 + stato.view.panY + y * stato.view.zoom }; };
+    const toWorld = (sx, sy) => { const s = size(); return { x: (sx - s.W / 2 - stato.view.panX) / stato.view.zoom, y: (sy - s.H / 2 - stato.view.panY) / stato.view.zoom }; };
     const radius = (n) => (n.core ? R_CORE : R_NODE);
     function hitNode(sx, sy) {
       const w = toWorld(sx, sy);
@@ -99,7 +102,7 @@
     }
 
     // ---------- Disegno ----------
-    function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+    function requestDraw() { if (!stato.raf) stato.raf = requestAnimationFrame(() => { stato.raf = 0; draw(); }); }
     function draw() {
       if (!canvas.isConnected) return;
       const { W, H } = size();
@@ -120,17 +123,17 @@
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
       }
-      if (!starField) starField = stars(hash(path().name), 180);
-      for (const s of starField) {
+      if (!stato.starField) stato.starField = stars(hash(path().name), 180);
+      for (const s of stato.starField) {
         const tw = moving ? 0.5 + 0.5 * Math.sin(now / 900 + s.tw) : 1;
         ctx.fillStyle = rgba(C.light, (s.a * (0.6 + 0.4 * tw)).toFixed(3));
         ctx.beginPath();
-        ctx.arc(((s.x * W + view.panX * 0.15) % W + W) % W, ((s.y * H + view.panY * 0.15) % H + H) % H, s.r + 0.4, 0, Math.PI * 2);
+        ctx.arc(((s.x * W + stato.view.panX * 0.15) % W + W) % W, ((s.y * H + stato.view.panY * 0.15) % H + H) % H, s.r + 0.4, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (snap && mode === 'editor') {
+      if (stato.snap && mode === 'editor') {
         ctx.strokeStyle = rgba(C.bianco, 0.05);
-        const step = SNAP * view.zoom;
+        const step = SNAP * stato.view.zoom;
         const o = toScreen(0, 0);
         for (let x = o.x % step; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
         for (let y = o.y % step; y < H; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
@@ -138,7 +141,7 @@
       const p = path();
       const have = unlocked();
       const avail = mode === 'sblocca' ? new Set(P.available(p, [...have], opts.ctx())) : new Set();
-      const found = new Set(P.search(p, query));
+      const found = new Set(P.search(p, stato.query));
       // Collegamenti: curvi; attivi (entrambi sbloccati) dorati con scorrimento di luce.
       for (const l of p.links) {
         const a = P.nodeById(p, l[0]);
@@ -173,10 +176,10 @@
         ctx.restore();
       }
       // Luce che corre lungo la linea dello sblocco.
-      if (anim) {
-        const k = Math.min(1, (now - anim.t0) / 700);
-        const a = P.nodeById(p, anim.from);
-        const b = P.nodeById(p, anim.to);
+      if (stato.anim) {
+        const k = Math.min(1, (now - stato.anim.t0) / 700);
+        const a = P.nodeById(p, stato.anim.from);
+        const b = P.nodeById(p, stato.anim.to);
         if (a && b) {
           const A = toScreen(a.x, a.y);
           const B = toScreen(b.x, b.y);
@@ -190,12 +193,12 @@
           ctx.arc(x, y, 22, 0, Math.PI * 2);
           ctx.fill();
         }
-        if (k >= 1 && now - anim.t0 > 1300) anim = null;
+        if (k >= 1 && now - stato.anim.t0 > 1300) stato.anim = null;
       }
       // Nodi: gemme o sigilli; il Nucleo come sole con aureola.
       for (const n of p.nodes) {
         const S = toScreen(n.x, n.y);
-        const r = radius(n) * view.zoom;
+        const r = radius(n) * stato.view.zoom;
         const on = have.has(n.id);
         const can = avail.has(n.id);
         const dim = mode === 'sblocca' && !on && !can;
@@ -226,8 +229,8 @@
           ctx.stroke();
           ctx.shadowBlur = 0;
         }
-        if (anim && anim.to === n.id) {
-          const k = Math.min(1, (now - anim.t0 - 700) / 600);
+        if (stato.anim && stato.anim.to === n.id) {
+          const k = Math.min(1, (now - stato.anim.t0 - 700) / 600);
           if (k > 0) {
             ctx.strokeStyle = rgba(C.bianco, 1 - k);
             ctx.lineWidth = 4;
@@ -253,23 +256,23 @@
         ctx.fill();
         ctx.shadowBlur = 0;
         ctx.strokeStyle = on ? rgba(C.light, 0.95) : rgba(C.light, 0.45);
-        ctx.lineWidth = selected.includes(n.id) ? 3 : 1.5;
-        if (selected.includes(n.id)) ctx.strokeStyle = C.bianco;
+        ctx.lineWidth = stato.selected.includes(n.id) ? 3 : 1.5;
+        if (stato.selected.includes(n.id)) ctx.strokeStyle = C.bianco;
         ctx.stroke();
         if (found.has(n.id)) { ctx.strokeStyle = C.ricerca; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(S.x, S.y, r * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
         if (r > 12) DnD.icone.drawIcon(ctx, n.icon, S.x, S.y, r * 0.55, requestDraw);
         ctx.restore();
         // Etichetta: nome e costo.
-        if (view.zoom > 0.3) {
+        if (stato.view.zoom > 0.3) {
           ctx.save();
-          ctx.font = (n.core ? '700 ' : '600 ') + Math.max(10, 12 * Math.min(1.3, view.zoom)) + 'px system-ui, sans-serif';
+          ctx.font = (n.core ? '700 ' : '600 ') + Math.max(10, 12 * Math.min(1.3, stato.view.zoom)) + 'px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = dim ? rgba(C.light, 0.55) : C.light;
           ctx.shadowColor = C.ombra;
           ctx.shadowBlur = 4;
           ctx.fillText(n.name, S.x, S.y + r + 15);
           if (!n.core) {
-            ctx.font = Math.max(9, 10 * Math.min(1.3, view.zoom)) + 'px system-ui, sans-serif';
+            ctx.font = Math.max(9, 10 * Math.min(1.3, stato.view.zoom)) + 'px system-ui, sans-serif';
             ctx.fillStyle = rgba(C.gold, 0.9);
             ctx.fillText('◆'.repeat(n.cost) + (n.minRank ? ' · rango ' + n.minRank : ''), S.x, S.y + r + 28);
           }
@@ -277,27 +280,27 @@
         }
       }
       // Anteprime dell'editor: collegamento in corso, rettangolo di selezione.
-      if (drag && drag.type === 'link' && drag.at) {
-        const a = P.nodeById(p, drag.from);
+      if (stato.drag && stato.drag.type === 'link' && stato.drag.at) {
+        const a = P.nodeById(p, stato.drag.from);
         const A = toScreen(a.x, a.y);
         ctx.strokeStyle = rgba(C.bianco, 0.8);
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
-        ctx.lineTo(drag.at.x, drag.at.y);
+        ctx.lineTo(stato.drag.at.x, stato.drag.at.y);
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (drag && drag.type === 'rect' && drag.b) {
+      if (stato.drag && stato.drag.type === 'rect' && stato.drag.b) {
         ctx.strokeStyle = rgba(C.ricerca, 0.9);
         ctx.fillStyle = rgba(C.ricerca, 0.1);
-        const x = Math.min(drag.a.x, drag.b.x);
-        const y = Math.min(drag.a.y, drag.b.y);
-        ctx.fillRect(x, y, Math.abs(drag.b.x - drag.a.x), Math.abs(drag.b.y - drag.a.y));
-        ctx.strokeRect(x, y, Math.abs(drag.b.x - drag.a.x), Math.abs(drag.b.y - drag.a.y));
+        const x = Math.min(stato.drag.a.x, stato.drag.b.x);
+        const y = Math.min(stato.drag.a.y, stato.drag.b.y);
+        ctx.fillRect(x, y, Math.abs(stato.drag.b.x - stato.drag.a.x), Math.abs(stato.drag.b.y - stato.drag.a.y));
+        ctx.strokeRect(x, y, Math.abs(stato.drag.b.x - stato.drag.a.x), Math.abs(stato.drag.b.y - stato.drag.a.y));
       }
       // Animazione continua (pulsazione, scorrimento di luce, stelle) solo se le animazioni sono attive.
-      if (moving && (mode === 'sblocca' || anim || p.links.some((l) => have.has(l[0]) && have.has(l[1])))) requestDraw();
+      if (moving && (mode === 'sblocca' || stato.anim || p.links.some((l) => have.has(l[0]) && have.has(l[1])))) requestDraw();
     }
     new ResizeObserver(() => requestDraw()).observe(wrap);
 
@@ -308,57 +311,56 @@
       const pt = local(e);
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* evento sintetico */ }
       const hit = hitNode(pt.x, pt.y);
-      if (e.button === 1 || (!hit && mode === 'sblocca')) { drag = { type: 'pan', p0: pt, v0: Object.assign({}, view) }; return; }
+      if (e.button === 1 || (!hit && mode === 'sblocca')) { stato.drag = { type: 'pan', p0: pt, v0: Object.assign({}, stato.view) }; return; }
       if (mode === 'sblocca') { if (hit) unlockDialog(hit.id); return; }
-      if (tool === 'collega' && hit) { drag = { type: 'link', from: hit.id, at: pt }; return; }
-      if (tool === 'elimina' && hit) { removeSelected([hit.id]); return; }
-      if (tool === 'scollega') { const l = hitLink(pt.x, pt.y); if (l) commit(P.unlink(path(), l[0], l[1]), 'scollega'); return; }
-      if (tool === 'aggiungi' && !hit) {
+      if (stato.tool === 'collega' && hit) { stato.drag = { type: 'link', from: hit.id, at: pt }; return; }
+      if (stato.tool === 'elimina' && hit) { removeSelected([hit.id]); return; }
+      if (stato.tool === 'scollega') { const l = hitLink(pt.x, pt.y); if (l) commit(P.unlink(path(), l[0], l[1]), 'scollega'); return; }
+      if (stato.tool === 'aggiungi' && !hit) {
         const w = toWorld(pt.x, pt.y);
-        const from = selected.length === 1 ? selected[0] : null;
-        const r = P.addNode(path(), { name: 'Nuovo nodo', x: snap ? Math.round(w.x / SNAP) * SNAP : Math.round(w.x), y: snap ? Math.round(w.y / SNAP) * SNAP : Math.round(w.y) });
+        const from = stato.selected.length === 1 ? stato.selected[0] : null;
+        const r = P.addNode(path(), { name: 'Nuovo nodo', x: stato.snap ? Math.round(w.x / SNAP) * SNAP : Math.round(w.x), y: stato.snap ? Math.round(w.y / SNAP) * SNAP : Math.round(w.y) });
         commit(from ? P.link(r.path, from, r.id) : r.path, 'aggiungi');
-        selected = [r.id];
+        stato.selected = [r.id];
         refresh();
         return;
       }
       if (hit) {
-        if (e.shiftKey || e.ctrlKey) selected = selected.includes(hit.id) ? selected.filter((x) => x !== hit.id) : selected.concat(hit.id);
-        else if (!selected.includes(hit.id)) selected = [hit.id];
-        drag = { type: 'move', p0: pt, ids: selected.slice(), moved: false };
+        if (e.shiftKey || e.ctrlKey) stato.selected = stato.selected.includes(hit.id) ? stato.selected.filter((x) => x !== hit.id) : stato.selected.concat(hit.id);
+        else if (!stato.selected.includes(hit.id)) stato.selected = [hit.id];
+        stato.drag = { type: 'move', p0: pt, ids: stato.selected.slice(), moved: false };
         refreshSide();
         requestDraw();
         return;
       }
-      if (e.shiftKey) { drag = { type: 'rect', a: pt, b: pt }; return; }
-      selected = [];
+      if (e.shiftKey) { stato.drag = { type: 'rect', a: pt, b: pt }; return; }
+      stato.selected = [];
       refreshSide();
-      drag = { type: 'pan', p0: pt, v0: Object.assign({}, view) };
+      stato.drag = { type: 'pan', p0: pt, v0: Object.assign({}, stato.view) };
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (!drag) return;
+      if (!stato.drag) return;
       const pt = local(e);
-      if (drag.type === 'pan') { view.panX = drag.v0.panX + pt.x - drag.p0.x; view.panY = drag.v0.panY + pt.y - drag.p0.y; }
-      else if (drag.type === 'link') drag.at = pt;
-      else if (drag.type === 'rect') drag.b = pt;
-      else if (drag.type === 'move') { drag.moved = Math.hypot(pt.x - drag.p0.x, pt.y - drag.p0.y) > 3; drag.at = pt; previewMove(); }
+      if (stato.drag.type === 'pan') { stato.view.panX = stato.drag.v0.panX + pt.x - stato.drag.p0.x; stato.view.panY = stato.drag.v0.panY + pt.y - stato.drag.p0.y; }
+      else if (stato.drag.type === 'link') stato.drag.at = pt;
+      else if (stato.drag.type === 'rect') stato.drag.b = pt;
+      else if (stato.drag.type === 'move') { stato.drag.moved = Math.hypot(pt.x - stato.drag.p0.x, pt.y - stato.drag.p0.y) > 3; stato.drag.at = pt; previewMove(); }
       requestDraw();
     });
-    let preview = null; // posizioni provvisorie durante lo spostamento
     function previewMove() {
-      const dx = (drag.at.x - drag.p0.x) / view.zoom;
-      const dy = (drag.at.y - drag.p0.y) / view.zoom;
-      if (!preview) preview = clone(path());
+      const dx = (stato.drag.at.x - stato.drag.p0.x) / stato.view.zoom;
+      const dy = (stato.drag.at.y - stato.drag.p0.y) / stato.view.zoom;
+      if (!stato.preview) stato.preview = clone(path());
       const base = path();
-      for (const n of base.nodes) if (drag.ids.includes(n.id)) {
-        const orig = preview.nodes.find((x) => x.id === n.id);
-        n.x = snap ? Math.round((orig.x + dx) / SNAP) * SNAP : orig.x + dx;
-        n.y = snap ? Math.round((orig.y + dy) / SNAP) * SNAP : orig.y + dy;
+      for (const n of base.nodes) if (stato.drag.ids.includes(n.id)) {
+        const orig = stato.preview.nodes.find((x) => x.id === n.id);
+        n.x = stato.snap ? Math.round((orig.x + dx) / SNAP) * SNAP : orig.x + dx;
+        n.y = stato.snap ? Math.round((orig.y + dy) / SNAP) * SNAP : orig.y + dy;
       }
     }
     canvas.addEventListener('pointerup', (e) => {
-      const d = drag;
-      drag = null;
+      const d = stato.drag;
+      stato.drag = null;
       if (!d) return;
       const pt = local(e);
       if (d.type === 'link') {
@@ -367,25 +369,25 @@
       } else if (d.type === 'rect') {
         const a = toWorld(Math.min(d.a.x, pt.x), Math.min(d.a.y, pt.y));
         const b = toWorld(Math.max(d.a.x, pt.x), Math.max(d.a.y, pt.y));
-        selected = path().nodes.filter((n) => n.x >= a.x && n.x <= b.x && n.y >= a.y && n.y <= b.y).map((n) => n.id);
+        stato.selected = path().nodes.filter((n) => n.x >= a.x && n.x <= b.x && n.y >= a.y && n.y <= b.y).map((n) => n.id);
         refreshSide();
-      } else if (d.type === 'move' && d.moved && preview) {
+      } else if (d.type === 'move' && d.moved && stato.preview) {
         // Le posizioni provvisorie diventano una modifica annullabile.
         const moved = clone(path());
-        Object.assign(path(), preview);
+        Object.assign(path(), stato.preview);
         commit(moved, 'sposta');
       }
-      preview = null;
+      stato.preview = null;
       requestDraw();
     });
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const pt = local(e);
       const before = toWorld(pt.x, pt.y);
-      view.zoom = Math.max(0.25, Math.min(3, view.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      stato.view.zoom = Math.max(0.25, Math.min(3, stato.view.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
       const after = toScreen(before.x, before.y);
-      view.panX += pt.x - after.x;
-      view.panY += pt.y - after.y;
+      stato.view.panX += pt.x - after.x;
+      stato.view.panY += pt.y - after.y;
       requestDraw();
     }, { passive: false });
     canvas.addEventListener('keydown', (e) => {
@@ -393,7 +395,7 @@
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-      else if (e.key === 'Delete' && selected.length) { e.preventDefault(); removeSelected(selected); }
+      else if (e.key === 'Delete' && stato.selected.length) { e.preventDefault(); removeSelected(stato.selected); }
     });
 
     function undo() { const prev = hist.undo(path()); if (prev) { opts.setPath(prev, 'annulla'); refresh(); } }
@@ -402,7 +404,7 @@
       const del = ids.filter((id) => id !== P.CORE_ID);
       if (!del.length) { toast('Il Nucleo non si può eliminare.', 'error'); return; }
       commit(P.removeNodes(path(), del), 'elimina');
-      selected = selected.filter((x) => !del.includes(x));
+      stato.selected = stato.selected.filter((x) => !del.includes(x));
       refresh();
     }
     function fit() {
@@ -412,9 +414,9 @@
       const ys = p.nodes.map((n) => n.y);
       const w = Math.max(...xs) - Math.min(...xs) + 200;
       const h = Math.max(...ys) - Math.min(...ys) + 200;
-      view.zoom = Math.max(0.25, Math.min(1.6, Math.min(W / w, H / h)));
-      view.panX = -((Math.max(...xs) + Math.min(...xs)) / 2) * view.zoom;
-      view.panY = -((Math.max(...ys) + Math.min(...ys)) / 2) * view.zoom;
+      stato.view.zoom = Math.max(0.25, Math.min(1.6, Math.min(W / w, H / h)));
+      stato.view.panX = -((Math.max(...xs) + Math.min(...xs)) / 2) * stato.view.zoom;
+      stato.view.panY = -((Math.max(...ys) + Math.min(...ys)) / 2) * stato.view.zoom;
       requestDraw();
     }
 
@@ -448,7 +450,7 @@
         { text: '✦ Sblocca', class: 'primary', onclick: () => {
           if (!confirm('Sbloccare «' + n.name + '» per ' + n.cost + (n.cost === 1 ? ' punto' : ' punti') + '?')) return false;
           const from = P.neighbors(p, id).find((x) => have.has(x)) || P.CORE_ID;
-          if (opts.onUnlock(id)) { anim = { from, to: id, t0: performance.now() }; requestDraw(); }
+          if (opts.onUnlock(id)) { stato.anim = { from, to: id, t0: performance.now() }; requestDraw(); }
           return undefined;
         } },
       ]);
@@ -519,23 +521,23 @@
       return el('div', { class: 'effect-block' }, head, body);
     }
 
-    const duplicateBtn = (cls) => el('button', { type: 'button', class: 'btn ' + cls, text: '⧉ Duplica', onclick: () => { const r = P.duplicateNodes(path(), selected); commit(r.path, 'duplica'); selected = r.ids; refresh(); } });
+    const duplicateBtn = (cls) => el('button', { type: 'button', class: 'btn ' + cls, text: '⧉ Duplica', onclick: () => { const r = P.duplicateNodes(path(), stato.selected); commit(r.path, 'duplica'); stato.selected = r.ids; refresh(); } });
     function refreshSide() {
       clear(side);
       if (mode !== 'editor') return;
       const p = path();
       const warnings = P.validate(p);
-      if (selected.length !== 1) {
-        side.append(el('h3', { text: selected.length ? selected.length + ' nodi selezionati' : 'Percorso' }),
+      if (stato.selected.length !== 1) {
+        side.append(el('h3', { text: stato.selected.length ? stato.selected.length + ' nodi selezionati' : 'Percorso' }),
           el('p', { class: 'muted small', text: p.nodes.length + ' nodi · ' + p.links.length + ' collegamenti' }),
-          selected.length ? el('div', { class: 'head-actions' },
+          stato.selected.length ? el('div', { class: 'head-actions' },
             duplicateBtn('btn small'),
-            el('button', { type: 'button', class: 'btn small danger', text: '🗑 Elimina', onclick: () => removeSelected(selected) })) : el('p', { class: 'muted small', text: 'Clicca un nodo per modificarlo.' }),
+            el('button', { type: 'button', class: 'btn small danger', text: '🗑 Elimina', onclick: () => removeSelected(stato.selected) })) : el('p', { class: 'muted small', text: 'Clicca un nodo per modificarlo.' }),
           warnings.length ? el('ul', { class: 'warn-text small' }, warnings.map((w) => el('li', { text: '⚠ ' + w }))) : el('p', { class: 'ok-text small', text: '✓ Tutti i nodi sono raggiungibili dal Nucleo.' }));
         return;
       }
-      const n = clone(P.nodeById(p, selected[0]));
-      if (!n) { selected = []; refreshSide(); return; }
+      const n = clone(P.nodeById(p, stato.selected[0]));
+      if (!n) { stato.selected = []; refreshSide(); return; }
       const save = (label) => {
         const q = clone(path());
         const i = q.nodes.findIndex((x) => x.id === n.id);
@@ -578,22 +580,22 @@
       if (mode === 'editor') {
         toolbar.append(
           el('div', { class: 'tool-group', role: 'toolbar', 'aria-label': 'Strumenti del percorso' }, Object.entries(TOOLS).map(([k, label]) => el('button', {
-            type: 'button', class: 'btn small tool' + (tool === k ? ' active' : ''), 'aria-pressed': String(tool === k), text: label, onclick: () => { tool = k; refresh(); },
+            type: 'button', class: 'btn small tool' + (stato.tool === k ? ' active' : ''), 'aria-pressed': String(stato.tool === k), text: label, onclick: () => { stato.tool = k; refresh(); },
           }))),
           el('button', { type: 'button', class: 'btn small', text: '✺ Raggiera', title: 'Disposizione automatica a raggiera attorno al Nucleo', onclick: () => { commit(P.radialLayout(path()), 'raggiera'); fit(); } }),
-          el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: snap, onchange: (e) => { snap = e.target.checked; requestDraw(); } }), ' Griglia'),
+          el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: stato.snap, onchange: (e) => { stato.snap = e.target.checked; requestDraw(); } }), ' Griglia'),
           el('button', { type: 'button', class: 'btn small', text: '↶', title: 'Annulla (Ctrl+Z)', 'aria-label': 'Annulla', disabled: !hist.canUndo(), onclick: undo }),
           el('button', { type: 'button', class: 'btn small', text: '↷', title: 'Ripeti (Ctrl+Y)', 'aria-label': 'Ripeti', disabled: !hist.canRedo(), onclick: redo }));
       }
       toolbar.append(
         el('button', { type: 'button', class: 'btn small', text: '⤢ Adatta', title: 'Mostra tutto il percorso', onclick: fit }),
-        el('input', { type: 'search', placeholder: 'Cerca un nodo…', value: query, 'aria-label': 'Cerca un nodo', oninput: (e) => { query = e.target.value.trim(); requestDraw(); } }));
+        el('input', { type: 'search', placeholder: 'Cerca un nodo…', value: stato.query, 'aria-label': 'Cerca un nodo', oninput: (e) => { stato.query = e.target.value.trim(); requestDraw(); } }));
     }
 
     function refresh() {
       refreshToolbar();
       refreshSide();
-      info.textContent = mode === 'editor' ? HINTS[tool] : 'Clicca un nodo per i dettagli. I nodi che pulsano si possono sbloccare.';
+      info.textContent = mode === 'editor' ? HINTS[stato.tool] : 'Clicca un nodo per i dettagli. I nodi che pulsano si possono sbloccare.';
       requestDraw();
     }
     refresh();
@@ -601,12 +603,12 @@
 
     return {
       node, refresh, fit, requestDraw,
-      select: (ids) => { selected = ids; refresh(); },
-      selected: () => selected.slice(),
+      select: (ids) => { stato.selected = ids; refresh(); },
+      selected: () => stato.selected.slice(),
       // Posizione di un nodo sullo schermo (per i test e l'accessibilità).
       screenOf: (id) => { const n = P.nodeById(path(), id); const sp = toScreen(n.x, n.y); const r = canvas.getBoundingClientRect(); return { x: r.left + sp.x, y: r.top + sp.y }; },
       canUndo: () => hist.canUndo(),
-      reset: () => { hist.clear(); selected = []; starField = null; },
+      reset: () => { hist.clear(); stato.selected = []; stato.starField = null; },
     };
   }
 
