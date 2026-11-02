@@ -6270,6 +6270,8 @@
       ok(riga.text.includes('vantaggio') && riga.text.includes('[4, 17]'), riga.text);
       eq([dadi.Ale.length, dadi.Bice.length, dadi.Ale[0].tiro.gruppi.map((g) => g.values)], [1, 1, [[4, 17], [6]]], 'stessi dadi del master sui due lati');
       eq(dadi.Ale[0].tiro, dadi.Bice[0].tiro);
+      // Anche il dado mandato ai giocatori passa dal filtro: niente PF esatti nel testo (audit A2).
+      ok(!/\d+ → \d+ PF/.test(dadi.Ale[0].tiro.testo) && !/PF \d+\/\d+/.test(dadi.Ale[0].tiro.testo), 'dado filtrato: ' + dadi.Ale[0].tiro.testo);
       // Secondo attacco (Attacco extra del guerriero di 5° livello): critico con il 20 naturale.
       E.dadiDiProva(seq(20, 3, 5));
       e = await chiedi(ale, 'attacca', { combattenteId: 'x1', bersaglioId: 'g2', armaId: 'arco' });

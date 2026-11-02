@@ -447,7 +447,7 @@
       try { r = v.esegui(); } catch (e) { return rispondi(g, id, 'rifiutata', 'Il master non è riuscito a eseguire la richiesta: ' + e.message); }
       if (r && r.ok === false) return rispondi(g, id, 'rifiutata', r.testo);
       // Dadi del combattimento tirati dal master: anche ai giocatori (stessi valori, stessa animazione).
-      if (r && r.tiro && v.diffondi) diffondiDado({ da: v.diffondi, colore: g.colore, tiro: r.tiro });
+      if (r && r.tiro && v.diffondi) diffondiDado({ da: v.diffondi, colore: g.colore, tiro: F().tiroPerGiocatore(o.stato(), r.tiro, { pfNemici: o.pfNemici }) });
       // Il testo è la riga del registro del master: passa dal filtro come il log (PF dei nemici, combattenti non visti).
       const testo = r && r.testo ? F().testoEsito(o.stato(), r.testo, { pfNemici: o.pfNemici }) : 'Fatto.';
       return rispondi(g, id, 'eseguita', testo, v.avviso || (r && r.avviso) || '');

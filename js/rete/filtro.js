@@ -200,6 +200,19 @@
     return r ? r.testo : 'Fatto.';
   }
 
+  /**
+   * Dado tirato dal master per un'intenzione, pronto per i giocatori: etichetta e testo passano dallo stesso filtro
+   * dell'esito (il testo è la riga del registro del master, con i PF dei nemici e i nomi dei non visti).
+   * @param {object} st stato del master  @param {object} tiro tiro normalizzato  @param {{pfNemici?: boolean}} opts
+   * @returns {object} copia del tiro con etichetta e testo filtrati
+   */
+  function tiroPerGiocatore(st, tiro, opts) {
+    const t = DnD.dadi.normalizeTiro(tiro);
+    const filtra = (x) => (x ? testoEsito(st, x, opts) : x);
+    const etichetta = filtra(t.etichetta);
+    return Object.assign(t, { etichetta: etichetta === 'Fatto.' ? 'Tiro' : etichetta, testo: filtra(t.testo) });
+  }
+
   function combattimento(st, c, o, mio, raccolta) {
     const { vg, mostrati, ids, nomi } = visibili(st, c);
     const opzPedina = { pfNemici: Boolean(o.pfNemici), combattenteId: mio ? mio.id : '', regole: o.regole, piedi: c.grid.feetPerCell || 5, economia: o.economia };
@@ -649,7 +662,7 @@
 
   DnD.rete = DnD.rete || {};
   DnD.rete.filtro = {
-    SALUTE, salute, rigaLog, testoEsito, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
+    SALUTE, salute, rigaLog, testoEsito, tiroPerGiocatore, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
     statoPerGiocatore, eventoPerGiocatore, ammetti, statoNpcPerGiocatore, statoScenaPerGiocatore, visioneGiocatore, nonRicevuto,
     contestoPrezzi, npcPiazzato, negozio, SCHEMA: VISTA,
   };
