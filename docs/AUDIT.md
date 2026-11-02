@@ -721,18 +721,18 @@ sotto le 40 righe» **non è raggiunto**.
 | A4 | **risolto** | `c63462c`: il ripiego resta ma avvisa all'avvio (`loadError`) e scrive in console; test con `openIdb` finto |
 | A5 | **risolto** | `e5aedc7`: decisione «anche i dati online»: cancella profilo, gettoni, note e STUN; le preferenze restano |
 | A6 | **risolto** | nessun ciclo; regole senza letture di `DnD.store` (passano da `modello.statoCorrente`) |
-| A7 | rimandato | `rete/sessione` esegue ancora tramite `DnD.uiCombattimento.online`: serve prima A8 |
-| A8 | rimandato | le regole di combattimento sono ora in file separati (`ui-combattimento-*.js`) ma restano nell'interfaccia |
+| A7 | non necessario | `rete/sessione` non chiama l'interfaccia: riceve l'esecutore come opzione (`esecutore`, passato da `ui-online.js`); con A8 le regole che esegue sono in `combattimento.js` |
+| A8 | **risolto** | `eb57dc8`, `7803964`: danno, effetti dopo l'azione, attacco, incantesimi, tiro salvezza e turno in `combattimento.js` (regole pure, testate); l'interfaccia tiene `mutate`, dadi animati, avvisi e suoni |
 | A9 | **risolto in parte** | `ui-griglia.js` 797 e `ui-combattimento.js` 781 righe, divisi in parti con `api` |
 | A10 | rimandato | `rete/sessione.master`, `note-editor.create`, `ui-scheda.editor`, `ui-percorso.create`, `ui-visione.create`, `ui-pannello-tile.create`, `ui-tile.cutter` |
 | A11 | **risolto** | `dati.js` diviso in `js/stato/` (normalizza, esempi, migrazioni, archivio) |
 | A12 | **risolto in parte** | migrazioni dello stato in `stato/migrazioni.js`, delle tile in `migrazioni-tile.js`; restano quelle delle preferenze (audio, layout) e il completamento dei TileSet legacy all'avvio |
-| A13 | rimandato | modi di tiro ripetuti nelle interfacce |
+| A13 | **risolto** | `5d15feb`: `regole.MODI_TIRO` unica fonte (eventi, intenzioni, interfacce) |
 | A14 | rimandato | segno meno: decisione aperta (domanda 4) |
-| A15 | rimandato | `esc` locali in `note.js` e `ui-note.js` |
+| A15 | **risolto** | `d9c2c23`: le due copie non erano uguali a `escapeText` (che conserva le entità): unite in `note.escapeHtml`, testo invariato |
 | A16 | **risolto** | `dati/misure.js` (caselle, piedi, metri, scala delle mappe) |
 | A17 | **risolto** | `movimento.distance` usa `griglia.cellDistance` senza la regola 5-10-5; la gittata resta da verificare (20.4) |
-| A18 | rimandato | `Math.random` in due interfacce |
+| A18 | **risolto** | `a5cb0e4`: seme della mappa e suggerimenti della scheda con `dadi.randomInt`; restano `Math.random` solo per effetti visivi e sonori (rumore, numeri che scorrono) |
 | A19 | rimandato | nessun export cancellato: serve una verifica uno per uno (domanda 6) |
 | A20 | **risolto** | export doppio tolto |
 | A21 | rimandato | classi CSS probabilmente inutilizzate non cancellate |
@@ -744,7 +744,7 @@ sotto le 40 righe» **non è raggiunto**.
 | A27 | **risolto in parte** | aggiunti test di fumo, migrazione, griglia e combattimento nell'interfaccia; restano scoperte le altre sezioni |
 | A28 | non necessario | documentato in `CLAUDE.md` (serve una finestra di dimensione reale) |
 | A29 | **risolto** | test «Elenchi dei file» |
-| A30 | rimandato | `RIPRESA-LAVORO.md` e due titoli del README ancora superati |
+| A30 | **risolto** | `3206cc1`: titoli del README aggiornati; `RIPRESA-LAVORO.md` con la voce attuale in cima (le precedenti restano come storia) |
 | A31 | rimandato | `alert`/`confirm`/`prompt` nativi |
 | A32 | rimandato | preferenze senza versione (documentato in `docs/ARCHITETTURA.md`) |
 
@@ -775,6 +775,18 @@ sotto le 40 righe» **non è raggiunto**.
 Corretti in commit separati, ognuno con test: A3 e A4 (`c63462c`), A22 in parte (`ea48b2b`), A2 (`e97b99c`), A5
 (`e5aedc7`). **Gittata e regola 5-10-5**: decisione «lascia com'è» (nel 5e base le diagonali valgono una casella; la
 5-10-5 è una regola opzionale applicata al solo movimento): non è un bug.
+
+### 20.4.2 Seconda tornata del riordino (novembre 2026)
+
+Un commit per modulo, tutti i test verdi dopo ognuno (alla fine **327**, compresi fumo, migrazione e online in
+memoria): A15 (`d9c2c23`), A18 (`a5cb0e4`), A13 (`5d15feb`), A8 in due parti (`eb57dc8`, `7803964`), A30 (`3206cc1`).
+Misure dopo questa tornata: 130 file JavaScript senza test (+1: `combattimento.js`), 40 402 righe; `js/test.js`
+7 323 righe; nessuna dipendenza verso l'alto del nuovo modulo (cicli: ancora **0**).
+
+**Ancora rimandati** (servono decisioni o una fase propria): A10 (funzioni lunghe da accorciare), A12 (migrazioni
+delle preferenze), A19 e A21 (export e classi CSS da eliminare: domanda 6), A22 resto, A23 (listener e timer),
+A24 (vista filtrata ricalcolata a ogni salvataggio), A25 (colori letterali nei canvas), A31 (dialoghi nativi:
+domanda 8), A32 (preferenze senza versione), intestazioni mancanti in circa 70 file.
 
 ### 20.5 Limiti residui
 
