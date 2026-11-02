@@ -1,7 +1,8 @@
-// Archivio dei dati sul disco del browser: IndexedDB (stato, immagini «img:», suoni «snd:»), con ripiego su
-// localStorage; scritture in fila con esito reale, copia dei dati danneggiati, migrazione dal salvataggio della
-// versione 1. È l'unico modulo che scrive lo stato su disco. Livello stato (in cima). Espone DnD.archivio e aggiunge
-// openStore e saveErrorMessage a DnD.dati; usa DnD.dati (emptyState, parseSaved).
+// Archivio dei dati sul disco del browser: IndexedDB (stato, immagini «img:», suoni «snd:»), con ripiego avvisato su
+// localStorage; scritture in fila con esito reale, copia dei dati danneggiati (se non riesce o la lettura fallisce,
+// sola lettura), migrazione dal salvataggio della versione 1. È l'unico modulo che scrive lo stato su disco. Livello
+// stato (in cima). Espone DnD.archivio e aggiunge openStore e saveErrorMessage a DnD.dati; usa DnD.dati (emptyState,
+// parseSaved).
 (function (DnD) {
   'use strict';
 
@@ -70,32 +71,60 @@
     return (e && e.message) || 'errore sconosciuto';
   }
 
-  // opts.backend: archivio alternativo { name, get, set, clear } (usato dai test).
+  // Avviso per il ripiego su localStorage: i dati eventualmente salvati in IndexedDB restano lì ma non si vedono.
+  function avvisoRipiego(e) {
+    return 'Archivio IndexedDB non disponibile (' + ((e && e.message) || 'errore sconosciuto') + '): i dati sono salvati '
+      + 'in localStorage, con meno spazio. Se prima avevi dati salvati, ora non sono visibili: ricarica la pagina; '
+      + 'se il problema resta, controlla le impostazioni del browser sui dati dei siti.';
+  }
+
+  /**
+   * Apre l'archivio dello stato. Se i dati salvati non si possono leggere, o sono danneggiati e la loro copia non si
+   * può scrivere, lo store resta in sola lettura (`bloccato`): nessun salvataggio sovrascrive i dati originali.
+   * @param {Storage} storage localStorage (o un sostituto)
+   * @param {{backend?: object, openIdb?: Function}} [opts] backend alternativo { name, get, set, clear } oppure
+   *   apertura di IndexedDB sostituita (usati dai test)
+   * @returns {Promise<object>} lo store
+   */
   async function openStore(storage, opts) {
     let backend = opts && opts.backend;
+    let avviso = null;
     if (!backend) {
       try {
-        backend = await openIdbBackend();
+        backend = await ((opts && opts.openIdb) || openIdbBackend)();
       } catch (e) {
+        console.error('Archivio: IndexedDB non si apre, ripiego su localStorage', e);
+        avviso = avvisoRipiego(e);
         backend = localBackend(storage);
       }
     }
     let text;
     let error = null;
+    let bloccato = false;
     try {
       text = await backend.get(DB_KEY);
     } catch (e) {
-      error = 'Impossibile leggere i dati salvati: ' + e.message;
+      console.error('Archivio: lettura dello stato non riuscita', e);
+      // Lo stato vuoto non deve sovrascrivere i dati che non si sono potuti leggere.
+      error = 'Impossibile leggere i dati salvati: ' + e.message + '. I salvataggi sono sospesi per non sovrascriverli: ricarica la pagina.';
+      bloccato = true;
     }
     let legacy = null;
-    if (text === null || text === undefined) {
-      try { legacy = storage.getItem(LEGACY_KEY); } catch (e) { /* nessun dato precedente */ }
+    if (!bloccato && (text === null || text === undefined)) {
+      try { legacy = storage.getItem(LEGACY_KEY); } catch (e) { console.warn('Archivio: salvataggio della versione 1 non leggibile', e); }
       text = legacy;
     }
     const loaded = parseSaved(text);
     if (loaded.corrupted) {
       // Conserva una copia dei dati illeggibili invece di sovrascriverli e perderli.
-      try { await backend.set(DB_KEY + '-danneggiato', loaded.corrupted); } catch (e) { /* ignora */ }
+      try {
+        await backend.set(DB_KEY + '-danneggiato', loaded.corrupted);
+      } catch (e) {
+        console.error('Archivio: copia dei dati danneggiati non riuscita', e);
+        loaded.error += ' Non è stato possibile conservarne una copia: i salvataggi sono sospesi per non perderli ('
+          + saveErrorMessage(e) + ').';
+        bloccato = true;
+      }
     }
 
     let queued = null;
@@ -106,12 +135,18 @@
       backend: backend.name,
       // Archivio delle immagini importate: stesso database, chiavi separate dallo stato.
       blobs: { get: (k) => backend.get(k), set: (k, v) => backend.set(k, v) },
-      loadError: error || loaded.error,
+      loadError: [avviso, error || loaded.error].filter(Boolean).join(' ') || null,
+      // Sola lettura: i dati sul disco non si sono potuti leggere né copiare, quindi non si sovrascrivono.
+      bloccato,
       onSaveError: null,
       // Dopo ogni modifica (update, replace): la sessione online manda gli aggiornamenti ai giocatori.
       onChange: null,
       lastError: null,
       save() {
+        if (store.bloccato) {
+          if (store.onChange) store.onChange();
+          return Promise.resolve({ ok: false, error: null, message: 'salvataggi sospesi: i dati sul disco non si sono potuti leggere o copiare.' });
+        }
         queued = JSON.stringify(store.state);
         if (store.onChange) store.onChange();
         const result = new Promise((resolve) => waiters.push(resolve));
@@ -132,6 +167,8 @@
       async clearAll() {
         await store.saved();
         await backend.clear();
+        // Cancellazione voluta dall'utente: i dati illeggibili non vanno più protetti.
+        store.bloccato = false;
         return store.replace(emptyState());
       },
     };
@@ -149,7 +186,7 @@
           result = { ok: true, error: null, message: '' };
           if (legacy !== null) {
             // Migrazione completata: il vecchio salvataggio in localStorage non serve più.
-            try { storage.removeItem(LEGACY_KEY); } catch (e) { /* ignora */ }
+            try { storage.removeItem(LEGACY_KEY); } catch (e) { console.warn('Archivio: vecchio salvataggio non rimosso', e); }
             legacy = null;
           }
         } catch (e) {

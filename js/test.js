@@ -1401,6 +1401,51 @@
     eq([Object.keys(backend.data), store.state.tilesets.length], [['stato'], 0], '"Cancella tutti i dati" svuota anche le immagini');
   });
 
+  test('Archivio: dati danneggiati senza copia possibile, nessun salvataggio li sovrascrive (A3)', async () => {
+    const backend = fakeBackend();
+    await backend.set('stato', '{ rotto');
+    const realSet = backend.set;
+    backend.set = (k, v) => (k.endsWith('-danneggiato') ? Promise.reject(new Error('disco pieno')) : realSet(k, v));
+    const store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    let reported = null;
+    store.onSaveError = (e) => { reported = e; };
+    const res = await store.update((st) => { st.diceHistory = []; });
+    eq([store.bloccato, res.ok, backend.data.stato, reported, /sospesi/.test(store.loadError)], [true, false, '{ rotto', null, true]);
+    await store.clearAll();
+    eq([store.bloccato, typeof backend.data.stato], [false, 'string'], 'dopo «Cancella tutti i dati» si salva di nuovo');
+  });
+
+  test('Archivio: dati danneggiati con copia riuscita, salvataggi normali (A3)', async () => {
+    const backend = fakeBackend();
+    await backend.set('stato', '{ rotto');
+    const store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    eq([store.bloccato, backend.data['stato-danneggiato'], (await store.save()).ok], [false, '{ rotto', true]);
+  });
+
+  test('Archivio: lettura non riuscita, i dati non vengono sovrascritti (A3)', async () => {
+    const backend = fakeBackend();
+    await backend.set('stato', '{"version":18}');
+    backend.get = () => Promise.reject(new Error('letto male'));
+    const store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    eq([store.bloccato, (await store.save()).ok, backend.data.stato, /letto male/.test(store.loadError)], [true, false, '{"version":18}', true]);
+  });
+
+  test('Archivio: IndexedDB non si apre, ripiego su localStorage con avviso (A4)', async () => {
+    const mem = new Map();
+    const storage = { get length() { return mem.size; }, key: (i) => [...mem.keys()][i], getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    const errore = console.error;
+    console.error = () => {};
+    let store;
+    try {
+      store = await DnD.dati.openStore(storage, { openIdb: () => Promise.reject(new Error('bloccato dal browser')) });
+    } finally {
+      console.error = errore;
+    }
+    eq([store.backend, /IndexedDB non disponibile \(bloccato dal browser\)/.test(store.loadError), store.bloccato], ['localStorage', true, false]);
+    eq((await store.save()).ok, true);
+    ok(mem.has('dnd-battaglie:stato'), 'salvato in localStorage');
+  });
+
   // I test possono essere asincroni (restituire una Promise): vengono eseguiti uno dopo l'altro.
   // ======================= Fase "pianificatore di sessione" =======================
   const CR = () => DnD.creature;
