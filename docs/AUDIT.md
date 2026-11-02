@@ -724,7 +724,7 @@ sotto le 40 righe» **non è raggiunto**.
 | A7 | non necessario | `rete/sessione` non chiama l'interfaccia: riceve l'esecutore come opzione (`esecutore`, passato da `ui-online.js`); con A8 le regole che esegue sono in `combattimento.js` |
 | A8 | **risolto** | `eb57dc8`, `7803964`: danno, effetti dopo l'azione, attacco, incantesimi, tiro salvezza e turno in `combattimento.js` (regole pure, testate); l'interfaccia tiene `mutate`, dadi animati, avvisi e suoni |
 | A9 | **risolto in parte** | `ui-griglia.js` 797 e `ui-combattimento.js` 781 righe, divisi in parti con `api` |
-| A10 | rimandato | `rete/sessione.master`, `note-editor.create`, `ui-scheda.editor`, `ui-percorso.create`, `ui-visione.create`, `ui-pannello-tile.create`, `ui-tile.cutter` |
+| A10 | **risolto in parte** | `9f41c0c`: la valutazione delle intenzioni (~220 righe) esce da `sessione.master` in `rete/valutazione.js`, un gestore per tipo; restano lunghi `note-editor.create`, `ui-scheda.editor`, `ui-percorso.create`, `ui-visione.create`, `ui-pannello-tile.create`, `ui-tile.cutter` (interfaccia senza test: prima servono test di caratterizzazione) |
 | A11 | **risolto** | `dati.js` diviso in `js/stato/` (normalizza, esempi, migrazioni, archivio) |
 | A12 | **risolto in parte** | migrazioni dello stato in `stato/migrazioni.js`, delle tile in `migrazioni-tile.js`; restano quelle delle preferenze (audio, layout) e il completamento dei TileSet legacy all'avvio |
 | A13 | **risolto** | `5d15feb`: `regole.MODI_TIRO` unica fonte (eventi, intenzioni, interfacce) |
@@ -737,9 +737,9 @@ sotto le 40 righe» **non è raggiunto**.
 | A20 | **risolto** | export doppio tolto |
 | A21 | rimandato | classi CSS probabilmente inutilizzate non cancellate |
 | A22 | **risolto in parte** | `ea48b2b`: file audio mancanti segnalati all'esportazione; `catch` di filtro, immagini e sessione con messaggio in console; i restanti sono preferenze non essenziali, commentati |
-| A23 | rimandato | listener e timer non rivisti |
-| A24 | rimandato | ricalcolo della vista filtrata a ogni salvataggio |
-| A25 | rimandato | colori letterali nei canvas |
+| A23 | **risolto** | `88703e9`: i listener dell'editor delle note si tolgono quando esce dalla pagina (scene, scheda: uno nuovo a ogni apertura); cache di `icone` con limite (200 immagini, 400 bitmap). Verificati e lasciati: timer online e dei dadi (fermati), listener di griglie e pannelli (un widget riusato per sezione), impostazioni (montate una volta) |
+| A24 | **risolto** | `4c92ad7`: misurato (mappa 150×150, 40 pedine: ~30 ms per giocatore, quasi tutto `visioneGiocatore`); la vista del party si calcola una volta per aggiornamento (`filtro.inBlocco`); gli aggiornamenti erano già accorpati (80 ms) |
+| A25 | **risolto** | `2252be3`: colori dei canvas in variabili CSS (griglia, visione, percorso, mappa d'esplorazione, boss) con `DnD.ui.coloreTema`; colori della chat in `protocollo`; valori identici in ogni tema (test) |
 | A26 | non necessario | nomi delle prime versioni lasciati com'erano (interfaccia dei moduli invariata); convenzione per il codice nuovo nel README |
 | A27 | **risolto in parte** | aggiunti test di fumo, migrazione, griglia e combattimento nell'interfaccia; restano scoperte le altre sezioni |
 | A28 | non necessario | documentato in `CLAUDE.md` (serve una finestra di dimensione reale) |
@@ -787,6 +787,10 @@ Misure dopo questa tornata: 130 file JavaScript senza test (+1: `combattimento.j
 delle preferenze), A19 e A21 (export e classi CSS da eliminare: domanda 6), A22 resto, A23 (listener e timer),
 A24 (vista filtrata ricalcolata a ogni salvataggio), A25 (colori letterali nei canvas), A31 (dialoghi nativi:
 domanda 8), A32 (preferenze senza versione), intestazioni mancanti in circa 70 file.
+
+### 20.4.3 Terza tornata (novembre 2026)
+
+A24 (`4c92ad7`), A23 (`88703e9`), A25 (`2252be3`), A10 in parte (`9f41c0c`); **330** test verdi dopo ogni commit.
 
 ### 20.5 Limiti residui
 
