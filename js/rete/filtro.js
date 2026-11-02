@@ -170,8 +170,27 @@
   }
   const testoPulito = (t, max) => String(t || '').replace(/\s*Nota del master:.*$/s, '').trim().slice(0, max || 400);
 
+  // Memoria di un blocco di calcoli sullo stesso stato (inBlocco): la vista del party non dipende dal giocatore, quindi
+  // si calcola una volta per aggiornamento invece che una volta per giocatore. Fuori da un blocco non si memorizza nulla
+  // (lo stato si modifica sul posto e non ha versioni).
+  let memo = null;
+  /**
+   * Esegue fn con la memoria attiva: dentro fn lo stato non deve cambiare.
+   * @param {Function} fn  @returns {*} il risultato di fn
+   */
+  function inBlocco(fn) {
+    if (memo) return fn();
+    memo = new Map();
+    try { return fn(); } finally { memo = null; }
+  }
+
   // Combattenti che il giocatore vede e nomi per ripulire i testi (non visti; nemici visti con i PF massimi).
   function visibili(st, c) {
+    if (!memo) return calcolaVisibili(st, c);
+    if (!memo.has(c)) memo.set(c, calcolaVisibili(st, c));
+    return memo.get(c);
+  }
+  function calcolaVisibili(st, c) {
     const tsIndex = DnD.tilemap.tilesetIndex(st.tilesets);
     const vg = DnD.visione.visioneGiocatore({ grid: grigliaNpcRivelati(c.grid), combatants: c.combatants }, { tilesets: tsIndex });
     const fogOn = Boolean(c.grid.fog && c.grid.fog.enabled);
@@ -662,7 +681,7 @@
 
   DnD.rete = DnD.rete || {};
   DnD.rete.filtro = {
-    SALUTE, salute, rigaLog, testoEsito, tiroPerGiocatore, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
+    SALUTE, salute, rigaLog, testoEsito, tiroPerGiocatore, inBlocco, scheda, istantanea, immaginiDi, differenze, applica, diffCelle, applicaCelle,
     statoPerGiocatore, eventoPerGiocatore, ammetti, statoNpcPerGiocatore, statoScenaPerGiocatore, visioneGiocatore, nonRicevuto,
     contestoPrezzi, npcPiazzato, negozio, SCHEMA: VISTA,
   };

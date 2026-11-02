@@ -6647,6 +6647,28 @@
     eq(cercaSegreti(c1.inviati), [], 'nessuna chiave o valore segreto in tutti i messaggi');
   });
 
+  test('Online 3: vista del party calcolata una volta per aggiornamento (filtro.inBlocco, audit A24)', async () => {
+    const F = NET().filtro;
+    const raw = await (await fetch('test/fixture/archivio-v18.json', { cache: 'no-store' })).json();
+    const st = DnD.dati.normalizeState(raw.state || raw);
+    const opz = (pid) => ({ personaggioId: pid, master: 'M', rivelati: {}, incontrati: new Set() });
+    const ids = [st.players[0].id, (st.players[1] || st.players[0]).id];
+    const vere = DnD.visione.visioneGiocatore;
+    let chiamate = 0;
+    DnD.visione.visioneGiocatore = (...a) => { chiamate++; return vere(...a); };
+    try {
+      const fuori = ids.map((pid, i) => F.statoPerGiocatore(st, 'g' + i, opz(pid)).vista);
+      const nFuori = chiamate;
+      chiamate = 0;
+      const dentro = F.inBlocco(() => ids.map((pid, i) => F.statoPerGiocatore(st, 'g' + i, opz(pid)).vista));
+      eq([JSON.stringify(dentro) === JSON.stringify(fuori), nFuori > chiamate, chiamate > 0], [true, true, true], 'stessa vista, meno calcoli');
+      F.statoPerGiocatore(st, 'g0', opz(ids[0]));
+      ok(chiamate > 1, 'fuori dal blocco non si memorizza nulla');
+    } finally {
+      DnD.visione.visioneGiocatore = vere;
+    }
+  });
+
   test('Online 3: campo nuovo non ammesso scartato con avviso; eventi filtrati per operazione', () => {
     const F = NET().filtro;
     const avvisi = [];

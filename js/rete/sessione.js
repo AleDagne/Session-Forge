@@ -663,7 +663,8 @@
       },
       // Dopo ogni modifica dello stato: eventi incrementali (o l'istantanea se la vista è cambiata del tutto).
       aggiorna() {
-        for (const g of attivi()) aggiornaUno(g);
+        // Stesso stato per tutti: la vista del party si calcola una volta sola (filtro.inBlocco).
+        F().inBlocco(() => { for (const g of attivi()) aggiornaUno(g); });
         presenza();
         saltaSeAssente();
       },
