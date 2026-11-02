@@ -50,146 +50,9 @@
     }
   }
 
-  // opts: { html, label, onChange(html) }
-  function create(opts) {
-    const { el } = DnD.ui;
-    const onChange = opts.onChange || (() => {});
-    const area = el('div', {
-      class: 'note-area', contenteditable: 'true', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true',
-      'aria-label': opts.label || 'Testo della nota',
-    });
-    let saved = null;          // ultimo intervallo selezionato nell'editor (i menù della barra rubano il focus)
-    let plainNext = false;     // Ctrl+Maiusc+V: il prossimo incolla è testo semplice
-    let lastHtml = '';
-    let past = [];
-    let future = [];
-    let typing = null;
-
-    // ---------- Selezione ----------
-    const inArea = (n) => Boolean(n) && (n === area || area.contains(n));
-    function range() {
-      const s = window.getSelection();
-      if (s && s.rangeCount && inArea(s.getRangeAt(0).commonAncestorContainer)) return s.getRangeAt(0);
-      return null;
-    }
-    function select(r) {
-      const s = window.getSelection();
-      s.removeAllRanges();
-      s.addRange(r);
-      saved = r.cloneRange();
-    }
-    // Ripristina la selezione salvata se il focus è uscito dall'editor (menù, selettori di colore).
-    function restore() {
-      if (range()) return range();
-      if (saved && inArea(saved.startContainer)) { select(saved.cloneRange()); return range(); }
-      const r = document.createRange();
-      r.selectNodeContents(area);
-      r.collapse(false);
-      select(r);
-      return range();
-    }
-    function caretIn(node, atEnd) {
-      const r = document.createRange();
-      r.selectNodeContents(node);
-      r.collapse(!atEnd);
-      select(r);
-    }
-    const create_ = (tag) => document.createElement(tag);
-    const unwrap = (node) => { while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node); node.remove(); };
-    function rename(node, tag) {
-      const n = create_(tag);
-      while (node.firstChild) n.appendChild(node.firstChild);
-      if (node.getAttribute('style')) n.setAttribute('style', node.getAttribute('style'));
-      node.replaceWith(n);
-      return n;
-    }
-
-    // ---------- Cronologia (annulla/ripeti) ----------
-    const html = () => area.innerHTML;
-    function commit() {
-      clearTimeout(typing);
-      typing = null;
-      const h = html();
-      if (h === lastHtml) return;
-      past.push(lastHtml);
-      if (past.length > HISTORY) past.shift();
-      future = [];
-      lastHtml = h;
-    }
-    function changed() {
-      ensureContent();
-      onChange(getHtml());
-      refreshState();
-    }
-    // Esegue un comando come un unico passo annullabile.
-    function command(fn) {
-      commit();
-      restore();
-      fn();
-      commit();
-      changed();
-      // Il focus torna nell'editor senza perdere la selezione appena impostata dal comando.
-      const keep = range() ? range().cloneRange() : null;
-      if (document.activeElement !== area) area.focus({ preventScroll: true });
-      if (keep) select(keep);
-    }
-    function undo() {
-      commit();
-      if (!past.length) return false;
-      future.push(lastHtml);
-      lastHtml = past.pop();
-      area.innerHTML = lastHtml;
-      caretIn(area, true);
-      changed();
-      return true;
-    }
-    function redo() {
-      commit();
-      if (!future.length) return false;
-      past.push(lastHtml);
-      lastHtml = future.pop();
-      area.innerHTML = lastHtml;
-      caretIn(area, true);
-      changed();
-      return true;
-    }
-
-    // ---------- Blocchi ----------
-    function ensureContent() {
-      if (!area.firstChild || (area.childNodes.length === 1 && area.firstChild.nodeName === 'BR')) area.innerHTML = '<p><br></p>';
-    }
-    // Il testo scritto direttamente nell'editor va in paragrafi (i comandi di blocco lavorano sui blocchi).
-    function ensureBlocks() {
-      let p = null;
-      for (const n of [...area.childNodes]) {
-        const inline = n.nodeType === 3 || (n.nodeType === 1 && !['P', 'DIV', 'H1', 'H2', 'H3', 'UL', 'OL', 'TABLE', 'HR', 'BLOCKQUOTE'].includes(n.nodeName));
-        if (!inline) { p = null; continue; }
-        if (n.nodeType === 3 && !n.textContent.trim() && !p) continue;
-        if (!p) { p = create_('p'); area.insertBefore(p, n); }
-        p.appendChild(n);
-      }
-      ensureContent();
-    }
-    function blockOf(node) {
-      for (let n = node; n && n !== area; n = n.parentNode) if (n.nodeType === 1 && BLOCK_TAGS.includes(n.nodeName)) return n;
-      return null;
-    }
-    // Blocchi "foglia" toccati dalla selezione, nell'ordine del documento.
-    function selectedBlocks() {
-      const r = range();
-      if (!r) return [];
-      const start = blockOf(r.startContainer);
-      const end = blockOf(r.endContainer);
-      if (!start) return [];
-      if (start === end) return [start];
-      const all = [...area.querySelectorAll(LEAF_SELECTOR)].filter((b) => !b.querySelector(LEAF_SELECTOR) || b.nodeName === 'LI');
-      const i = all.indexOf(start);
-      const j = all.indexOf(end);
-      return i >= 0 && j >= i ? all.slice(i, j + 1) : [start];
-    }
-    const topLevel = (node) => { let n = node; while (n && n.parentNode !== area) n = n.parentNode; return n; };
-
-    // ---------- Stile in linea: dimensione, colore, evidenziatore ----------
+  // Stile in linea: dimensione, colore, evidenziatore (Range, senza execCommand).
+  function stileInLinea(ed) {
+    const { area, range, select, restore, create_, unwrap, command, inArea } = ed;
     function stripProp(root, prop) {
       for (const s of [...root.querySelectorAll('span')]) {
         s.style.removeProperty(prop);
@@ -242,7 +105,7 @@
     }
     // Dimensione attuale (px) al cursore: la più vicina impostata nel testo, altrimenti quella calcolata.
     function currentSize() {
-      const r = range() || saved;
+      const r = range() || ed.saved();
       let n = r ? r.startContainer : null;
       if (n && n.nodeType === 3) n = n.parentNode;
       for (let x = n; x && inArea(x); x = x.parentNode) {
@@ -257,13 +120,12 @@
       const next = dir > 0 ? list.find((v) => v > cur + 0.5) || list[list.length - 1] : list.slice().reverse().find((v) => v < cur - 0.5) || list[0];
       command(() => applyStyle('font-size', next + 'px'));
     }
+    return { applyStyle, currentSize, stepSize };
+  }
 
-    // ---------- Allineamento ----------
-    function align(value) {
-      command(() => { ensureBlocks(); for (const b of selectedBlocks()) b.style.textAlign = value === 'left' ? '' : value; });
-    }
-
-    // ---------- Elenchi con rientro ----------
+  // Elenchi puntati e numerati con rientro.
+  function elenchi(ed) {
+    const { range, select, create_, rename, command, ensureBlocks, selectedBlocks, inArea } = ed;
     function liftItem(li) {
       const list = li.parentNode;
       const after = [...list.children].slice([...list.children].indexOf(li) + 1);
@@ -344,10 +206,14 @@
       command(() => { for (const li of back ? items.slice().reverse() : items) { if (back) outdentItem(li); else indentItem(li); } });
       return true;
     }
+    return { toggleList, indent, selectedItems };
+  }
 
-    // ---------- Tabelle ----------
+  // Tabelle: inserimento, righe e colonne, intestazione, Tab tra le celle, larghezza delle colonne.
+  function tabelle(ed) {
+    const { area, range, caretIn, create_, rename, command, commit, changed, ensureBlocks, topLevel, inArea } = ed;
     function currentCell() {
-      const r = range() || saved;
+      const r = range() || ed.saved();
       let n = r ? r.startContainer : null;
       for (; n && inArea(n); n = n.parentNode) if (n.nodeName === 'TD' || n.nodeName === 'TH') return n;
       return null;
@@ -492,6 +358,159 @@
     const endResize = () => { if (!resize) return; resize = null; commit(); changed(); };
     area.addEventListener('pointerup', endResize);
     area.addEventListener('pointercancel', endResize);
+    return { currentCell, insertTable, tableCommand, nextCell };
+  }
+
+  // opts: { html, label, onChange(html) }
+  function create(opts) {
+    const { el } = DnD.ui;
+    const onChange = opts.onChange || (() => {});
+    const area = el('div', {
+      class: 'note-area', contenteditable: 'true', role: 'textbox', 'aria-multiline': 'true', spellcheck: 'true',
+      'aria-label': opts.label || 'Testo della nota',
+    });
+    let saved = null;          // ultimo intervallo selezionato nell'editor (i menù della barra rubano il focus)
+    let plainNext = false;     // Ctrl+Maiusc+V: il prossimo incolla è testo semplice
+    let lastHtml = '';
+    let past = [];
+    let future = [];
+    let typing = null;
+
+    // ---------- Selezione ----------
+    const inArea = (n) => Boolean(n) && (n === area || area.contains(n));
+    function range() {
+      const s = window.getSelection();
+      if (s && s.rangeCount && inArea(s.getRangeAt(0).commonAncestorContainer)) return s.getRangeAt(0);
+      return null;
+    }
+    function select(r) {
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      saved = r.cloneRange();
+    }
+    // Ripristina la selezione salvata se il focus è uscito dall'editor (menù, selettori di colore).
+    function restore() {
+      if (range()) return range();
+      if (saved && inArea(saved.startContainer)) { select(saved.cloneRange()); return range(); }
+      const r = document.createRange();
+      r.selectNodeContents(area);
+      r.collapse(false);
+      select(r);
+      return range();
+    }
+    function caretIn(node, atEnd) {
+      const r = document.createRange();
+      r.selectNodeContents(node);
+      r.collapse(!atEnd);
+      select(r);
+    }
+    const create_ = (tag) => document.createElement(tag);
+    const unwrap = (node) => { while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node); node.remove(); };
+    function rename(node, tag) {
+      const n = create_(tag);
+      while (node.firstChild) n.appendChild(node.firstChild);
+      if (node.getAttribute('style')) n.setAttribute('style', node.getAttribute('style'));
+      node.replaceWith(n);
+      return n;
+    }
+
+    // ---------- Cronologia (annulla/ripeti) ----------
+    const html = () => area.innerHTML;
+    function commit() {
+      clearTimeout(typing);
+      typing = null;
+      const h = html();
+      if (h === lastHtml) return;
+      past.push(lastHtml);
+      if (past.length > HISTORY) past.shift();
+      future = [];
+      lastHtml = h;
+    }
+    function changed() {
+      ensureContent();
+      onChange(getHtml());
+      refreshState();
+    }
+    // Esegue un comando come un unico passo annullabile.
+    function command(fn) {
+      commit();
+      restore();
+      fn();
+      commit();
+      changed();
+      // Il focus torna nell'editor senza perdere la selezione appena impostata dal comando.
+      const keep = range() ? range().cloneRange() : null;
+      if (document.activeElement !== area) area.focus({ preventScroll: true });
+      if (keep) select(keep);
+    }
+    function undo() {
+      commit();
+      if (!past.length) return false;
+      future.push(lastHtml);
+      lastHtml = past.pop();
+      area.innerHTML = lastHtml;
+      caretIn(area, true);
+      changed();
+      return true;
+    }
+    function redo() {
+      commit();
+      if (!future.length) return false;
+      past.push(lastHtml);
+      lastHtml = future.pop();
+      area.innerHTML = lastHtml;
+      caretIn(area, true);
+      changed();
+      return true;
+    }
+
+    // ---------- Blocchi ----------
+    function ensureContent() {
+      if (!area.firstChild || (area.childNodes.length === 1 && area.firstChild.nodeName === 'BR')) area.innerHTML = '<p><br></p>';
+    }
+    // Il testo scritto direttamente nell'editor va in paragrafi (i comandi di blocco lavorano sui blocchi).
+    function ensureBlocks() {
+      let p = null;
+      for (const n of [...area.childNodes]) {
+        const inline = n.nodeType === 3 || (n.nodeType === 1 && !['P', 'DIV', 'H1', 'H2', 'H3', 'UL', 'OL', 'TABLE', 'HR', 'BLOCKQUOTE'].includes(n.nodeName));
+        if (!inline) { p = null; continue; }
+        if (n.nodeType === 3 && !n.textContent.trim() && !p) continue;
+        if (!p) { p = create_('p'); area.insertBefore(p, n); }
+        p.appendChild(n);
+      }
+      ensureContent();
+    }
+    function blockOf(node) {
+      for (let n = node; n && n !== area; n = n.parentNode) if (n.nodeType === 1 && BLOCK_TAGS.includes(n.nodeName)) return n;
+      return null;
+    }
+    // Blocchi "foglia" toccati dalla selezione, nell'ordine del documento.
+    function selectedBlocks() {
+      const r = range();
+      if (!r) return [];
+      const start = blockOf(r.startContainer);
+      const end = blockOf(r.endContainer);
+      if (!start) return [];
+      if (start === end) return [start];
+      const all = [...area.querySelectorAll(LEAF_SELECTOR)].filter((b) => !b.querySelector(LEAF_SELECTOR) || b.nodeName === 'LI');
+      const i = all.indexOf(start);
+      const j = all.indexOf(end);
+      return i >= 0 && j >= i ? all.slice(i, j + 1) : [start];
+    }
+    const topLevel = (node) => { let n = node; while (n && n.parentNode !== area) n = n.parentNode; return n; };
+
+    // Contesto condiviso con le parti (stile, elenchi, tabelle) definite fuori da create.
+    const ed = { area, range, select, restore, caretIn, create_, unwrap, rename, command, commit, changed, ensureBlocks, blockOf, selectedBlocks, topLevel, inArea, saved: () => saved };
+    const { applyStyle, currentSize, stepSize } = stileInLinea(ed);
+
+    // ---------- Allineamento ----------
+    function align(value) {
+      command(() => { ensureBlocks(); for (const b of selectedBlocks()) b.style.textAlign = value === 'left' ? '' : value; });
+    }
+
+    const { toggleList, indent, selectedItems } = elenchi(ed);
+    const { currentCell, insertTable, tableCommand, nextCell } = tabelle(ed);
 
     // ---------- Incolla, trascina, digitazione ----------
     function insertHtml(h) {
