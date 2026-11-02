@@ -83,7 +83,7 @@
 
   // Svuota anche IndexedDB: stato, TileSet e immagini importate.
   async function clearAll() {
-    if (!confirm('Cancellare TUTTI i dati (sessioni, personaggi e creature, griglie e sfondi, librerie, attrezzatura, oggetti di mappa, TileSet e immagini)?\nConviene esportare prima l\'archivio.')) return;
+    if (!confirm('Cancellare TUTTI i dati (sessioni, personaggi e creature, griglie e sfondi, librerie, attrezzatura, oggetti di mappa, TileSet e immagini, file dei suoni, profilo, gettoni e note del gioco online)?\nConviene esportare prima l\'archivio.')) return;
     if (!confirm('Ultima conferma: l\'operazione non si può annullare. Cancellare tutto?')) return;
     try {
       const res = await DnD.store.clearAll();

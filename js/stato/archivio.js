@@ -58,6 +58,19 @@
     };
   }
 
+  // Dati del gioco online in localStorage (profilo, gettoni, note, ripresa, server STUN): li cancella «Cancella tutti i
+  // dati» insieme all'archivio; le preferenze di visualizzazione e dei suoni restano.
+  const PREFISSO_ONLINE = DB_NAME + ':online-';
+  function cancellaOnline(storage) {
+    try {
+      const keys = [];
+      for (let i = 0; i < storage.length; i++) if (String(storage.key(i)).startsWith(PREFISSO_ONLINE)) keys.push(storage.key(i));
+      for (const k of keys) storage.removeItem(k);
+    } catch (e) {
+      console.error('Archivio: dati del gioco online non cancellati', e);
+    }
+  }
+
   // Store unico: ogni modifica passa da update(). Il salvataggio è asincrono ma ordinato:
   // le scritture non si sovrappongono e, se arrivano più modifiche, si salva solo l'ultima.
   // save(), update() e replace() restituiscono una Promise con l'esito reale della scrittura
@@ -163,10 +176,11 @@
       },
       // Promessa risolta quando tutte le scritture in corso sono terminate.
       saved: () => writing || Promise.resolve(),
-      // Cancella tutto (stato e immagini) e riparte da uno stato vuoto.
+      // Cancella tutto (stato, immagini, suoni e dati del gioco online) e riparte da uno stato vuoto.
       async clearAll() {
         await store.saved();
         await backend.clear();
+        cancellaOnline(storage);
         // Cancellazione voluta dall'utente: i dati illeggibili non vanno più protetti.
         store.bloccato = false;
         return store.replace(emptyState());

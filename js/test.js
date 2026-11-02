@@ -1415,6 +1415,14 @@
     eq([store.bloccato, typeof backend.data.stato], [false, 'string'], 'dopo «Cancella tutti i dati» si salva di nuovo');
   });
 
+  test('Archivio: «Cancella tutti i dati» toglie anche i dati del gioco online, non le preferenze (A5)', async () => {
+    const mem = new Map([['dnd-battaglie:online-profilo', '{}'], ['dnd-battaglie:online-gettone', '{}'], ['dnd-battaglie:online-note:x', '"a"'], ['dnd-battaglie:online-stun', '[]'], ['dnd-battaglie:impostazioni', '{}'], ['altro', '1']]);
+    const storage = { get length() { return mem.size; }, key: (i) => [...mem.keys()][i], getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    const store = await DnD.dati.openStore(storage, { backend: fakeBackend() });
+    await store.clearAll();
+    eq([...mem.keys()], ['dnd-battaglie:impostazioni', 'altro']);
+  });
+
   test('Archivio: dati danneggiati con copia riuscita, salvataggi normali (A3)', async () => {
     const backend = fakeBackend();
     await backend.set('stato', '{ rotto');

@@ -89,7 +89,7 @@ sempre lo stato; anche Alt+M).
 - **Dimensione del testo**: piccola, normale, grande. **Riduci animazioni**: sì/no.
 - **Esporta archivio**, **Esporta sessione corrente**, **Importa** (riconosce da solo se il file
   è un archivio completo o una singola sessione) e **Cancella tutti i dati** (doppia conferma;
-  le impostazioni di visualizzazione restano).
+  cancella anche profilo, gettoni e note del gioco online; le impostazioni di visualizzazione e dei suoni restano).
 
 - **Effetti boss**: barra della vita in alto, ombra ai lati dello schermo e animazioni dei boss nel
   combattimento (attivi di base). Spenti, i boss funzionano comunque (fasi, log, azioni). Spengono anche i suoni
@@ -1694,7 +1694,11 @@ i dati di navigazione del sito: fai backup regolari dal pannello **Impostazioni*
   gli elementi delle librerie che usano (razze, incantesimi anche innati, strutture, attrezzatura di
   armi, armature, inventari e contenuti, oggetti di mappa, i TileSet usati e le immagini, sfondi compresi). Importandola, la sessione si **aggiunge** alle
   altre: gli elementi delle librerie già presenti non vengono duplicati.
-- **Cancella tutti i dati** (doppia conferma) svuota anche IndexedDB, immagini, sfondi e suoni personalizzati compresi.
+- **Cancella tutti i dati** (doppia conferma) svuota anche IndexedDB, immagini, sfondi e suoni personalizzati compresi, e i dati del gioco online (profilo,
+  gettoni, note, server STUN).
+- Se i dati salvati non si possono leggere, o sono danneggiati e non se ne può conservare una copia, l'app li carica
+  vuoti ma **non salva** (avviso all'avvio) per non sovrascriverli; se IndexedDB non si apre, salva in localStorage e
+  lo dice. Esportando l'archivio, i file audio mancanti vengono segnalati.
 - Ogni creatura (Standard o del Manuale) si esporta e si importa anche da sola, come file JSON, dalla
   sezione Nemici.
 
