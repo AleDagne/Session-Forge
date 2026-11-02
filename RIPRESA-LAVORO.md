@@ -1,5 +1,14 @@
 # Ripresa del lavoro
 
+## Fase «Riordino 2/2» e correzioni (novembre 2026)
+
+- Stato: **completata e committata** (un commit per modulo). Dati invariati (versione 18). Lo stato aggiornato di
+  ogni problema è in `docs/AUDIT.md` §20; la struttura e le regole dei livelli in `docs/ARCHITETTURA.md`.
+- Bug corretti in commit separati: A3/A4 (archivio in sola lettura se i dati non si leggono, avviso sul ripiego da
+  IndexedDB), A22 (file audio mancanti nell'esportazione), A2 (dadi delle intenzioni filtrati), A5 («Cancella tutti i
+  dati» toglie anche i dati del gioco online).
+- Le voci qui sotto sono il registro delle fasi precedenti: valgono come storia, non come stato attuale.
+
 ## Fase «FASE ONLINE 2/3: Giocatore attivo e convalida del master» (26 ottobre 2026)
 
 - Stato: **completata**, non ancora committata; prove dal vivo affidate all'utente. Dati invariati (versione 18),

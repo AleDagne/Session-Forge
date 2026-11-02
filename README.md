@@ -634,9 +634,9 @@ mercanti, ruoli, stati delle quest) stanno in un solo file dati, `js/dati/mondo.
   - le variabili sono quelle della sessione (dell'esplorazione, se c'è).
 - Alla **consegna** il master conferma le ricompense da distribuire. I giocatori non vedono le quest non offerte.
 
-### Vista dei giocatori (per la futura fase Online)
+### Vista dei giocatori
 
-`DnD.npc.statoNpcPerGiocatore()` e `DnD.quest.perGiocatore()` danno ai giocatori solo ciò che il master rivela:
+Usata dal filtro del gioco online (`rete/filtro.js`, vedi «Gioco online»). `DnD.npc.statoNpcPerGiocatore()` e `DnD.quest.perGiocatore()` danno ai giocatori solo ciò che il master rivela:
 nome (o «Sconosciuto»), icona, ruolo e atteggiamento solo se rivelati, merce solo a negozio aperto (senza gli
 oggetti bloccati dalla reputazione) e solo le quest offerte e accettate. Mai note, ruoli nascosti, atteggiamenti
 segreti o reputazioni nascoste.
@@ -854,7 +854,7 @@ quell'oggetto dentro; le griglie restano 50×50 senza sfondo, con la TileMap por
 griglia; le strutture da immagine mantengono tile selezionati e flag; le pedine `size` diventano `w × h`. Si
 aggiungono il catalogo base, gli oggetti di mappa d'esempio e le creature d'esempio.
 
-### Collisioni (dalle versioni precedenti)
+### Collisioni con poligoni (TileMap delle versioni precedenti)
 
 Le tile delle TileMap precedenti possono avere poligoni di collisione (coordinate locali 0–1, soglia di blocco
 del TileSet, 50% di base): restano funzionanti in `js/collisioni.js`, ma l'interfaccia non li modifica più;
