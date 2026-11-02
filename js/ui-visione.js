@@ -77,6 +77,277 @@
     'v-vedi': 'Clicca una cella: anteprima di ciò che si vede da lì con i sensi scelti.',
   };
 
+  // Strumenti della visione sulla griglia (pittore): luce, blocco della vista, stanze, nebbia, «Vedi da qui».
+  function strumenti(S, api) {
+    const { doc, W, changed, edit, opts, refreshPanels } = api;
+    function setTool(t) {
+      S.tool = t;
+      if (t && opts.otherPainter) opts.otherPainter().deactivate();
+      refreshPanels();
+      if (W()) { W().updateUi(); W().requestDraw(); }
+    }
+    const inGrid = (g, c) => c && c.x >= 0 && c.y >= 0 && c.x < g.w && c.y < g.h;
+    function applyBrush(a, b) {
+      const d = doc();
+      const n = edit((g) => {
+        g.fog.enabled = true;
+        return V.paintFog(g, V.brushCells(g, S.brush, a, b, S.brush === 'riempi' ? V.sightMap(g, tilesets()) : null), S.tool === 'v-rivela');
+      });
+      if (d && !n) toast('Nessuna cella cambiata.');
+    }
+    const painter = {
+      active: () => Boolean(S.tool),
+      deactivate: () => { if (S.tool) { S.tool = null; S.drag = null; refreshPanels(); } },
+      down(cell) {
+        const d = doc();
+        if (!d || !inGrid(d.grid, cell)) return;
+        const g = d.grid;
+        if (S.tool === 'v-luce') {
+          const hit = g.vision.lights.find((l) => l.x === cell.x && l.y === cell.y);
+          if (hit) { S.selectedLight = hit.id; changed(); return; }
+          edit((gr) => {
+            const dark = S.lightKind === 'oscurita';
+            const src = V.sourceById(S.lightKind);
+            const l = V.normalizeLight(dark ? { name: K.DARKNESS.name, dark: true, x: cell.x, y: cell.y, minutes: null }
+              : { name: src.name, kind: src.id, bright: src.bright, dim: src.dim, color: src.color, flicker: src.flicker, x: cell.x, y: cell.y, minutes: null }, gr);
+            gr.vision.lights.push(l);
+            S.selectedLight = l.id;
+          });
+          return;
+        }
+        if (S.tool === 'v-blocco') {
+          S.drag = { value: K.SIGHT_CYCLE[g.vision.sight[cell.y * g.w + cell.x]], before: W().tileSnapshot(), cells: new Set() };
+          setSight(cell);
+          return;
+        }
+        if (S.tool === 'v-stanza') {
+          let room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
+          const before = W().tileSnapshot();
+          if (!room) {
+            room = V.normalizeRoom({ name: 'Stanza ' + (g.vision.rooms.length + 1) }, g);
+            g.vision.rooms.push(room);
+            S.selectedRoom = room.id;
+          }
+          S.drag = { before, adding: !room.cells.some((c) => c.x === cell.x && c.y === cell.y) };
+          toggleRoomCell(cell);
+          return;
+        }
+        if (S.tool === 'v-rivela' || S.tool === 'v-nascondi') {
+          if (S.brush === 'riempi') { applyBrush(cell); return; }
+          S.drag = { a: cell, b: cell };
+          return;
+        }
+        if (S.tool === 'v-vedi') {
+          S.probe = { pos: { x: cell.x, y: cell.y }, kind: S.probe.kind };
+          S.viewAs = 'punto';
+          changed();
+        }
+      },
+      move(cell, e, dragging) {
+        S.hover = cell;
+        const d = doc();
+        if (S.drag && dragging && cell && d && inGrid(d.grid, cell)) {
+          if (S.tool === 'v-blocco') setSight(cell);
+          else if (S.tool === 'v-stanza') toggleRoomCell(cell);
+          else if (S.drag.a) S.drag.b = cell;
+        }
+        if (W()) W().requestDraw();
+      },
+      up(cell) {
+        const dr = S.drag;
+        S.drag = null;
+        if (!dr) return;
+        if (S.tool === 'v-blocco' || S.tool === 'v-stanza') { W().commitTiles(dr.before); changed(); return; }
+        if (dr.a) applyBrush(dr.a, cell || dr.b);
+      },
+      draw(ctx, view, s) {
+        const d = doc();
+        if (!d || !S.tool) return;
+        ctx.save();
+        ctx.strokeStyle = palette().mark;
+        ctx.setLineDash([5, 4]);
+        if (S.drag && S.drag.a && S.drag.b) {
+          if (S.brush === 'rettangolo') {
+            const r = G.rectBetween(S.drag.a, S.drag.b, d.grid);
+            ctx.strokeRect(view.panX + r.x * s, view.panY + r.y * s, r.w * s, r.h * s);
+          } else {
+            const r = Math.hypot(S.drag.b.x - S.drag.a.x, S.drag.b.y - S.drag.a.y) + 0.5;
+            ctx.beginPath();
+            ctx.arc(view.panX + (S.drag.a.x + 0.5) * s, view.panY + (S.drag.a.y + 0.5) * s, r * s, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        } else if (S.hover) ctx.strokeRect(view.panX + S.hover.x * s + 0.5, view.panY + S.hover.y * s + 0.5, s - 1, s - 1);
+        ctx.restore();
+      },
+      hint: () => (S.tool ? HINTS[S.tool] : ''),
+    };
+    function setSight(cell) {
+      const g = doc().grid;
+      const k = cell.y * g.w + cell.x;
+      if (S.drag.cells.has(k)) return;
+      S.drag.cells.add(k);
+      g.vision.sight = g.vision.sight.slice(0, k) + S.drag.value + g.vision.sight.slice(k + 1);
+      S.cache = null;
+      W().requestDraw();
+    }
+    function toggleRoomCell(cell) {
+      const g = doc().grid;
+      const room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
+      if (!room) return;
+      const has = room.cells.some((c) => c.x === cell.x && c.y === cell.y);
+      if (S.drag.adding && !has && room.cells.length < K.MAX_ROOM_CELLS) room.cells.push({ x: cell.x, y: cell.y });
+      else if (!S.drag.adding && has) room.cells = room.cells.filter((c) => c.x !== cell.x || c.y !== cell.y);
+      W().requestDraw();
+    }
+
+    return { setTool, applyBrush, painter };
+  }
+
+  // Pannelli «Luce e visione», barra rapida e legenda (si ridisegnano con refreshPanels).
+  function pannelli(S, api) {
+    const { doc, changed, edit, mode, setTool } = api;
+    const panels = new Set();
+    function refreshPanels() { for (const p of panels) p(); }
+    const toolBtn = (t) => el('button', { type: 'button', class: 'btn small tool' + (S.tool === t ? ' active' : ''), 'aria-pressed': String(S.tool === t), text: TOOLS[t], onclick: () => setTool(S.tool === t ? null : t) });
+    const btn = (text, onclick, title) => el('button', { type: 'button', class: 'btn small', text, title, 'aria-label': title || text, onclick });
+
+    function viewSelect() {
+      const d = doc();
+      const sel = el('select', { 'aria-label': 'Vedi come', onchange: (e) => { S.viewAs = e.target.value; if (S.viewAs === 'punto' && !S.probe.pos) setTool('v-vedi'); changed(); } },
+        opt('master', '👁 Master (tutto)', S.viewAs === 'master'), opt('giocatori', 'Come i giocatori', S.viewAs === 'giocatori'),
+        d ? d.combatants.filter((c) => c.pos).map((c) => opt('pedina:' + c.id, 'Come ' + c.name, S.viewAs === 'pedina:' + c.id)) : [],
+        mode === 'editor' ? opt('punto', 'Da un punto scelto…', S.viewAs === 'punto') : null);
+      return sel;
+    }
+    function fogControls(g) {
+      return el('div', { class: 'explore-tool-row' },
+        el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.enabled, onchange: (e) => edit((gr) => { gr.fog.enabled = e.target.checked; }) }), ' Nebbia di guerra'),
+        el('label', { class: 'inline small' }, 'Modalità', el('select', { onchange: (e) => edit((gr) => { gr.fog.mode = e.target.value; }) },
+          K.FOG_MODES.map((m) => opt(m, K.FOG_MODE_NAMES[m], g.fog.mode === m)))),
+        el('label', { class: 'inline small' }, 'Pennello', el('select', { onchange: (e) => { S.brush = e.target.value; refreshPanels(); } },
+          K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b)))),
+        toolBtn('v-rivela'), toolBtn('v-nascondi'),
+        btn('Rivela tutto', () => edit((gr) => { gr.fog.enabled = true; V.revealAll(gr); })),
+        btn('Nascondi tutto', () => { if (confirm('Nascondere tutta la mappa e dimenticare le celle esplorate?')) edit((gr) => { gr.fog.enabled = true; V.hideAll(gr); }); }));
+    }
+
+    // Pannello completo «Luce e visione» (Editor griglie; nel gioco dentro una finestra).
+    function panel() {
+      const node = el('section', { class: 'panel vision-panel', 'aria-label': 'Luce e visione' });
+      const render = () => {
+        clear(node);
+        const d = doc();
+        if (!d || !d.grid) return;
+        const g = V.ensure(d.grid);
+        const v = g.vision;
+        const lights = v.lights;
+        const sel = lights.find((l) => l.id === S.selectedLight);
+        const room = v.rooms.find((r) => r.id === S.selectedRoom);
+        const c = S.cache;
+        node.append(
+          el('div', { class: 'explore-tools-head' }, el('h3', { text: '🔦 Luce e visione' }),
+            el('span', { class: 'muted small', text: c ? 'ricalcolo ' + Math.round(c.ms) + ' ms' : '' })),
+          el('div', { class: 'explore-cols' },
+            el('fieldset', {}, el('legend', { text: 'Luce' }),
+              el('div', { class: 'input-row' },
+                el('label', { class: 'inline small' }, 'Luce ambientale', el('select', { onchange: (e) => edit((gr) => { gr.vision.ambient = e.target.value; }) },
+                  K.AMBIENTS.filter((a) => a !== 'auto' || g.kind === 'esplorazione').map((a) => opt(a, K.AMBIENT_NAMES[a], v.ambient === a)))),
+                el('label', { class: 'check small', title: 'Celle nette invece del gradiente morbido (più veloce)' }, el('input', { type: 'checkbox', checked: v.stepped, onchange: (e) => edit((gr) => { gr.vision.stepped = e.target.checked; }) }), ' Luce a gradini')),
+              el('div', { class: 'explore-tool-row' },
+                el('select', { 'aria-label': 'Sorgente da piazzare', onchange: (e) => { S.lightKind = e.target.value; setTool('v-luce'); } },
+                  K.SOURCES.map((s) => opt(s.id, s.icon + ' ' + s.name, S.lightKind === s.id)), opt('oscurita', K.DARKNESS.icon + ' ' + K.DARKNESS.name, S.lightKind === 'oscurita')),
+                toolBtn('v-luce')),
+              lights.length ? el('ul', { class: 'placed-events' }, lights.map((l) => el('li', { class: l.id === S.selectedLight ? 'selected' : '' },
+                el('button', { type: 'button', class: 'link-btn', text: (l.dark ? '🌑 ' : '💡 ') + l.name + ' · ' + G.cellLabel(l.x, l.y), onclick: () => { S.selectedLight = l.id === S.selectedLight ? null : l.id; changed(); } }),
+                el('span', { class: 'muted small', text: (l.on ? '' : 'spenta · ') + (l.minutes === null ? '' : Math.round(l.minutes) + ' min') + (l.link ? ' · concentrazione' : '') }),
+                el('span', { class: 'action-tools' },
+                  el('button', { type: 'button', class: 'icon-btn', text: l.on ? '🌑' : '🔥', title: l.on ? 'Spegni' : 'Accendi', 'aria-label': l.on ? 'Spegni ' + l.name : 'Accendi ' + l.name,
+                    onclick: () => edit((gr) => { const x = gr.vision.lights.find((y) => y.id === l.id); x.on = !x.on; if (x.on && x.minutes === 0) x.minutes = null; }) }),
+                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Togli', 'aria-label': 'Togli ' + l.name, onclick: () => edit((gr) => { gr.vision.lights = gr.vision.lights.filter((y) => y.id !== l.id); }) })))))
+                : el('p', { class: 'muted small', text: 'Nessuna sorgente piazzata. Anche strutture, oggetti di mappa e pedine possono fare luce.' }),
+              sel ? lightForm(sel) : null),
+            el('fieldset', {}, el('legend', { text: 'Vista e stanze' }),
+              el('div', { class: 'explore-tool-row' }, toolBtn('v-blocco'), toolBtn('v-stanza'),
+                btn('+ Stanza', () => edit((gr) => { const r = V.normalizeRoom({ name: 'Stanza ' + (gr.vision.rooms.length + 1) }, gr); gr.vision.rooms.push(r); S.selectedRoom = r.id; S.tool = 'v-stanza'; }))),
+              v.rooms.length ? el('ul', { class: 'placed-events' }, v.rooms.map((r) => el('li', { class: r.id === S.selectedRoom ? 'selected' : '' },
+                el('button', { type: 'button', class: 'link-btn', text: r.name + ' · ' + r.cells.length + ' celle', onclick: () => { S.selectedRoom = r.id === S.selectedRoom ? null : r.id; changed(); } }),
+                el('span', { class: 'muted small', text: r.revealed ? 'rivelata' : 'da rivelare' }),
+                el('span', { class: 'action-tools' },
+                  el('button', { type: 'button', class: 'icon-btn', text: '✎', title: 'Rinomina', 'aria-label': 'Rinomina ' + r.name, onclick: () => { const n = prompt('Nome della stanza', r.name); if (n && n.trim()) edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).name = n.trim().slice(0, 60); }); } }),
+                  el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Torna «da rivelare»', 'aria-label': 'Azzera ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).revealed = false; }) }),
+                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Elimina', 'aria-label': 'Elimina ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms = gr.vision.rooms.filter((x) => x.id !== r.id); if (S.selectedRoom === r.id) S.selectedRoom = null; }) })))))
+                : el('p', { class: 'muted small', text: 'Una stanza si rivela tutta quando un giocatore ci entra o si apre una porta che la tocca.' }),
+              room ? el('p', { class: 'muted small', text: 'Stanza selezionata: «' + room.name + '». Usa 🚪 Stanza per aggiungere o togliere celle.' }) : null,
+              legend()),
+            el('fieldset', {}, el('legend', { text: 'Nebbia di guerra' }), fogControls(g),
+              el('div', { class: 'input-row' },
+                el('label', { class: 'inline small' }, 'Velo del master', el('input', { type: 'range', min: 10, max: 95, value: String(Math.round(g.fog.opacity * 100)), 'aria-label': 'Opacità del velo',
+                  onchange: (e) => edit((gr) => { gr.fog.opacity = Number(e.target.value) / 100; }) })),
+                el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.ghosts, onchange: (e) => edit((gr) => { gr.fog.ghosts = e.target.checked; }) }), ' Ultime posizioni note (fantasmi)'))),
+            el('fieldset', {}, el('legend', { text: 'Vedi come' }),
+              el('div', { class: 'input-row' }, viewSelect(),
+                mode === 'editor' ? el('select', { 'aria-label': 'Sensi del punto scelto', onchange: (e) => { S.probe = { pos: S.probe.pos, kind: e.target.value }; changed(); } },
+                  K.PROBES.map((pr) => opt(pr.id, pr.name, S.probe.kind === pr.id))) : null,
+                mode === 'editor' ? toolBtn('v-vedi') : null),
+              el('p', { class: 'muted small', text: S.viewAs === 'master' ? 'Il master vede tutto: le zone non rivelate hanno un velo.' : 'Anteprima: celle e pedine fuori vista coperte, come le vedrebbero i giocatori.' }))));
+      };
+      panels.add(render);
+      render();
+      return { node, refresh: render, dispose: () => panels.delete(render) };
+    }
+    function lightForm(l) {
+      const name = el('input', { type: 'text', value: l.name, maxlength: 60, 'aria-label': 'Nome della sorgente' });
+      const bright = numberInput(l.bright, { min: 0, max: 1000, step: 5, 'aria-label': 'Luce intensa (piedi)' });
+      const dim = numberInput(l.dim, { min: 0, max: 1000, step: 5, 'aria-label': 'Penombra oltre (piedi)' });
+      const color = el('input', { type: 'color', value: l.color, 'aria-label': 'Colore' });
+      const minutes = numberInput(l.minutes === null ? '' : l.minutes, { min: 0, max: 100000, placeholder: 'illimitata', 'aria-label': 'Durata in minuti' });
+      const flicker = el('input', { type: 'checkbox', checked: l.flicker });
+      return el('div', { class: 'form vision-light-form' },
+        el('div', { class: 'grid-3 tight' }, field('Nome', name), field(l.dark ? 'Raggio del buio (ft)' : 'Luce intensa (ft)', l.dark ? dim : bright), l.dark ? null : field('Penombra oltre (ft)', dim)),
+        el('div', { class: 'grid-3 tight' }, l.dark ? null : field('Colore', color), field('Durata (minuti di gioco)', minutes), l.dark ? null : el('label', { class: 'check' }, flicker, ' Intermittenza')),
+        el('p', { class: 'muted small', text: l.dark ? 'Buio magico: niente luce, la scurovisione non vede, la vista pura sì.' : 'Luce intensa ' + fmtFt(l.bright) + ', penombra fino a ' + fmtFt(l.bright + l.dim) + '.' }),
+        el('div', { class: 'form-actions' }, btn('Applica', () => edit((gr) => {
+          const x = gr.vision.lights.find((y) => y.id === l.id);
+          Object.assign(x, V.normalizeLight(Object.assign({}, x, { name: name.value, bright: readNumber(bright), dim: readNumber(dim), color: color.value, flicker: flicker.checked,
+            minutes: minutes.value.trim() === '' ? null : readNumber(minutes) }), gr));
+        }))));
+    }
+    function legend() {
+      return el('ul', { class: 'biome-legend vision-legend' }, K.LEVELS.map((lv) => el('li', { title: K.LEVEL_RULES[lv] },
+        el('span', { class: 'biome-swatch vision-swatch-' + lv }), K.LEVEL_ICONS[lv] + ' ' + K.LEVEL_NAMES[lv])),
+        el('li', { title: 'Celle mai viste dai giocatori' }, el('span', { class: 'biome-swatch vision-swatch-fog' }), 'Nebbia'),
+        el('li', { title: 'Celle già viste: strutture e tile, senza pedine nemiche' }, el('span', { class: 'biome-swatch vision-swatch-explored' }), 'Esplorata'));
+    }
+
+    // Barra rapida del Combattimento e dell'Esplorazione: nebbia, rivela/nascondi area, «Vedi come», pannello completo.
+    function quickBar() {
+      const node = el('div', { class: 'vision-quick explore-tool-row', role: 'toolbar', 'aria-label': 'Luce e nebbia' });
+      const render = () => {
+        clear(node);
+        const d = doc();
+        if (!d || !d.grid) return;
+        const g = V.ensure(d.grid);
+        node.append(
+          el('button', { type: 'button', class: 'btn small', 'aria-pressed': String(g.fog.enabled), text: g.fog.enabled ? '🌫 Nebbia attiva' : '🌫 Nebbia spenta',
+            onclick: () => edit((gr) => { gr.fog.enabled = !gr.fog.enabled; }) }),
+          toolBtn('v-rivela'), toolBtn('v-nascondi'),
+          el('select', { 'aria-label': 'Pennello della nebbia', onchange: (e) => { S.brush = e.target.value; refreshPanels(); } }, K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b))),
+          viewSelect(),
+          btn('🔦 Luce e visione…', () => {
+            const p = panel();
+            const dialog = openDialog('Luce e visione', p.node, [{ text: 'Chiudi' }]);
+            dialog.classList.add('wide');
+            dialog.addEventListener('close', () => p.dispose());
+          }, 'Luce ambientale, sorgenti, nebbia, stanze'));
+      };
+      panels.add(render);
+      render();
+      return node;
+    }
+
+    return { panel, quickBar, refreshPanels, legend };
+  }
+
   // opts: { getDoc(), widget(), mode: 'editor' | 'combattimento' | 'esplorazione', env() -> { hour, biomeLight },
   //   playersView(ctx, doc) -> { cells, seenIds } (di base: le pedine dei giocatori), onChange() }
   function create(opts) {
@@ -286,266 +557,13 @@
     // Livello di luce in una cella (indicatore della pedina corrente).
     function levelAt(x, y) { const c = compute(); return c ? V.lightAt(c.ctx, x, y) : 2; }
 
-    // ---- Strumenti (pittore della griglia) ----
-    function setTool(t) {
-      S.tool = t;
-      if (t && opts.otherPainter) opts.otherPainter().deactivate();
-      refreshPanels();
-      if (W()) { W().updateUi(); W().requestDraw(); }
-    }
-    const inGrid = (g, c) => c && c.x >= 0 && c.y >= 0 && c.x < g.w && c.y < g.h;
-    function applyBrush(a, b) {
-      const d = doc();
-      const n = edit((g) => {
-        g.fog.enabled = true;
-        return V.paintFog(g, V.brushCells(g, S.brush, a, b, S.brush === 'riempi' ? V.sightMap(g, tilesets()) : null), S.tool === 'v-rivela');
-      });
-      if (d && !n) toast('Nessuna cella cambiata.');
-    }
-    const painter = {
-      active: () => Boolean(S.tool),
-      deactivate: () => { if (S.tool) { S.tool = null; S.drag = null; refreshPanels(); } },
-      down(cell) {
-        const d = doc();
-        if (!d || !inGrid(d.grid, cell)) return;
-        const g = d.grid;
-        if (S.tool === 'v-luce') {
-          const hit = g.vision.lights.find((l) => l.x === cell.x && l.y === cell.y);
-          if (hit) { S.selectedLight = hit.id; changed(); return; }
-          edit((gr) => {
-            const dark = S.lightKind === 'oscurita';
-            const src = V.sourceById(S.lightKind);
-            const l = V.normalizeLight(dark ? { name: K.DARKNESS.name, dark: true, x: cell.x, y: cell.y, minutes: null }
-              : { name: src.name, kind: src.id, bright: src.bright, dim: src.dim, color: src.color, flicker: src.flicker, x: cell.x, y: cell.y, minutes: null }, gr);
-            gr.vision.lights.push(l);
-            S.selectedLight = l.id;
-          });
-          return;
-        }
-        if (S.tool === 'v-blocco') {
-          S.drag = { value: K.SIGHT_CYCLE[g.vision.sight[cell.y * g.w + cell.x]], before: W().tileSnapshot(), cells: new Set() };
-          setSight(cell);
-          return;
-        }
-        if (S.tool === 'v-stanza') {
-          let room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
-          const before = W().tileSnapshot();
-          if (!room) {
-            room = V.normalizeRoom({ name: 'Stanza ' + (g.vision.rooms.length + 1) }, g);
-            g.vision.rooms.push(room);
-            S.selectedRoom = room.id;
-          }
-          S.drag = { before, adding: !room.cells.some((c) => c.x === cell.x && c.y === cell.y) };
-          toggleRoomCell(cell);
-          return;
-        }
-        if (S.tool === 'v-rivela' || S.tool === 'v-nascondi') {
-          if (S.brush === 'riempi') { applyBrush(cell); return; }
-          S.drag = { a: cell, b: cell };
-          return;
-        }
-        if (S.tool === 'v-vedi') {
-          S.probe = { pos: { x: cell.x, y: cell.y }, kind: S.probe.kind };
-          S.viewAs = 'punto';
-          changed();
-        }
-      },
-      move(cell, e, dragging) {
-        S.hover = cell;
-        const d = doc();
-        if (S.drag && dragging && cell && d && inGrid(d.grid, cell)) {
-          if (S.tool === 'v-blocco') setSight(cell);
-          else if (S.tool === 'v-stanza') toggleRoomCell(cell);
-          else if (S.drag.a) S.drag.b = cell;
-        }
-        if (W()) W().requestDraw();
-      },
-      up(cell) {
-        const dr = S.drag;
-        S.drag = null;
-        if (!dr) return;
-        if (S.tool === 'v-blocco' || S.tool === 'v-stanza') { W().commitTiles(dr.before); changed(); return; }
-        if (dr.a) applyBrush(dr.a, cell || dr.b);
-      },
-      draw(ctx, view, s) {
-        const d = doc();
-        if (!d || !S.tool) return;
-        ctx.save();
-        ctx.strokeStyle = palette().mark;
-        ctx.setLineDash([5, 4]);
-        if (S.drag && S.drag.a && S.drag.b) {
-          if (S.brush === 'rettangolo') {
-            const r = G.rectBetween(S.drag.a, S.drag.b, d.grid);
-            ctx.strokeRect(view.panX + r.x * s, view.panY + r.y * s, r.w * s, r.h * s);
-          } else {
-            const r = Math.hypot(S.drag.b.x - S.drag.a.x, S.drag.b.y - S.drag.a.y) + 0.5;
-            ctx.beginPath();
-            ctx.arc(view.panX + (S.drag.a.x + 0.5) * s, view.panY + (S.drag.a.y + 0.5) * s, r * s, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-        } else if (S.hover) ctx.strokeRect(view.panX + S.hover.x * s + 0.5, view.panY + S.hover.y * s + 0.5, s - 1, s - 1);
-        ctx.restore();
-      },
-      hint: () => (S.tool ? HINTS[S.tool] : ''),
-    };
-    function setSight(cell) {
-      const g = doc().grid;
-      const k = cell.y * g.w + cell.x;
-      if (S.drag.cells.has(k)) return;
-      S.drag.cells.add(k);
-      g.vision.sight = g.vision.sight.slice(0, k) + S.drag.value + g.vision.sight.slice(k + 1);
-      S.cache = null;
-      W().requestDraw();
-    }
-    function toggleRoomCell(cell) {
-      const g = doc().grid;
-      const room = g.vision.rooms.find((r) => r.id === S.selectedRoom);
-      if (!room) return;
-      const has = room.cells.some((c) => c.x === cell.x && c.y === cell.y);
-      if (S.drag.adding && !has && room.cells.length < K.MAX_ROOM_CELLS) room.cells.push({ x: cell.x, y: cell.y });
-      else if (!S.drag.adding && has) room.cells = room.cells.filter((c) => c.x !== cell.x || c.y !== cell.y);
-      W().requestDraw();
-    }
-
-    // ---- Pannelli ----
-    const panels = new Set();
-    function refreshPanels() { for (const p of panels) p(); }
-    const toolBtn = (t) => el('button', { type: 'button', class: 'btn small tool' + (S.tool === t ? ' active' : ''), 'aria-pressed': String(S.tool === t), text: TOOLS[t], onclick: () => setTool(S.tool === t ? null : t) });
-    const btn = (text, onclick, title) => el('button', { type: 'button', class: 'btn small', text, title, 'aria-label': title || text, onclick });
-
-    function viewSelect() {
-      const d = doc();
-      const sel = el('select', { 'aria-label': 'Vedi come', onchange: (e) => { S.viewAs = e.target.value; if (S.viewAs === 'punto' && !S.probe.pos) setTool('v-vedi'); changed(); } },
-        opt('master', '👁 Master (tutto)', S.viewAs === 'master'), opt('giocatori', 'Come i giocatori', S.viewAs === 'giocatori'),
-        d ? d.combatants.filter((c) => c.pos).map((c) => opt('pedina:' + c.id, 'Come ' + c.name, S.viewAs === 'pedina:' + c.id)) : [],
-        mode === 'editor' ? opt('punto', 'Da un punto scelto…', S.viewAs === 'punto') : null);
-      return sel;
-    }
-    function fogControls(g) {
-      return el('div', { class: 'explore-tool-row' },
-        el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.enabled, onchange: (e) => edit((gr) => { gr.fog.enabled = e.target.checked; }) }), ' Nebbia di guerra'),
-        el('label', { class: 'inline small' }, 'Modalità', el('select', { onchange: (e) => edit((gr) => { gr.fog.mode = e.target.value; }) },
-          K.FOG_MODES.map((m) => opt(m, K.FOG_MODE_NAMES[m], g.fog.mode === m)))),
-        el('label', { class: 'inline small' }, 'Pennello', el('select', { onchange: (e) => { S.brush = e.target.value; refreshPanels(); } },
-          K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b)))),
-        toolBtn('v-rivela'), toolBtn('v-nascondi'),
-        btn('Rivela tutto', () => edit((gr) => { gr.fog.enabled = true; V.revealAll(gr); })),
-        btn('Nascondi tutto', () => { if (confirm('Nascondere tutta la mappa e dimenticare le celle esplorate?')) edit((gr) => { gr.fog.enabled = true; V.hideAll(gr); }); }));
-    }
-
-    // Pannello completo «Luce e visione» (Editor griglie; nel gioco dentro una finestra).
-    function panel() {
-      const node = el('section', { class: 'panel vision-panel', 'aria-label': 'Luce e visione' });
-      const render = () => {
-        clear(node);
-        const d = doc();
-        if (!d || !d.grid) return;
-        const g = V.ensure(d.grid);
-        const v = g.vision;
-        const lights = v.lights;
-        const sel = lights.find((l) => l.id === S.selectedLight);
-        const room = v.rooms.find((r) => r.id === S.selectedRoom);
-        const c = S.cache;
-        node.append(
-          el('div', { class: 'explore-tools-head' }, el('h3', { text: '🔦 Luce e visione' }),
-            el('span', { class: 'muted small', text: c ? 'ricalcolo ' + Math.round(c.ms) + ' ms' : '' })),
-          el('div', { class: 'explore-cols' },
-            el('fieldset', {}, el('legend', { text: 'Luce' }),
-              el('div', { class: 'input-row' },
-                el('label', { class: 'inline small' }, 'Luce ambientale', el('select', { onchange: (e) => edit((gr) => { gr.vision.ambient = e.target.value; }) },
-                  K.AMBIENTS.filter((a) => a !== 'auto' || g.kind === 'esplorazione').map((a) => opt(a, K.AMBIENT_NAMES[a], v.ambient === a)))),
-                el('label', { class: 'check small', title: 'Celle nette invece del gradiente morbido (più veloce)' }, el('input', { type: 'checkbox', checked: v.stepped, onchange: (e) => edit((gr) => { gr.vision.stepped = e.target.checked; }) }), ' Luce a gradini')),
-              el('div', { class: 'explore-tool-row' },
-                el('select', { 'aria-label': 'Sorgente da piazzare', onchange: (e) => { S.lightKind = e.target.value; setTool('v-luce'); } },
-                  K.SOURCES.map((s) => opt(s.id, s.icon + ' ' + s.name, S.lightKind === s.id)), opt('oscurita', K.DARKNESS.icon + ' ' + K.DARKNESS.name, S.lightKind === 'oscurita')),
-                toolBtn('v-luce')),
-              lights.length ? el('ul', { class: 'placed-events' }, lights.map((l) => el('li', { class: l.id === S.selectedLight ? 'selected' : '' },
-                el('button', { type: 'button', class: 'link-btn', text: (l.dark ? '🌑 ' : '💡 ') + l.name + ' · ' + G.cellLabel(l.x, l.y), onclick: () => { S.selectedLight = l.id === S.selectedLight ? null : l.id; changed(); } }),
-                el('span', { class: 'muted small', text: (l.on ? '' : 'spenta · ') + (l.minutes === null ? '' : Math.round(l.minutes) + ' min') + (l.link ? ' · concentrazione' : '') }),
-                el('span', { class: 'action-tools' },
-                  el('button', { type: 'button', class: 'icon-btn', text: l.on ? '🌑' : '🔥', title: l.on ? 'Spegni' : 'Accendi', 'aria-label': l.on ? 'Spegni ' + l.name : 'Accendi ' + l.name,
-                    onclick: () => edit((gr) => { const x = gr.vision.lights.find((y) => y.id === l.id); x.on = !x.on; if (x.on && x.minutes === 0) x.minutes = null; }) }),
-                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Togli', 'aria-label': 'Togli ' + l.name, onclick: () => edit((gr) => { gr.vision.lights = gr.vision.lights.filter((y) => y.id !== l.id); }) })))))
-                : el('p', { class: 'muted small', text: 'Nessuna sorgente piazzata. Anche strutture, oggetti di mappa e pedine possono fare luce.' }),
-              sel ? lightForm(sel) : null),
-            el('fieldset', {}, el('legend', { text: 'Vista e stanze' }),
-              el('div', { class: 'explore-tool-row' }, toolBtn('v-blocco'), toolBtn('v-stanza'),
-                btn('+ Stanza', () => edit((gr) => { const r = V.normalizeRoom({ name: 'Stanza ' + (gr.vision.rooms.length + 1) }, gr); gr.vision.rooms.push(r); S.selectedRoom = r.id; S.tool = 'v-stanza'; }))),
-              v.rooms.length ? el('ul', { class: 'placed-events' }, v.rooms.map((r) => el('li', { class: r.id === S.selectedRoom ? 'selected' : '' },
-                el('button', { type: 'button', class: 'link-btn', text: r.name + ' · ' + r.cells.length + ' celle', onclick: () => { S.selectedRoom = r.id === S.selectedRoom ? null : r.id; changed(); } }),
-                el('span', { class: 'muted small', text: r.revealed ? 'rivelata' : 'da rivelare' }),
-                el('span', { class: 'action-tools' },
-                  el('button', { type: 'button', class: 'icon-btn', text: '✎', title: 'Rinomina', 'aria-label': 'Rinomina ' + r.name, onclick: () => { const n = prompt('Nome della stanza', r.name); if (n && n.trim()) edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).name = n.trim().slice(0, 60); }); } }),
-                  el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Torna «da rivelare»', 'aria-label': 'Azzera ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms.find((x) => x.id === r.id).revealed = false; }) }),
-                  el('button', { type: 'button', class: 'icon-btn danger', text: '✕', title: 'Elimina', 'aria-label': 'Elimina ' + r.name, onclick: () => edit((gr) => { gr.vision.rooms = gr.vision.rooms.filter((x) => x.id !== r.id); if (S.selectedRoom === r.id) S.selectedRoom = null; }) })))))
-                : el('p', { class: 'muted small', text: 'Una stanza si rivela tutta quando un giocatore ci entra o si apre una porta che la tocca.' }),
-              room ? el('p', { class: 'muted small', text: 'Stanza selezionata: «' + room.name + '». Usa 🚪 Stanza per aggiungere o togliere celle.' }) : null,
-              legend()),
-            el('fieldset', {}, el('legend', { text: 'Nebbia di guerra' }), fogControls(g),
-              el('div', { class: 'input-row' },
-                el('label', { class: 'inline small' }, 'Velo del master', el('input', { type: 'range', min: 10, max: 95, value: String(Math.round(g.fog.opacity * 100)), 'aria-label': 'Opacità del velo',
-                  onchange: (e) => edit((gr) => { gr.fog.opacity = Number(e.target.value) / 100; }) })),
-                el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: g.fog.ghosts, onchange: (e) => edit((gr) => { gr.fog.ghosts = e.target.checked; }) }), ' Ultime posizioni note (fantasmi)'))),
-            el('fieldset', {}, el('legend', { text: 'Vedi come' }),
-              el('div', { class: 'input-row' }, viewSelect(),
-                mode === 'editor' ? el('select', { 'aria-label': 'Sensi del punto scelto', onchange: (e) => { S.probe = { pos: S.probe.pos, kind: e.target.value }; changed(); } },
-                  K.PROBES.map((pr) => opt(pr.id, pr.name, S.probe.kind === pr.id))) : null,
-                mode === 'editor' ? toolBtn('v-vedi') : null),
-              el('p', { class: 'muted small', text: S.viewAs === 'master' ? 'Il master vede tutto: le zone non rivelate hanno un velo.' : 'Anteprima: celle e pedine fuori vista coperte, come le vedrebbero i giocatori.' }))));
-      };
-      panels.add(render);
-      render();
-      return { node, refresh: render, dispose: () => panels.delete(render) };
-    }
-    function lightForm(l) {
-      const name = el('input', { type: 'text', value: l.name, maxlength: 60, 'aria-label': 'Nome della sorgente' });
-      const bright = numberInput(l.bright, { min: 0, max: 1000, step: 5, 'aria-label': 'Luce intensa (piedi)' });
-      const dim = numberInput(l.dim, { min: 0, max: 1000, step: 5, 'aria-label': 'Penombra oltre (piedi)' });
-      const color = el('input', { type: 'color', value: l.color, 'aria-label': 'Colore' });
-      const minutes = numberInput(l.minutes === null ? '' : l.minutes, { min: 0, max: 100000, placeholder: 'illimitata', 'aria-label': 'Durata in minuti' });
-      const flicker = el('input', { type: 'checkbox', checked: l.flicker });
-      return el('div', { class: 'form vision-light-form' },
-        el('div', { class: 'grid-3 tight' }, field('Nome', name), field(l.dark ? 'Raggio del buio (ft)' : 'Luce intensa (ft)', l.dark ? dim : bright), l.dark ? null : field('Penombra oltre (ft)', dim)),
-        el('div', { class: 'grid-3 tight' }, l.dark ? null : field('Colore', color), field('Durata (minuti di gioco)', minutes), l.dark ? null : el('label', { class: 'check' }, flicker, ' Intermittenza')),
-        el('p', { class: 'muted small', text: l.dark ? 'Buio magico: niente luce, la scurovisione non vede, la vista pura sì.' : 'Luce intensa ' + fmtFt(l.bright) + ', penombra fino a ' + fmtFt(l.bright + l.dim) + '.' }),
-        el('div', { class: 'form-actions' }, btn('Applica', () => edit((gr) => {
-          const x = gr.vision.lights.find((y) => y.id === l.id);
-          Object.assign(x, V.normalizeLight(Object.assign({}, x, { name: name.value, bright: readNumber(bright), dim: readNumber(dim), color: color.value, flicker: flicker.checked,
-            minutes: minutes.value.trim() === '' ? null : readNumber(minutes) }), gr));
-        }))));
-    }
-    function legend() {
-      return el('ul', { class: 'biome-legend vision-legend' }, K.LEVELS.map((lv) => el('li', { title: K.LEVEL_RULES[lv] },
-        el('span', { class: 'biome-swatch vision-swatch-' + lv }), K.LEVEL_ICONS[lv] + ' ' + K.LEVEL_NAMES[lv])),
-        el('li', { title: 'Celle mai viste dai giocatori' }, el('span', { class: 'biome-swatch vision-swatch-fog' }), 'Nebbia'),
-        el('li', { title: 'Celle già viste: strutture e tile, senza pedine nemiche' }, el('span', { class: 'biome-swatch vision-swatch-explored' }), 'Esplorata'));
-    }
-
-    // Barra rapida del Combattimento e dell'Esplorazione: nebbia, rivela/nascondi area, «Vedi come», pannello completo.
-    function quickBar() {
-      const node = el('div', { class: 'vision-quick explore-tool-row', role: 'toolbar', 'aria-label': 'Luce e nebbia' });
-      const render = () => {
-        clear(node);
-        const d = doc();
-        if (!d || !d.grid) return;
-        const g = V.ensure(d.grid);
-        node.append(
-          el('button', { type: 'button', class: 'btn small', 'aria-pressed': String(g.fog.enabled), text: g.fog.enabled ? '🌫 Nebbia attiva' : '🌫 Nebbia spenta',
-            onclick: () => edit((gr) => { gr.fog.enabled = !gr.fog.enabled; }) }),
-          toolBtn('v-rivela'), toolBtn('v-nascondi'),
-          el('select', { 'aria-label': 'Pennello della nebbia', onchange: (e) => { S.brush = e.target.value; refreshPanels(); } }, K.BRUSHES.map((b) => opt(b, K.BRUSH_NAMES[b], S.brush === b))),
-          viewSelect(),
-          btn('🔦 Luce e visione…', () => {
-            const p = panel();
-            const dialog = openDialog('Luce e visione', p.node, [{ text: 'Chiudi' }]);
-            dialog.classList.add('wide');
-            dialog.addEventListener('close', () => p.dispose());
-          }, 'Luce ambientale, sorgenti, nebbia, stanze'));
-      };
-      panels.add(render);
-      render();
-      return node;
-    }
+    // Parti fuori da create (strumenti e pannelli): stato S condiviso e api con rimandi (si chiamano a vicenda).
+    const api = { doc, W, changed, edit, compute, mode, opts, refreshPanels: () => P.refreshPanels(), setTool: (t) => T.setTool(t) };
+    const T = strumenti(S, api);
+    const { painter } = T;
+    Object.assign(api, { applyBrush: T.applyBrush, painter });
+    const P = pannelli(S, api);
+    const { panel, quickBar, refreshPanels } = P;
 
     return {
       painter, draw, compute, hideToken, hideItem, levelAt, panel, quickBar, emitterEditor,
