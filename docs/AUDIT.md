@@ -716,10 +716,10 @@ sotto le 40 righe» **non è raggiunto**.
 | Id | Stato | Note |
 |---|---|---|
 | A1 | **risolto** | `bcfc3f2`: l'esito delle intenzioni passa da `filtro.testoEsito`; test aggiunto |
-| A2 | rimandato | tiri del master e `rivela.immagine` fuori dal filtro: da decidere (vedi 20.4) |
-| A3 | rimandato | bug: copia dei dati danneggiati con errore ignorato (20.4) |
-| A4 | rimandato | bug: ripiego silenzioso da IndexedDB a localStorage (20.4) |
-| A5 | rimandato | «Cancella tutti i dati»: decisione aperta (domanda 1) |
+| A2 | **risolto** | `e97b99c`: i dadi delle intenzioni passano da `filtro.tiroPerGiocatore`; `master.dado` non è usato dall'interfaccia e `rivela` manda solo ciò che il master sceglie (voluto) |
+| A3 | **risolto** | `c63462c`: se la copia dei danneggiati o la lettura falliscono l'archivio resta in sola lettura (`bloccato`); test |
+| A4 | **risolto** | `c63462c`: il ripiego resta ma avvisa all'avvio (`loadError`) e scrive in console; test con `openIdb` finto |
+| A5 | **risolto** | `e5aedc7`: decisione «anche i dati online»: cancella profilo, gettoni, note e STUN; le preferenze restano |
 | A6 | **risolto** | nessun ciclo; regole senza letture di `DnD.store` (passano da `modello.statoCorrente`) |
 | A7 | rimandato | `rete/sessione` esegue ancora tramite `DnD.uiCombattimento.online`: serve prima A8 |
 | A8 | rimandato | le regole di combattimento sono ora in file separati (`ui-combattimento-*.js`) ma restano nell'interfaccia |
@@ -736,7 +736,7 @@ sotto le 40 righe» **non è raggiunto**.
 | A19 | rimandato | nessun export cancellato: serve una verifica uno per uno (domanda 6) |
 | A20 | **risolto** | export doppio tolto |
 | A21 | rimandato | classi CSS probabilmente inutilizzate non cancellate |
-| A22 | rimandato | `catch` silenziosi non rivisti |
+| A22 | **risolto in parte** | `ea48b2b`: file audio mancanti segnalati all'esportazione; `catch` di filtro, immagini e sessione con messaggio in console; i restanti sono preferenze non essenziali, commentati |
 | A23 | rimandato | listener e timer non rivisti |
 | A24 | rimandato | ricalcolo della vista filtrata a ogni salvataggio |
 | A25 | rimandato | colori letterali nei canvas |
@@ -769,6 +769,12 @@ sotto le 40 righe» **non è raggiunto**.
 5. **Gittata e regola 5-10-5 (media, da verificare)**: la distanza per gittata e portata non applica la regola delle
    diagonali alternate, il movimento sì.
 6. **A22 (media)**: `audio.js` non esporta un file audio mancante senza avvisare; altri `catch` silenziosi.
+
+### 20.4.1 Esito della fase di correzione (novembre 2026)
+
+Corretti in commit separati, ognuno con test: A3 e A4 (`c63462c`), A22 in parte (`ea48b2b`), A2 (`e97b99c`), A5
+(`e5aedc7`). **Gittata e regola 5-10-5**: decisione «lascia com'è» (nel 5e base le diagonali valgono una casella; la
+5-10-5 è una regola opzionale applicata al solo movimento): non è un bug.
 
 ### 20.5 Limiti residui
 
