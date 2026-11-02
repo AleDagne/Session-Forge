@@ -42,66 +42,10 @@
     };
   }
 
-  // opts: {
-  //   mode: 'editor' | 'sblocca', getPath(), setPath(path, label) (salva), getUnlocked(), ctx() -> { rank, bonus },
-  //   onUnlock(nodeId) -> bool, getTransformations() -> [{ id, name }] (per l'effetto «Sblocca trasformazione»)
-  // }
-  function create(opts) {
-    const stato = {
-      view: { zoom: 1, panX: 0, panY: 0 },
-      tool: 'sposta',
-      selected: [],
-      drag: null,
-      snap: false,
-      query: '',
-      anim: null, // { from, to, t0 } luce che corre lungo la linea allo sblocco
-      raf: 0,
-      starField: null,
-      preview: null, // posizioni provvisorie durante lo spostamento
-    };
-    const mode = opts.mode || 'editor';
-    const hist = P.history(50);
-    const canvas = el('canvas', { class: 'path-canvas', tabindex: 0, 'aria-label': mode === 'editor' ? 'Mappa del percorso: modifica dei nodi' : 'Percorso leggendario: scegli un nodo da sbloccare' });
-    const wrap = el('div', { class: 'path-canvas-wrap' }, canvas);
-    const info = el('div', { class: 'path-info muted small', 'aria-live': 'polite' });
-    const side = el('aside', { class: 'path-side' });
-    const toolbar = el('div', { class: 'path-toolbar' });
-    const node = el('div', { class: 'path-editor path-' + mode }, toolbar, el('div', { class: 'path-body' }, wrap, side), info);
-
-    const path = () => opts.getPath();
-    const unlocked = () => new Set(P.withCore(opts.getUnlocked ? opts.getUnlocked() : []));
-    function commit(p, label) {
-      hist.push(path());
-      opts.setPath(P.normalizePath(p), label);
-      refresh();
-    }
-
-    // ---------- Coordinate ----------
-    const size = () => ({ W: wrap.clientWidth || 600, H: wrap.clientHeight || 420 });
-    const toScreen = (x, y) => { const s = size(); return { x: s.W / 2 + stato.view.panX + x * stato.view.zoom, y: s.H / 2 + stato.view.panY + y * stato.view.zoom }; };
-    const toWorld = (sx, sy) => { const s = size(); return { x: (sx - s.W / 2 - stato.view.panX) / stato.view.zoom, y: (sy - s.H / 2 - stato.view.panY) / stato.view.zoom }; };
-    const radius = (n) => (n.core ? R_CORE : R_NODE);
-    function hitNode(sx, sy) {
-      const w = toWorld(sx, sy);
-      const list = path().nodes.slice().reverse();
-      return list.find((n) => (n.x - w.x) ** 2 + (n.y - w.y) ** 2 <= (radius(n) + 4) ** 2) || null;
-    }
-    function hitLink(sx, sy) {
-      const p = path();
-      for (const l of p.links) {
-        const a = P.nodeById(p, l[0]);
-        const b = P.nodeById(p, l[1]);
-        const A = toScreen(a.x, a.y);
-        const B = toScreen(b.x, b.y);
-        const dx = B.x - A.x;
-        const dy = B.y - A.y;
-        const t = Math.max(0, Math.min(1, ((sx - A.x) * dx + (sy - A.y) * dy) / (dx * dx + dy * dy || 1)));
-        if (Math.hypot(A.x + t * dx - sx, A.y + t * dy - sy) < 7) return l;
-      }
-      return null;
-    }
-
-    // ---------- Disegno ----------
+  // Disegno del Percorso sul canvas: sfondo cosmico del tema, collegamenti, luce dello sblocco, nodi, anteprime
+  // dell'editor. Ridisegna con requestAnimationFrame solo se serve (animazioni attive).
+  function disegno(stato, api) {
+    const { canvas, wrap, size, toScreen, path, unlocked, mode, opts } = api;
     function requestDraw() { if (!stato.raf) stato.raf = requestAnimationFrame(() => { stato.raf = 0; draw(); }); }
     function draw() {
       if (!canvas.isConnected) return;
@@ -303,6 +247,71 @@
       if (moving && (mode === 'sblocca' || stato.anim || p.links.some((l) => have.has(l[0]) && have.has(l[1])))) requestDraw();
     }
     new ResizeObserver(() => requestDraw()).observe(wrap);
+
+    return { requestDraw, draw };
+  }
+
+  // opts: {
+  //   mode: 'editor' | 'sblocca', getPath(), setPath(path, label) (salva), getUnlocked(), ctx() -> { rank, bonus },
+  //   onUnlock(nodeId) -> bool, getTransformations() -> [{ id, name }] (per l'effetto «Sblocca trasformazione»)
+  // }
+  function create(opts) {
+    const stato = {
+      view: { zoom: 1, panX: 0, panY: 0 },
+      tool: 'sposta',
+      selected: [],
+      drag: null,
+      snap: false,
+      query: '',
+      anim: null, // { from, to, t0 } luce che corre lungo la linea allo sblocco
+      raf: 0,
+      starField: null,
+      preview: null, // posizioni provvisorie durante lo spostamento
+    };
+    const mode = opts.mode || 'editor';
+    const hist = P.history(50);
+    const canvas = el('canvas', { class: 'path-canvas', tabindex: 0, 'aria-label': mode === 'editor' ? 'Mappa del percorso: modifica dei nodi' : 'Percorso leggendario: scegli un nodo da sbloccare' });
+    const wrap = el('div', { class: 'path-canvas-wrap' }, canvas);
+    const info = el('div', { class: 'path-info muted small', 'aria-live': 'polite' });
+    const side = el('aside', { class: 'path-side' });
+    const toolbar = el('div', { class: 'path-toolbar' });
+    const node = el('div', { class: 'path-editor path-' + mode }, toolbar, el('div', { class: 'path-body' }, wrap, side), info);
+
+    const path = () => opts.getPath();
+    const unlocked = () => new Set(P.withCore(opts.getUnlocked ? opts.getUnlocked() : []));
+    function commit(p, label) {
+      hist.push(path());
+      opts.setPath(P.normalizePath(p), label);
+      refresh();
+    }
+
+    // ---------- Coordinate ----------
+    const size = () => ({ W: wrap.clientWidth || 600, H: wrap.clientHeight || 420 });
+    const toScreen = (x, y) => { const s = size(); return { x: s.W / 2 + stato.view.panX + x * stato.view.zoom, y: s.H / 2 + stato.view.panY + y * stato.view.zoom }; };
+    const toWorld = (sx, sy) => { const s = size(); return { x: (sx - s.W / 2 - stato.view.panX) / stato.view.zoom, y: (sy - s.H / 2 - stato.view.panY) / stato.view.zoom }; };
+    const radius = (n) => (n.core ? R_CORE : R_NODE);
+    function hitNode(sx, sy) {
+      const w = toWorld(sx, sy);
+      const list = path().nodes.slice().reverse();
+      return list.find((n) => (n.x - w.x) ** 2 + (n.y - w.y) ** 2 <= (radius(n) + 4) ** 2) || null;
+    }
+    function hitLink(sx, sy) {
+      const p = path();
+      for (const l of p.links) {
+        const a = P.nodeById(p, l[0]);
+        const b = P.nodeById(p, l[1]);
+        const A = toScreen(a.x, a.y);
+        const B = toScreen(b.x, b.y);
+        const dx = B.x - A.x;
+        const dy = B.y - A.y;
+        const t = Math.max(0, Math.min(1, ((sx - A.x) * dx + (sy - A.y) * dy) / (dx * dx + dy * dy || 1)));
+        if (Math.hypot(A.x + t * dx - sx, A.y + t * dy - sy) < 7) return l;
+      }
+      return null;
+    }
+
+    // ---------- Disegno (fuori da create: disegno(stato, api)) ----------
+    const { requestDraw } = disegno(stato, { canvas, wrap, size, toScreen, path, unlocked, mode, opts });
 
     // ---------- Puntatore ----------
     const local = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
