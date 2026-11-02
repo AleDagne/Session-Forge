@@ -1939,6 +1939,7 @@ js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cac
 js/ui-combattimento-preparazione.js Combattimento: preparazione (giocatori, nemici, griglia, difficoltà, simulato) e iniziativa
 js/ui-combattimento-incantesimi.js Combattimento: lancio degli incantesimi, tiri salvezza, cure, modifica e rimozione di un combattente
 js/ui-combattimento-ia.js Combattimento simulato: piano del turno dell'IA, esecuzione animata, annulla del turno, modalità automatica, pannello
+js/ui-combattimento-mondo.js Combattimento e Mondo: fazioni, NPC che entrano nello scontro, provocazioni, cambio di fazione, effetti dopo le azioni
 js/ui-combattimento-creature.js Combattimento: azioni di mostri e boss, schede dei combattenti con risorse, schermata del combattimento in corso
 js/ui-colonne.js      disposizione a tre colonne delle schermate di gioco (Combattimento, Esplorazione, Online)
 js/ui-griglia-disegno.js colori del canvas dal tema e primitive di disegno della griglia (pedine, strutture, zone, TileMap, percorsi)
