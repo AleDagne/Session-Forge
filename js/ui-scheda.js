@@ -385,7 +385,7 @@
         const ta = el('textarea', { rows: 2, maxlength: 2000, value: p.sheet.personality[k], 'aria-label': K.PERSONALITY_NAMES[k], oninput: (e) => { p.sheet.personality[k] = e.target.value; } });
         const sugg = bg ? bg.suggestions[k] : [];
         return el('div', { class: 'char-textbox' }, ta, el('div', { class: 'char-box-label' }, K.PERSONALITY_NAMES[k],
-          sugg.length ? el('button', { type: 'button', class: 'link-btn small', text: ' (suggerimento)', title: sugg.join('\n'), onclick: () => { const s = sugg[Math.floor(Math.random() * sugg.length)]; ta.value = (ta.value ? ta.value + '\n' : '') + s; p.sheet.personality[k] = ta.value; } }) : null));
+          sugg.length ? el('button', { type: 'button', class: 'link-btn small', text: ' (suggerimento)', title: sugg.join('\n'), onclick: () => { const s = sugg[DnD.dadi.randomInt(sugg.length) - 1]; ta.value = (ta.value ? ta.value + '\n' : '') + s; p.sheet.personality[k] = ta.value; } }) : null));
       }));
     }
     function featuresBlock() {

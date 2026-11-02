@@ -277,7 +277,7 @@
       const g = grid();
       const biomes = DnD.store.state.biomes;
       const checks = biomes.map((b) => el('label', { class: 'check small' }, el('input', { type: 'checkbox', value: b.id, checked: ['bioma-foresta', 'bioma-pianura', 'bioma-palude'].includes(b.id) }), ' ' + b.name));
-      const seed = numberInput(Math.floor(Math.random() * 99999) + 1, { min: 1, max: 2147483646 });
+      const seed = numberInput(DnD.dadi.randomInt(99999), { min: 1, max: 2147483646 });
       const blob = numberInput(60, { min: 4, max: 1000 });
       const onlyEmpty = el('input', { type: 'checkbox', checked: true });
       openDialog('Genera da bioma', el('div', { class: 'form' },
