@@ -128,7 +128,7 @@
       const st = o.stato();
       const c = combat();
       const turno = c && c.phase === 'attivo' ? c.combatants.find((y) => y.id === c.currentId) : null;
-      const lista = [{ id: 'master', nome: o.nome, colore: '#c9a24f', stato: 'master', personaggio: '', spettatore: false, turno: false }].concat([...giocatori.values()].filter((g) => g.stato !== 'attesa')
+      const lista = [{ id: 'master', nome: o.nome, colore: P().COLORE_MASTER, stato: 'master', personaggio: '', spettatore: false, turno: false }].concat([...giocatori.values()].filter((g) => g.stato !== 'attesa')
         .map((g) => {
           const p = personaggio(g, st);
           return { id: g.id, nome: g.nome, colore: g.colore, stato: g.stato, personaggio: p && !g.spettatore ? p.name : '', spettatore: Boolean(g.spettatore),
@@ -648,7 +648,7 @@
       collega(trasporto) {
         if (finita) { trasporto.chiudi(); return null; }
         const g = {
-          id: DnD.dadi.uid(), nome: '', colore: '#4f8cc9', stato: 'attesa', personaggioId: null, permessi: null, gettone: '', trasporto, invia: null, coda: null,
+          id: DnD.dadi.uid(), nome: '', colore: P().COLORE_NUOVO, stato: 'attesa', personaggioId: null, permessi: null, gettone: '', trasporto, invia: null, coda: null,
           spettatore: false, come: null, sporco: false, presenza: '', latenze: [],
           vista: null, n: 0, ultimoMsg: o.ora(), latenza: null, eco: null, avvisato: -1e9, richiesta: null,
           limite: P().limitatore(40, 20), limiteChat: P().limitatore(5, 1), limiteIntenzioni: P().limitatore(12, 6), limitePing: P().limitatore(2, 1), limiteScrive: P().limitatore(2, 0.5),
@@ -672,12 +672,12 @@
       chat(testo, aId) {
         const t = P().pulisciTesto(testo, P().LIMITI.testo);
         if (!t) return null;
-        const m = { da: o.nome, colore: '#c9a24f', testo: t, privato: Boolean(aId) };
+        const m = { da: o.nome, colore: P().COLORE_MASTER, testo: t, privato: Boolean(aId) };
         annota('💬 ' + o.nome + (aId ? ' (privato)' : '') + ': ' + t);
         for (const g of attivi()) if (!aId || g.id === aId) g.invia('chat', Object.assign({}, m));
         return m;
       },
-      dado(tiro) { annota('🎲 ' + o.nome + ': ' + tiroTesto(tiro)); for (const g of attivi()) g.invia('dado', { da: o.nome, colore: '#c9a24f', tiro, verificato: true }); },
+      dado(tiro) { annota('🎲 ' + o.nome + ': ' + tiroTesto(tiro)); for (const g of attivi()) g.invia('dado', { da: o.nome, colore: P().COLORE_MASTER, tiro, verificato: true }); },
       eco(id) { const g = giocatori.get(id); if (g && g.stato === 'attivo') g.invia('eco', { t: o.ora() }); },
       espelli(id, motivo) {
         const g = giocatori.get(id);
@@ -836,7 +836,7 @@
         return rid;
       },
       ping(x, y, nome, colore) {
-        const p = { x, y, nome: nome || o.nome, colore: colore || '#c9a24f' };
+        const p = { x, y, nome: nome || o.nome, colore: colore || P().COLORE_MASTER };
         o.suPing(p);
         for (const g of attivi()) g.invia('ping', p);
       },

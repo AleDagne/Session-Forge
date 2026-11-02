@@ -35,7 +35,11 @@
   function palette(node) {
     const cs = getComputedStyle(node);
     const v = (k, def) => { const x = cs.getPropertyValue(k).trim(); return /^#[0-9a-f]{6}$/i.test(x) ? x : def; };
-    return { gold: v('--lg-gold', '#f2c94c'), light: v('--lg-light', '#fff8e1'), accent: v('--lg-accent', '#e8b84a'), bg: v('--lg-bg', '#0c0a06') };
+    return {
+      gold: v('--lg-gold', '#f2c94c'), light: v('--lg-light', '#fff8e1'), accent: v('--lg-accent', '#e8b84a'), bg: v('--lg-bg', '#0c0a06'),
+      // Bagliori bianchi, evidenziazione della ricerca, ombra del testo (uguali in tutti i temi, sovrascrivibili).
+      bianco: v('--lg-bianco', '#ffffff'), ricerca: v('--lg-ricerca', '#5cc8f0'), ombra: v('--lg-ombra', '#000000'),
+    };
   }
 
   // opts: {
@@ -125,7 +129,7 @@
         ctx.fill();
       }
       if (snap && mode === 'editor') {
-        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.strokeStyle = rgba(C.bianco, 0.05);
         const step = SNAP * view.zoom;
         const o = toScreen(0, 0);
         for (let x = o.x % step; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
@@ -157,7 +161,7 @@
           if (moving) {
             ctx.setLineDash([6, 18]);
             ctx.lineDashOffset = -now / 40;
-            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.strokeStyle = rgba(C.bianco, 0.9);
             ctx.lineWidth = 2;
             ctx.stroke();
           }
@@ -179,7 +183,7 @@
           const x = A.x + (B.x - A.x) * k;
           const y = A.y + (B.y - A.y) * k;
           const gl = ctx.createRadialGradient(x, y, 0, x, y, 22);
-          gl.addColorStop(0, 'rgba(255,255,255,1)');
+          gl.addColorStop(0, rgba(C.bianco, 1));
           gl.addColorStop(1, rgba(C.gold, 0));
           ctx.fillStyle = gl;
           ctx.beginPath();
@@ -225,7 +229,7 @@
         if (anim && anim.to === n.id) {
           const k = Math.min(1, (now - anim.t0 - 700) / 600);
           if (k > 0) {
-            ctx.strokeStyle = 'rgba(255,255,255,' + (1 - k) + ')';
+            ctx.strokeStyle = rgba(C.bianco, 1 - k);
             ctx.lineWidth = 4;
             ctx.beginPath();
             ctx.arc(S.x, S.y, r * (1.2 + k * 1.6), 0, Math.PI * 2);
@@ -234,7 +238,7 @@
         }
         // Gemma: sfaccettatura con gradiente del colore della categoria.
         const gem = ctx.createRadialGradient(S.x - r * 0.35, S.y - r * 0.4, r * 0.1, S.x, S.y, r);
-        gem.addColorStop(0, on || n.core ? '#ffffff' : rgba(n.color, 0.9));
+        gem.addColorStop(0, on || n.core ? C.bianco : rgba(n.color, 0.9));
         gem.addColorStop(0.35, on || n.core ? n.color : rgba(n.color, 0.55));
         gem.addColorStop(1, C.bg);
         if (on) { ctx.shadowColor = n.color; ctx.shadowBlur = 22; }
@@ -250,9 +254,9 @@
         ctx.shadowBlur = 0;
         ctx.strokeStyle = on ? rgba(C.light, 0.95) : rgba(C.light, 0.45);
         ctx.lineWidth = selected.includes(n.id) ? 3 : 1.5;
-        if (selected.includes(n.id)) ctx.strokeStyle = '#ffffff';
+        if (selected.includes(n.id)) ctx.strokeStyle = C.bianco;
         ctx.stroke();
-        if (found.has(n.id)) { ctx.strokeStyle = '#5cc8f0'; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(S.x, S.y, r * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+        if (found.has(n.id)) { ctx.strokeStyle = C.ricerca; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(S.x, S.y, r * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
         if (r > 12) DnD.icone.drawIcon(ctx, n.icon, S.x, S.y, r * 0.55, requestDraw);
         ctx.restore();
         // Etichetta: nome e costo.
@@ -261,7 +265,7 @@
           ctx.font = (n.core ? '700 ' : '600 ') + Math.max(10, 12 * Math.min(1.3, view.zoom)) + 'px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = dim ? rgba(C.light, 0.55) : C.light;
-          ctx.shadowColor = '#000';
+          ctx.shadowColor = C.ombra;
           ctx.shadowBlur = 4;
           ctx.fillText(n.name, S.x, S.y + r + 15);
           if (!n.core) {
@@ -276,7 +280,7 @@
       if (drag && drag.type === 'link' && drag.at) {
         const a = P.nodeById(p, drag.from);
         const A = toScreen(a.x, a.y);
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.strokeStyle = rgba(C.bianco, 0.8);
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
@@ -285,8 +289,8 @@
         ctx.setLineDash([]);
       }
       if (drag && drag.type === 'rect' && drag.b) {
-        ctx.strokeStyle = 'rgba(92,200,240,0.9)';
-        ctx.fillStyle = 'rgba(92,200,240,0.1)';
+        ctx.strokeStyle = rgba(C.ricerca, 0.9);
+        ctx.fillStyle = rgba(C.ricerca, 0.1);
         const x = Math.min(drag.a.x, drag.b.x);
         const y = Math.min(drag.a.y, drag.b.y);
         ctx.fillRect(x, y, Math.abs(drag.b.x - drag.a.x), Math.abs(drag.b.y - drag.a.y));

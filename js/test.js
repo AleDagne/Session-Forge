@@ -1529,6 +1529,30 @@
     }
   });
 
+  test('Tema: i colori dei canvas spostati nelle variabili CSS hanno gli stessi valori di prima (audit A25)', () => {
+    const attesi = {
+      '--grid-ok': 'rgba(63,174,99,0.45)', '--grid-bad': 'rgba(212,69,58,0.5)', '--grid-reach': 'rgba(63,174,99,0.18)', '--grid-reach-dash': 'rgba(232,131,42,0.16)',
+      '--grid-shape-stroke': 'rgba(0,0,0,0.4)', '--grid-hostile': '#d4453a', '--grid-badge-bg': '#111', '--grid-badge-fg': '#fff', '--grid-hidden-bg': 'rgba(0,0,0,0.6)',
+      '--grid-hidden-slash': '#ff6b5e', '--vision-source-dark': '#1b1d27', '--vision-source-dark-stroke': '#c9c2ff', '--vision-sight-blocca': 'rgba(212,69,58,0.45)',
+      '--vision-sight-libera': 'rgba(63,174,99,0.4)', '--vision-sight-altro': 'rgba(150,150,170,0.45)', '--vision-sight-bloccata': 'rgba(212,69,58,0.55)',
+      '--mappa-fatto': 'rgba(0,0,0,0.7)', '--mappa-nascosto-bg': 'rgba(20,22,28,0.85)', '--mappa-tratto': '#ffffff', '--mappa-cursore': 'rgba(255,255,255,0.8)',
+      '--boss-corona': '#f2c94c', '--boss-corona-bordo': '#3a2408', '--boss-anteprima-linea': 'rgba(255,255,255,0.08)', '--lg-bianco': '#ffffff', '--lg-ricerca': '#5cc8f0', '--lg-ombra': '#000000',
+    };
+    const temi = ['', 'dark'];
+    const prima = document.documentElement.dataset.theme;
+    try {
+      for (const t of temi) {
+        if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+        const cs = getComputedStyle(document.documentElement);
+        const diversi = Object.entries(attesi).filter(([k, v]) => cs.getPropertyValue(k).trim() !== v).map(([k]) => k);
+        eq(diversi, [], 'tema ' + (t || 'chiaro'));
+      }
+    } finally {
+      if (prima === undefined) delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = prima;
+    }
+    eq([NET().protocollo.COLORE_MASTER, NET().protocollo.COLORE_NUOVO], ['#c9a24f', '#4f8cc9']);
+  });
+
   test('Icone di libreria: almeno 40, categorie, palette, oggetti con colore libero', () => {
     const L = DnD.libreriaIcone;
     ok(L.LIBRARY.length >= 40, 'icone delle pedine: ' + L.LIBRARY.length);

@@ -63,12 +63,41 @@
   --grid-label-bg: rgba(255, 255, 255, 0.92);
   --grid-missing: #9aa0a8;
   --grid-missing-text: #1b1e25;
+  /* Canvas della griglia: stessi valori in ogni tema (letti da ui-griglia-disegno.js). */
+  --grid-ok: rgba(63,174,99,0.45);
+  --grid-bad: rgba(212,69,58,0.5);
+  --grid-reach: rgba(63,174,99,0.18);
+  --grid-reach-dash: rgba(232,131,42,0.16);
+  --grid-shape-stroke: rgba(0,0,0,0.4);
+  --grid-hostile: #d4453a;
+  --grid-badge-bg: #111;
+  --grid-badge-fg: #fff;
+  --grid-hidden-bg: rgba(0,0,0,0.6);
+  --grid-hidden-slash: #ff6b5e;
+  /* Altri canvas (DnD.ui.coloreTema), stessi valori in ogni tema. */
+  --mappa-fatto: rgba(0,0,0,0.7);
+  --mappa-nascosto-bg: rgba(20,22,28,0.85);
+  --mappa-tratto: #ffffff;
+  --mappa-cursore: rgba(255,255,255,0.8);
+  --boss-corona: #f2c94c;
+  --boss-corona-bordo: #3a2408;
+  --boss-anteprima-linea: rgba(255,255,255,0.08);
+  --lg-bianco: #ffffff;
+  --lg-ricerca: #5cc8f0;
+  --lg-ombra: #000000;
   /* Luce, visione e nebbia di guerra (r, g, b): buio, velo del master, nebbia dei giocatori, stanze, segni. */
   --vision-dark: 12, 16, 34;
   --vision-fog: 74, 82, 99;
   --vision-fog-player: 46, 50, 60;
   --vision-room: 70, 120, 230;
   --vision-mark: #c98a00;
+  /* Canvas della visione: stessi valori in ogni tema (letti da ui-visione.js). */
+  --vision-source-dark: #1b1d27;
+  --vision-source-dark-stroke: #c9c2ff;
+  --vision-sight-blocca: rgba(212,69,58,0.45);
+  --vision-sight-libera: rgba(63,174,99,0.4);
+  --vision-sight-altro: rgba(150,150,170,0.45);
+  --vision-sight-bloccata: rgba(212,69,58,0.55);
   --zone-players: 47, 111, 184;
   --zone-enemies: 176, 40, 28;
   /* Sovrapposizioni dei TileSet e delle TileMap (taglio, selezione, esclusi, bloccanti, collisioni). */

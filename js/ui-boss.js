@@ -186,10 +186,10 @@
     ctx.lineTo(x + w, y + h * 0.3);
     ctx.lineTo(x + w, y + h);
     ctx.closePath();
-    ctx.fillStyle = '#f2c94c';
+    ctx.fillStyle = DnD.ui.coloreTema('--boss-corona', '#f2c94c');
     ctx.fill();
     ctx.lineWidth = Math.max(1.2, w * 0.07);
-    ctx.strokeStyle = '#3a2408';
+    ctx.strokeStyle = DnD.ui.coloreTema('--boss-corona-bordo', '#3a2408');
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(cx, y + h * 0.72, w * 0.08, 0, Math.PI * 2);
@@ -213,7 +213,7 @@
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cols * cell, rows * cell);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.strokeStyle = DnD.ui.coloreTema('--boss-anteprima-linea', 'rgba(255,255,255,0.08)');
     for (let i = 0; i <= cols; i++) { ctx.beginPath(); ctx.moveTo(i * cell + 0.5, 0); ctx.lineTo(i * cell + 0.5, rows * cell); ctx.stroke(); }
     for (let j = 0; j <= rows; j++) { ctx.beginPath(); ctx.moveTo(0, j * cell + 0.5); ctx.lineTo(cols * cell, j * cell + 0.5); ctx.stroke(); }
     const px = (aura + 0.5) * cell;

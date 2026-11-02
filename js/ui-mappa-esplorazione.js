@@ -74,7 +74,7 @@
       ctx.globalAlpha = 1;
       if (!visible && opts.master) eyeSlash(ctx, view.panX + (c0.x + 1) * s - s * 0.2, view.panY + c0.y * s + s * 0.2, Math.max(5, s * 0.17));
       if (spent && opts.master) {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillStyle = DnD.ui.coloreTema('--mappa-fatto', 'rgba(0,0,0,0.7)');
         ctx.font = Math.max(9, s * 0.3) + 'px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('✓', view.panX + c0.x * s + s * 0.8, view.panY + (c0.y + 1) * s - s * 0.12);
@@ -84,11 +84,11 @@
   }
   function eyeSlash(ctx, cx, cy, r) {
     ctx.save();
-    ctx.fillStyle = 'rgba(20,22,28,0.85)';
+    ctx.fillStyle = DnD.ui.coloreTema('--mappa-nascosto-bg', 'rgba(20,22,28,0.85)');
     ctx.beginPath();
     ctx.arc(cx, cy, r * 1.25, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = DnD.ui.coloreTema('--mappa-tratto', '#ffffff');
     ctx.lineWidth = Math.max(1.2, r * 0.22);
     ctx.beginPath();
     ctx.ellipse(cx, cy, r, r * 0.55, 0, 0, Math.PI * 2);
@@ -236,13 +236,13 @@
         if (drag && tool === 'b-rettangolo') {
           const r = G.rectBetween(drag.a, drag.b, g);
           ctx.save();
-          ctx.strokeStyle = '#ffffff';
+          ctx.strokeStyle = DnD.ui.coloreTema('--mappa-tratto', '#ffffff');
           ctx.setLineDash([5, 4]);
           ctx.strokeRect(view.panX + r.x * s, view.panY + r.y * s, r.w * s, r.h * s);
           ctx.restore();
         } else if (tool && hover) {
           ctx.save();
-          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.strokeStyle = DnD.ui.coloreTema('--mappa-cursore', 'rgba(255,255,255,0.8)');
           ctx.strokeRect(view.panX + hover.x * s + 0.5, view.panY + hover.y * s + 0.5, s - 1, s - 1);
           ctx.restore();
         }

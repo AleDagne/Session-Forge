@@ -8,6 +8,9 @@
   'use strict';
 
   const VERSIONE = 3;
+  // Colori dei nomi nella chat e nei dadi (dati del protocollo, uguali su tutti i client).
+  const COLORE_MASTER = '#c9a24f';
+  const COLORE_NUOVO = '#4f8cc9'; // giocatore appena collegato, prima che scelga il suo
   const LIMITI = {
     daGiocatore: 16 * 1024,        // un messaggio di un giocatore (chat, dado, battito…)
     daMaster: 4 * 1024 * 1024,     // istantanea compresa
@@ -194,5 +197,5 @@
   }
 
   DnD.rete = DnD.rete || {};
-  DnD.rete.protocollo = { VERSIONE, LIMITI, TIPI, pulisciTesto, crea, codifica, decodifica, limitatore, statoLinea };
+  DnD.rete.protocollo = { VERSIONE, COLORE_MASTER, COLORE_NUOVO, LIMITI, TIPI, pulisciTesto, crea, codifica, decodifica, limitatore, statoLinea };
 })(globalThis.DnD = globalThis.DnD || {});

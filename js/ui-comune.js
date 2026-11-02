@@ -223,7 +223,20 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  DnD.ui = { slug, today, download, shortcutsBlocked, el, clear, fill, field, numberInput, textInput, readNumber, showErrors, toast, openDialog, promptText, openMenu, closeMenu, persistentToggle, scrollBehavior, svgIcon, emptyState, raceName };
+  // Colori dei canvas dalle variabili CSS del tema (un canvas non legge var()): cache svuotata al cambio di tema.
+  const coloriTema = new Map();
+  /**
+   * Valore di una variabile CSS di colore, per disegnare su un canvas.
+   * @param {string} nome variabile (es. '--mappa-tratto')  @param {string} predefinito se la variabile manca
+   * @returns {string} colore
+   */
+  function coloreTema(nome, predefinito) {
+    if (!coloriTema.has(nome)) coloriTema.set(nome, getComputedStyle(document.documentElement).getPropertyValue(nome).trim() || predefinito);
+    return coloriTema.get(nome);
+  }
+  if (typeof window !== 'undefined') window.addEventListener('themechange', () => coloriTema.clear());
+
+  DnD.ui = { coloreTema, slug, today, download, shortcutsBlocked, el, clear, fill, field, numberInput, textInput, readNumber, showErrors, toast, openDialog, promptText, openMenu, closeMenu, persistentToggle, scrollBehavior, svgIcon, emptyState, raceName };
 
   // Interfaccia dell'app per le sezioni (navigazione, aggiornamento, sessioni, barra, note): dichiarata qui, alla base
   // dell'interfaccia, e riempita da app.js all'avvio. Prima dell'avvio ogni funzione segnala l'errore.

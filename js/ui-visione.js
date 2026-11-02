@@ -25,6 +25,9 @@
       pal = {
         dark: rgb('--vision-dark', [8, 10, 20]), fog: rgb('--vision-fog', [30, 34, 44]), fogPlayer: rgb('--vision-fog-player', [14, 16, 22]),
         room: rgb('--vision-room', [110, 160, 255]), mark: v('--vision-mark') || '#f2b632', theme: document.documentElement.dataset.theme || '',
+        sourceDark: v('--vision-source-dark') || '#1b1d27', sourceDarkStroke: v('--vision-source-dark-stroke') || '#c9c2ff',
+        sight: { 1: v('--vision-sight-blocca') || 'rgba(212,69,58,0.45)', 2: v('--vision-sight-libera') || 'rgba(63,174,99,0.4)', 3: v('--vision-sight-altro') || 'rgba(150,150,170,0.45)' },
+        sightBlocked: v('--vision-sight-bloccata') || 'rgba(212,69,58,0.55)',
       };
     }
     return pal;
@@ -223,8 +226,8 @@
         const cy = view.panY + (l.y + 0.5) * s;
         ctx.save();
         ctx.globalAlpha = l.on ? 0.95 : 0.4;
-        ctx.fillStyle = l.dark ? '#1b1d27' : l.color;
-        ctx.strokeStyle = l.dark ? '#c9c2ff' : '#1b1d27';
+        ctx.fillStyle = l.dark ? palette().sourceDark : l.color;
+        ctx.strokeStyle = l.dark ? palette().sourceDarkStroke : palette().sourceDark;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(4, s * 0.16), 0, Math.PI * 2);
@@ -250,13 +253,13 @@
       }
       if (tool === 'v-blocco') {
         ctx.save();
-        const cols = { 1: 'rgba(212,69,58,0.45)', 2: 'rgba(63,174,99,0.4)', 3: 'rgba(150,150,170,0.45)' };
+        const cols = palette().sight;
         for (let i = 0; i < g.vision.sight.length; i++) {
           const v = g.vision.sight[i];
           const x = i % g.w;
           const y = Math.floor(i / g.w);
           if (v !== '0') { ctx.fillStyle = cols[v]; ctx.fillRect(view.panX + x * s + 2, view.panY + y * s + 2, s - 4, s - 4); }
-          else if (c.ctx.sm.block[i]) { ctx.strokeStyle = 'rgba(212,69,58,0.55)'; ctx.strokeRect(view.panX + x * s + 3.5, view.panY + y * s + 3.5, s - 7, s - 7); }
+          else if (c.ctx.sm.block[i]) { ctx.strokeStyle = palette().sightBlocked; ctx.strokeRect(view.panX + x * s + 3.5, view.panY + y * s + 3.5, s - 7, s - 7); }
         }
         ctx.restore();
       }

@@ -24,9 +24,11 @@
         bg: v('--grid-bg'), board: v('--grid-board'), line: v('--grid-line'), line5: v('--grid-line-strong'),
         label: v('--grid-label'), labelBg: v('--grid-label-bg'), text: v('--text'), current: v('--accent'), selected: v('--selection'),
         missing: v('--grid-missing'), missingText: v('--grid-missing-text'), conc: v('--conc'), condBg: v('--cond-token-bg'),
-        ok: 'rgba(63,174,99,0.45)', bad: 'rgba(212,69,58,0.5)',
+        ok: v('--grid-ok'), bad: v('--grid-bad'),
         // Movimento: celle raggiungibili (1×) e con lo Scatto (2×), percorso.
-        reach: 'rgba(63,174,99,0.18)', reachDash: 'rgba(232,131,42,0.16)', path: v('--accent'),
+        reach: v('--grid-reach'), reachDash: v('--grid-reach-dash'), path: v('--accent'),
+        shapeStroke: v('--grid-shape-stroke'), hostile: v('--grid-hostile'), badgeBg: v('--grid-badge-bg'), badgeFg: v('--grid-badge-fg'),
+        hiddenBg: v('--grid-hidden-bg'), hiddenSlash: v('--grid-hidden-slash'),
         hp: { alto: v('--hp-high'), medio: v('--hp-mid'), basso: v('--hp-low') }, hpTrack: v('--hp-track'),
         zone: { giocatori: rgb('--zone-players'), nemici: rgb('--zone-enemies') },
       };
@@ -51,7 +53,7 @@
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.strokeStyle = colors().shapeStroke;
     for (let j = 0; j < shape.h; j++) {
       for (let i = 0; i < shape.w; i++) {
         if (!G.isFilled(shape, i, j)) continue;
@@ -190,7 +192,7 @@
       ctx.save();
       ctx.beginPath();
       ctx.ellipse(cx, cy, dw / 2 - pad * 0.45, dh / 2 - pad * 0.45, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = (t.hostileTo && t.hostileTo.length) ? '#d4453a' : fac.color;
+      ctx.strokeStyle = (t.hostileTo && t.hostileTo.length) ? colors().hostile : fac.color;
       ctx.lineWidth = Math.max(1.5, s * 0.05);
       if (t.joinRound) ctx.setLineDash([4, 3]);
       ctx.stroke();
@@ -247,12 +249,12 @@
       const byy = py + pad + br * 0.9;
       ctx.beginPath();
       ctx.arc(bxx, byy, br, 0, Math.PI * 2);
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = colors().badgeBg;
       ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = colors().badgeFg;
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = colors().badgeFg;
       ctx.font = 'bold ' + Math.round(br * 1.2) + 'px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -344,7 +346,7 @@
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(px + dw / 2, py + dh / 2, dw / 2 - pad * 0.45, dh / 2 - pad * 0.45, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = it.npcState && it.npcState.hostile ? '#d4453a' : info.faction ? info.faction.color : colors().missing;
+    ctx.strokeStyle = it.npcState && it.npcState.hostile ? colors().hostile : info.faction ? info.faction.color : colors().missing;
     ctx.lineWidth = Math.max(1.5, s * 0.05);
     ctx.setLineDash([Math.max(2, s * 0.12), Math.max(2, s * 0.08)]);
     ctx.stroke();
@@ -383,11 +385,11 @@
       const r = Math.max(4, s * 0.14);
       const cx = view.panX + it.x * s + r + 2;
       const cy = view.panY + (it.y + it.h) * s - r - 2;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillStyle = colors().hiddenBg;
       ctx.beginPath();
       ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = colors().badgeFg;
       ctx.lineWidth = Math.max(1, r * 0.22);
       ctx.beginPath();
       ctx.ellipse(cx, cy, r, r * 0.55, 0, 0, Math.PI * 2);
@@ -395,7 +397,7 @@
       ctx.beginPath();
       ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.strokeStyle = '#ff6b5e';
+      ctx.strokeStyle = colors().hiddenSlash;
       ctx.beginPath();
       ctx.moveTo(cx - r, cy + r * 0.8);
       ctx.lineTo(cx + r, cy - r * 0.8);
@@ -483,7 +485,7 @@
       // A sinistra del cursore se a destra non c'è spazio.
       const lx = dr.cursor.sx + 14 + tw > wrap.clientWidth ? dr.cursor.sx - 14 - tw : dr.cursor.sx + 14;
       ctx.fillRect(lx, dr.cursor.sy + 8, tw, 20);
-      ctx.fillStyle = r.stopped || !r.end ? '#d4453a' : colors().current;
+      ctx.fillStyle = r.stopped || !r.end ? colors().hostile : colors().current;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(r.label, lx + 6, dr.cursor.sy + 18);
