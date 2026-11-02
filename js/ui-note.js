@@ -224,7 +224,7 @@
       const h = editor.getHtml();
       const title = (currentPage() ? currentPage().name : N.DEFAULT_PAGE) + ' — ' + session().name;
       if (kind === 'txt') { DnD.ui.download(N.htmlToText(h), fileName('txt'), 'text/plain;charset=utf-8'); return; }
-      const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const esc = DnD.note.escapeHtml;
       const doc = '<!doctype html>\n<html lang="it"><head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
         '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem}table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 8px}</style>' +
         '</head><body><h1>' + esc(title) + '</h1>\n' + h + '\n</body></html>\n';

@@ -31,6 +31,8 @@
 
   // ---------- Sanificazione ----------
   const escapeText = (s) => s.replace(/&(?!(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});)/gi, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Testo semplice → HTML: ogni & diventa &amp; (a differenza di escapeText, che lascia le entità già scritte).
+  const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const escapeAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   // Solo le proprietà ammesse, con valori sicuri (niente url(), expression, javascript:...).
@@ -133,8 +135,7 @@
 
   // Testo semplice -> HTML (paragrafi), per "incolla come testo semplice".
   function textToHtml(text) {
-    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return String(text || '').replace(/\r\n?/g, '\n').split(/\n/).map((line) => '<p>' + (esc(line) || '<br>') + '</p>').join('');
+    return String(text || '').replace(/\r\n?/g, '\n').split(/\n/).map((line) => '<p>' + (escapeHtml(line) || '<br>') + '</p>').join('');
   }
 
   // Dimensione in byte (UTF-8) di un testo.
@@ -257,7 +258,7 @@
 
   DnD.note = {
     TAGS, STYLES, MAX_BYTES, MAX_PAGES, DEFAULT_PAGE, FONT_SIZES, COLORS, HIGHLIGHTS,
-    sanitizeHtml, sanitizeStyle, htmlToText, wordCount, textToHtml, byteSize, tooLarge, escapeText,
+    sanitizeHtml, sanitizeStyle, htmlToText, wordCount, textToHtml, byteSize, tooLarge, escapeText, escapeHtml,
     normalizePage, normalizePages, uniqueName, addPage, renamePage, duplicatePage, removePage, movePage, createAutosave,
   };
 })(globalThis.DnD = globalThis.DnD || {});

@@ -1956,6 +1956,7 @@
     eq(NT().wordCount('<p>Il drago &amp; la principessa</p><p>12 monete</p>'), 6, 'la «&» non è una parola');
     eq(NT().wordCount('<p><br></p>'), 0);
     eq(NT().textToHtml('a < b\n\n<i>x</i>'), '<p>a &lt; b</p><p><br></p><p>&lt;i&gt;x&lt;/i&gt;</p>', 'incolla come testo semplice');
+    eq([NT().textToHtml('&amp; x'), NT().escapeHtml('&amp; <b>'), NT().escapeText('&amp; <b>')], ['<p>&amp;amp; x</p>', '&amp;amp; &lt;b&gt;', '&amp; &lt;b&gt;'], 'escape completo e escape che conserva le entità');
     eq(NT().byteSize('è'), 2);
     ok(NT().tooLarge('x'.repeat(NT().MAX_BYTES + 1)) && !NT().tooLarge('x'.repeat(1000)), 'limite di 500 KB');
     eq([NT().FONT_SIZES, NT().COLORS.length], [[10, 12, 14, 16, 20, 24, 32, 48], 12]);
