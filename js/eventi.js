@@ -66,7 +66,7 @@
       case 'prova': Object.assign(out, {
         what: typeof a.what === 'string' && (AB().includes(a.what) || SKILLS()[a.what]) ? a.what : 'Atletica',
         save: Boolean(a.save), dc: int(a.dc, 12, 1, 40), who: pick(a.who, WHO, 'migliore'), memberId: str(a.memberId, 64),
-        mode: pick(a.mode, ['normale', 'vantaggio', 'svantaggio'], 'normale'), group: Boolean(a.group), success: sub(a.success), failure: sub(a.failure),
+        mode: pick(a.mode, DnD.regole.MODI_TIRO, 'normale'), group: Boolean(a.group), success: sub(a.success), failure: sub(a.failure),
       }); break;
       case 'combattimento': Object.assign(out, {
         foes: arr(a.foes).slice(0, 20).map((f) => ({ npcId: str(obj(f).npcId, 64), qty: dice(obj(f).qty, '1') })).filter((f) => f.npcId),

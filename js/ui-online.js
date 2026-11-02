@@ -341,7 +341,7 @@
   function tiroDialog(g) {
     const car = el('select', { 'aria-label': 'Caratteristica' }, DnD.regole.ABILITIES.map((a) => el('option', { value: a, text: DnD.regole.ABILITY_NAMES[a], selected: a === 'DES' })));
     const cd = DnD.ui.numberInput(14, { min: 1, max: 40, 'aria-label': 'Classe Difficoltà' });
-    const modo = el('select', { 'aria-label': 'Tiro' }, [['normale', 'Normale'], ['vantaggio', 'Vantaggio'], ['svantaggio', 'Svantaggio']].map(([v, t]) => el('option', { value: v, text: t })));
+    const modo = el('select', { 'aria-label': 'Tiro' }, DnD.regole.MODI_TIRO.map((v) => el('option', { value: v, text: v[0].toUpperCase() + v.slice(1) })));
     const testo = textInput('', { maxlength: 120, placeholder: 'es. trappola a dardi', 'aria-label': 'Motivo' });
     openDialog('Tiro salvezza per ' + g.nome, el('div', { class: 'form' }, field('Caratteristica', car), field('CD (vuota = senza CD)', cd), field('Tiro', modo), field('Motivo', testo),
       el('p', { class: 'muted small', text: 'Nel combattimento valgono anche le condizioni (svantaggio, fallimento automatico).' })), [
@@ -357,7 +357,7 @@
   function modificaDialog(q) {
     const c = DnD.sessioni.current(DnD.store.state).combat;
     const campi = [];
-    const modo = el('select', { 'aria-label': 'Tiro' }, ['normale', 'vantaggio', 'svantaggio'].map((v) => el('option', { value: v, text: v, selected: q.dati.modo === v })));
+    const modo = el('select', { 'aria-label': 'Tiro' }, DnD.regole.MODI_TIRO.map((v) => el('option', { value: v, text: v, selected: q.dati.modo === v })));
     if (q.dati.modo) campi.push(field('Tiro', modo));
     let bers = null;
     if (q.tipo === 'attacca' && c) { bers = el('select', { 'aria-label': 'Bersaglio' }, c.combatants.map((x) => el('option', { value: x.id, text: x.name, selected: x.id === q.dati.bersaglioId }))); campi.push(field('Bersaglio', bers)); }
@@ -1148,7 +1148,7 @@
   // Bersagli: le pedine che vedi (tranne te).
   const bersagli = () => { const m = mieAzioni(); return m ? m.c.pedine.filter((p) => p.id !== m.p.id && !p.morto) : []; };
   const modoRadio = (nome) => el('fieldset', { class: 'radio-row' }, el('legend', { text: 'Tiro' }),
-    ['normale', 'vantaggio', 'svantaggio'].map((v, i) => el('label', { class: 'check' }, el('input', { type: 'radio', name: nome, value: v, checked: !i }), ' ' + v)));
+    DnD.regole.MODI_TIRO.map((v, i) => el('label', { class: 'check' }, el('input', { type: 'radio', name: nome, value: v, checked: !i }), ' ' + v)));
   const modoLetto = (body, nome) => body.querySelector('input[name="' + nome + '"]:checked').value;
   function sceltaSullaGriglia(select, riapri) {
     return el('button', { type: 'button', class: 'btn small', text: '🎯 Scegli sulla griglia', onclick: () => {

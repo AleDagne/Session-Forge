@@ -51,7 +51,7 @@
       const chosen = new Set(preset.targetIds || []);
       const targetBox = el('div', { class: 'target-checks' });
       const modeBox = el('fieldset', { class: 'radio-row' }, el('legend', { text: 'Tiro per colpire' }),
-        ['normale', 'vantaggio', 'svantaggio'].map((m) => el('label', { class: 'check' },
+        DnD.regole.MODI_TIRO.map((m) => el('label', { class: 'check' },
           el('input', { type: 'radio', name: 'modo-magia', value: m, checked: m === (preset.mode || 'normale') }), ' ' + m[0].toUpperCase() + m.slice(1))));
       const current = () => spells.find((sp) => sp.id === spellSel.value);
       const readTargets = () => [...targetBox.querySelectorAll('input:checked')].map((i) => i.value);

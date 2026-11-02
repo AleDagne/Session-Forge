@@ -190,7 +190,7 @@
             el('select', { 'aria-label': 'Chi tira', onchange: (e) => { a.who = e.target.value; draw(); } }, E.WHO.map((k) => opt(k, E.WHO_NAMES[k], k === a.who))),
             a.who === 'scelto' ? el('select', { 'aria-label': 'Personaggio', onchange: set('memberId') }, opt('', '— primo del gruppo —', !a.memberId),
               DnD.sessioni.visible(s, 'players').map((p) => opt(p.id, p.name, p.id === a.memberId))) : null,
-            el('select', { 'aria-label': 'Modalità', onchange: set('mode') }, ['normale', 'vantaggio', 'svantaggio'].map((m) => opt(m, m[0].toUpperCase() + m.slice(1), m === a.mode))),
+            el('select', { 'aria-label': 'Modalità', onchange: set('mode') }, DnD.regole.MODI_TIRO.map((m) => opt(m, m[0].toUpperCase() + m.slice(1), m === a.mode))),
             a.who === 'gruppo' ? el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: a.group, onchange: (e) => { a.group = e.target.checked; } }), ' prova di gruppo (basta metà)') : null),
           el('details', { class: 'branch ok', open: true }, el('summary', { text: '✓ Se riesce (' + a.success.length + ')' }), actionsEditor(a.success, depth + 1)),
           el('details', { class: 'branch ko', open: true }, el('summary', { text: '✗ Se fallisce (' + a.failure.length + ')' }), actionsEditor(a.failure, depth + 1))];

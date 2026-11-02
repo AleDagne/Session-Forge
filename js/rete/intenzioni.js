@@ -15,7 +15,7 @@
   const ID = /^[\w-]{1,64}$/;
   const isId = (v) => typeof v === 'string' && ID.test(v);
   const intero = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
-  const MODI = ['normale', 'vantaggio', 'svantaggio'];
+  const MODI = DnD.regole.MODI_TIRO;
   const modo = (v) => (MODI.includes(v) ? v : 'normale');
   const celle = (n) => n + (n === 1 ? ' cella' : ' celle');
 

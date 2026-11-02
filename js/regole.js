@@ -11,6 +11,8 @@
     INT: 'Intelligenza', SAG: 'Saggezza', CAR: 'Carisma',
   };
   const MODES = { normale: 'normale', vantaggio: 'vantaggio', svantaggio: 'svantaggio' };
+  // Elenco ordinato dei modi del d20 (menù a tendina, convalida): l'unica copia per tutto il progetto.
+  const MODI_TIRO = Object.freeze(Object.values(MODES));
 
   function modifier(score) {
     return Math.floor((score - 10) / 2);
@@ -296,7 +298,7 @@
   }
 
   DnD.regole = {
-    ABILITIES, ABILITY_NAMES, MODES,
+    ABILITIES, ABILITY_NAMES, MODES, MODI_TIRO,
     modifier, formatModifier, racialBonus, finalAbilities, asiPointsAvailable, asiPointsAssigned,
     rollD20, rollToHit, resolveAttack, applyDamage, heal, hpLevel, isDown, dying,
     sortByInitiative, firstTurn, nextTurn, waiting, rollInitiative,
