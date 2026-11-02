@@ -5866,6 +5866,12 @@
     ui.painter.move({ x: 6, y: 5 }, null, true);
     ui.painter.up({ x: 6, y: 5 });
     eq([g.vision.rooms.length, g.vision.rooms[0].name, g.vision.rooms[0].cells], [1, 'Stanza 1', [{ x: 5, y: 5 }, { x: 6, y: 5 }]], 'stanza nuova con due celle');
+    strumento('v-rivela').click();
+    ui.painter.down({ x: 8, y: 2 });
+    ui.painter.move({ x: 9, y: 2 }, null, true);
+    ui.painter.up({ x: 9, y: 2 });
+    const rivelate = [...g.fog.manual].filter((c) => c === '1').length;
+    eq([g.fog.enabled, rivelate, g.fog.manual[2 * 12 + 8]], [true, 9, '1'], 'nebbia accesa e cerchio rivelato a mano');
     ui.painter.deactivate();
     eq([ui.tool(), ui.painter.active()], [null, false]);
     ui.reset();
