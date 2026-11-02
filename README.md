@@ -1936,6 +1936,7 @@ js/esplorazione.js    logica pura dell'esplorazione: scala, gruppo, movimento, t
 js/ui-biomi.js, js/ui-eventi.js  Asset › Biomi ed Eventi (editor a blocchi, Prova evento, esporta/importa)
 js/ui-mappa-esplorazione.js  disegno di biomi ed eventi; strumenti Bioma ed Evento sulla griglia
 js/ui-visione.js      luce, buio e nebbia sulla griglia (livello a parte con cache), strumenti, pannello «Luce e visione», «Vedi come»
+js/ui-combattimento-preparazione.js Combattimento: preparazione (giocatori, nemici, griglia, difficoltà, simulato) e iniziativa
 js/ui-combattimento-incantesimi.js Combattimento: lancio degli incantesimi, tiri salvezza, cure, modifica e rimozione di un combattente
 js/ui-combattimento-creature.js Combattimento: azioni di mostri e boss, schede dei combattenti con risorse, schermata del combattimento in corso
 js/ui-colonne.js      disposizione a tre colonne delle schermate di gioco (Combattimento, Esplorazione, Online)
