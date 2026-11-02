@@ -1504,6 +1504,31 @@
   });
 
   // --- Libreria di icone ---
+  test('Risorse: cache delle immagini con limite e listener dell\'editor tolti quando esce dalla pagina (audit A23)', async () => {
+    const I = DnD.icone;
+    const src = (i) => DnD.icone.svgDataUrl('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="' + (i % 2 + 1) + '" height="2" fill="#' + String(100000 + i).slice(-6) + '"/></svg>');
+    const prima = I.getImage(src(0));
+    await Promise.all(Array.from({ length: 230 }, (_, i) => new Promise((r) => { const img = I.getImage(src(i)); if (img.complete) r(); else img.addEventListener('load', r); img.addEventListener('error', r); })));
+    const ultima = I.getImage(src(229));
+    eq([I.dimensioniCache().immagini <= 200, I.getImage(src(229)) === ultima, I.getImage(src(0)) !== prima], [true, true, true], 'le più vecchie si scartano, le recenti restano');
+    // Primo gesto prima della spia: lo sblocco dell'audio toglie i suoi listener e non deve confondere il conteggio.
+    document.dispatchEvent(new Event('pointerdown'));
+    const tolti = [];
+    const vero = document.removeEventListener;
+    document.removeEventListener = function (t, ...a) { if (t === 'pointerdown' || t === 'selectionchange') tolti.push(t); return vero.call(this, t, ...a); };
+    try {
+      const ed = DnD.noteEditor.create({ html: '<p>a</p>' });
+      document.body.append(ed.node);
+      document.dispatchEvent(new Event('pointerdown'));
+      eq(tolti, [], 'nella pagina restano');
+      ed.node.remove();
+      document.dispatchEvent(new Event('pointerdown'));
+      eq(tolti.sort(), ['pointerdown', 'selectionchange'], 'uscito dalla pagina: tolti entrambi');
+    } finally {
+      document.removeEventListener = vero;
+    }
+  });
+
   test('Icone di libreria: almeno 40, categorie, palette, oggetti con colore libero', () => {
     const L = DnD.libreriaIcone;
     ok(L.LIBRARY.length >= 40, 'icone delle pedine: ' + L.LIBRARY.length);

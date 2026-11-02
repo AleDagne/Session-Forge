@@ -585,7 +585,8 @@
       });
       return { wrap, pop };
     }
-    document.addEventListener('pointerdown', (e) => { if (openPop && !openPop.parentNode.contains(e.target)) closePop(); }, true);
+    const onPointer = (e) => { if (staccato()) return; if (openPop && !openPop.parentNode.contains(e.target)) closePop(); };
+    document.addEventListener('pointerdown', onPointer, true);
     const swatches = (list, onpick, defLabel) => el('div', { class: 'note-swatches' },
       list.map((c) => el('button', { type: 'button', class: 'note-swatch', style: 'background:' + c, title: c, 'aria-label': 'Colore ' + c,
         onmousedown: (e) => e.preventDefault(), onclick: () => { closePop(); onpick(c); } })),
@@ -660,8 +661,20 @@
       tableBar.hidden = !inTable;
       set('header', inTable && Boolean(currentCell().closest('table').tHead));
     }
-    const onSelection = () => { if (area.isConnected) refreshState(); };
+    const onSelection = () => { if (!staccato() && area.isConnected) refreshState(); };
     document.addEventListener('selectionchange', onSelection);
+    // Listener sul documento: si tolgono da soli quando l'editor, dopo essere stato nella pagina, ne esce (finestre delle
+    // scene, pagine della scheda: ogni apertura crea un editor nuovo e il vecchio non torna più) o con destroy().
+    let attaccato = false;
+    function togliListener() {
+      document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('selectionchange', onSelection);
+    }
+    function staccato() {
+      if (node.isConnected) { attaccato = true; return false; }
+      if (attaccato) togliListener();
+      return attaccato;
+    }
 
     // ---------- API ----------
     function getHtml() { return N.sanitizeHtml(area.innerHTML.split(ZWSP).join('')); }
@@ -684,7 +697,7 @@
       fontSize: (px) => command(() => applyStyle('font-size', px + 'px')),
       stepSize, color: (c) => command(() => applyStyle('color', c)), highlight: (c) => command(() => applyStyle('background-color', c)),
       toggleList, indent, align, insertTable, tableCommand, nextCell, format, block, hr, clearFormat, insertHtml: (h) => command(() => insertHtml(N.sanitizeHtml(h))),
-      destroy: () => document.removeEventListener('selectionchange', onSelection),
+      destroy: togliListener,
     };
   }
 

@@ -48,6 +48,21 @@
 
   // ---------- Disegno (solo browser) ----------
   const images = new Map();
+  // Limiti delle cache (le chiavi possono essere data URL grandi, come i ritratti): oltre il limite si scartano le voci
+  // usate meno di recente e già pronte; se tornano a servire si ricaricano (il disegno riparte con onload).
+  const MAX_IMMAGINI = 200;
+  const MAX_BITMAP = 400;
+  // Segna la voce come usata ora (ordine della Map = ordine d'uso) e scarta le più vecchie già caricate.
+  function usa(map, key, entry, max, pronta) {
+    map.delete(key);
+    map.set(key, entry);
+    if (map.size <= max) return;
+    for (const [k, e] of map) {
+      if (map.size <= max) break;
+      if (k === key || !pronta(e)) continue;
+      map.delete(k);
+    }
+  }
 
   // Restituisce l'immagine (in cache); `onload` viene chiamato quando è pronta per il disegno.
   function getImage(src, onload) {
@@ -57,8 +72,8 @@
       entry = { img, callbacks: [] };
       img.onload = () => { const cbs = entry.callbacks; entry.callbacks = []; cbs.forEach((cb) => cb()); };
       img.src = src;
-      images.set(src, entry);
     }
+    usa(images, src, entry, MAX_IMMAGINI, (e) => e.img.complete);
     if (!entry.img.complete && onload) entry.callbacks.push(onload);
     return entry.img;
   }
@@ -91,7 +106,6 @@
     let entry = bitmaps.get(key);
     if (!entry) {
       entry = { img: null, callbacks: [] };
-      bitmaps.set(key, entry);
       const svg = iconSvg(id, color);
       if (svg && typeof Image === 'function') {
         const img = new Image();
@@ -103,6 +117,7 @@
         img.src = svgDataUrl(svg);
       }
     }
+    usa(bitmaps, key, entry, MAX_BITMAP, (e) => Boolean(e.img));
     if (!entry.img && onload) entry.callbacks.push(onload);
     return entry.img;
   }
@@ -209,8 +224,11 @@
     });
   }
 
+  // Dimensione delle cache (per i test).
+  const dimensioniCache = () => ({ immagini: images.size, bitmap: bitmaps.size });
+
   DnD.icone = {
     SHAPES, SHAPE_NAMES, CREATURE_COLORS, DEFAULT_COLOR, HEX,
-    isImageDataUrl, libraryEntry, iconSvg, svgDataUrl, normalizeIcon, getImage, libraryImage, shapePath, drawIcon, drawIconRect, iconCanvas, fileToIconDataUrl,
+    isImageDataUrl, libraryEntry, iconSvg, svgDataUrl, normalizeIcon, getImage, libraryImage, shapePath, drawIcon, drawIconRect, iconCanvas, fileToIconDataUrl, dimensioniCache,
   };
 })(globalThis.DnD = globalThis.DnD || {});
