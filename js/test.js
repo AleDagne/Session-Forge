@@ -5880,6 +5880,53 @@
     p.dispose();
   });
 
+  test('Percorso UI: barra, selezione, spostamento di un nodo con annulla e ripeti, impronta del disegno (caratterizzazione)', () => {
+    const P = DnD.percorso;
+    let path = P.normalizePath({ name: 'Prova', nodes: [{ id: 'n1', name: 'Forza del drago', x: 120, y: 0 }, { id: 'n2', name: 'Vista acuta', x: 0, y: 140 }], links: [[P.CORE_ID, 'n1'], ['n1', 'n2']] });
+    const cambi = [];
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:0;top:0;width:640px;height:440px;';
+    document.body.append(host);
+    const raf = window.requestAnimationFrame;
+    const ora = performance.now;
+    const ridotte = DnD.impostazioni.reduceMotion;
+    window.requestAnimationFrame = (f) => { f(); return 1; };
+    performance.now = () => 1000;
+    DnD.impostazioni.reduceMotion = () => true;
+    try {
+      const w = DnD.uiPercorso.create({ mode: 'editor', getPath: () => path, setPath: (p, label) => { path = p; cambi.push(label); }, getUnlocked: () => [], ctx: () => ({ rank: 1, bonus: 0 }), getTransformations: () => [] });
+      host.append(w.node);
+      w.node.querySelector('.path-canvas-wrap').style.cssText = 'width:600px;height:400px;';
+      w.fit();
+      eq([...w.node.querySelectorAll('.path-toolbar button')].map((b) => b.textContent), ['🖐 Seleziona/Sposta', '＋ Aggiungi nodo', '🔗 Collega', '✂ Scollega', '🗑 Elimina', '✺ Raggiera', '↶', '↷', '⤢ Adatta'], 'pulsanti della barra');
+      w.select(['n1']);
+      ok(w.node.querySelector('.path-side').textContent.startsWith('NodoNomeDescrizioneCosto (punti)Rango minimo'), 'pannello del nodo');
+      const c = w.node.querySelector('canvas');
+      const impronta = () => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let h = 7; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) >>> 0; return h; };
+      // Impronta dei pixel con il tempo fermo e le animazioni ridotte: confronta il disegno prima e dopo un riordino
+      // (dipende dai caratteri del sistema: se cambia la macchina, va rilevata di nuovo sul codice precedente).
+      w.requestDraw();
+      eq(impronta(), 3176409095, 'disegno invariato');
+      const a = w.screenOf('n1');
+      const ev = (t, x, y) => c.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, pointerId: 1, button: 0, buttons: t === 'pointerup' ? 0 : 1, bubbles: true }));
+      ev('pointerdown', a.x, a.y);
+      ev('pointermove', a.x + 30, a.y + 20);
+      ev('pointermove', a.x + 60, a.y + 40);
+      ev('pointerup', a.x + 60, a.y + 40);
+      const n1 = P.nodeById(path, 'n1');
+      eq([cambi.slice(), Math.round(n1.x * 100) / 100, Math.round(n1.y * 100) / 100, w.canUndo()], [['sposta'], 164.54, 29.69, true], 'nodo spostato');
+      [...w.node.querySelectorAll('.path-toolbar button')].find((b) => b.textContent === '↶').click();
+      eq([P.nodeById(path, 'n1').x, P.nodeById(path, 'n1').y, cambi[cambi.length - 1]], [120, 0, 'annulla'], 'annulla');
+      w.reset();
+      eq(w.selected(), []);
+    } finally {
+      window.requestAnimationFrame = raf;
+      performance.now = ora;
+      DnD.impostazioni.reduceMotion = ridotte;
+      host.remove();
+    }
+  });
+
   test('Visione: prestazioni su una griglia 100×100', () => {
     const structures = [];
     for (let i = 0; i < 12; i++) structures.push(vWall('m' + i, 8 * i + 4, (i * 13) % 60, 1, 30));
