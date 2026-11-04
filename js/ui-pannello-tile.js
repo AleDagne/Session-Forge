@@ -47,78 +47,10 @@
     }
   }
 
-  // opts: { getGrid() -> contenuto della griglia (bozza) | null, widget() -> componente griglia }
-  function create(opts) {
-    const S = {
-      tool: null, // null = strumenti della griglia
-      layer: 0,
-      base: null, // timbro scelto nella palette (orientamento 0)
-      ops: [], // rotazioni e specchi del timbro
-      hover: null,
-      drag: null,
-      selRect: null,
-      clipboard: null,
-      pasting: false,
-      showBlocked: false,
-      height: 360,
-    };
-    const byId = () => TM.tilesetIndex(DnD.store.state.tilesets);
-    const grid = () => opts.getGrid();
-    const widget = () => opts.widget();
-    const map = () => grid() && grid().tileMap;
-
-    // La TileMap della griglia: creata al primo tratto, sempre grande quanto la griglia.
-    function ensureMap() {
-      const g = grid();
-      if (!g.tileMap) {
-        const d = G.dims(g);
-        g.tileMap = TM.newGridMap(d.w, d.h);
-        g.tileMap.feetPerCell = g.feetPerCell || 5;
-      }
-      S.layer = Math.max(0, Math.min(g.tileMap.layers.length - 1, S.layer));
-      return g.tileMap;
-    }
-    const editable = () => {
-      const l = ensureMap().layers[S.layer];
-      if (l.locked) { toast('Il livello «' + l.name + '» è bloccato: sbloccalo per modificarlo.', 'error'); return false; }
-      return true;
-    };
-    // Modifica annullabile: fn() modifica la TileMap (restituisce false se non cambia nulla).
-    function edit(fn) {
-      const before = widget().tileSnapshot();
-      const was = JSON.stringify(map() || null);
-      ensureMap();
-      if (fn() === false || JSON.stringify(map()) === was) { widget().requestDraw(); return; }
-      widget().commitTiles(before);
-      renderLayers();
-    }
-
-    // ---------- Timbro ----------
-    const spanFor = (tsId, tileId, o) => { const m = map(); return TM.spanOf({ tilesets: [tsId], cellW: m ? m.cellW : 0, cellH: m ? m.cellH : 0 }, byId(), [0, tileId, o]); };
-    function fromPalette(st) {
-      if (!st.stamp) { S.base = null; return; }
-      const first = st.stamp.ids.find((x) => x !== null);
-      S.base = TM.makeStamp(st.stamp.tilesetId, st.stamp.ids, st.stamp.w, st.stamp.h, spanFor(st.stamp.tilesetId, first, 0));
-      S.ops = [];
-      if (!['pennello', 'rettangolo', 'riempi'].includes(S.tool)) setTool('pennello');
-      updateBrush();
-    }
-    function stamp() {
-      if (!S.base) return null;
-      const s = S.ops.reduce((acc, op) => TM.transformRegion(acc, op), S.base);
-      const b = byId();
-      // Trasformazioni non ammesse dalla tile: si dipinge con l'orientamento originale.
-      return Object.assign({}, s, { cells: s.cells.map((c) => (c && !T.orientAllowed(T.tileProps(b[c[0]], c[1]), c[2]) ? [c[0], c[1], 0] : c)) });
-    }
-    function transform(op) {
-      if (S.selRect && S.tool === 'selezione') { transformSelection(op); return; }
-      if (!S.base) { toast('Scegli prima un tile nella palette.', 'error'); return; }
-      S.ops.push(op);
-      updateBrush();
-      widget().requestDraw();
-    }
-
-    // ---------- Strumenti sulla griglia ----------
+  // Pannello Tile: strumenti sulla griglia (pennello, gomma, riempi, rettangolo, contagocce, selezione, blocco) e
+  // operazioni sulla selezione (copia, taglia, incolla, svuota, trasforma).
+  function strumentiTile(S, api) {
+    const { ensureMap, editable, edit, map, grid, widget, byId, stamp, spanFor, setTool, updateUi, updateBrush, renderLayers } = api;
     const inMap = (c) => c && grid() && c.x >= 0 && c.y >= 0 && c.x < G.dims(grid()).w && c.y < G.dims(grid()).h;
     const clampCell = (c) => { const d = G.dims(grid()); return { x: Math.max(0, Math.min(d.w - 1, c.x)), y: Math.max(0, Math.min(d.h - 1, c.y)) }; };
     const inSel = (c) => S.selRect && c.x >= S.selRect.x && c.y >= S.selRect.y && c.x < S.selRect.x + S.selRect.w && c.y < S.selRect.y + S.selRect.h;
@@ -145,7 +77,7 @@
         if (!a) continue;
         const tsId = m.tilesets[a.cell[0]];
         if (!b[tsId] || !T.resolveTile(b[tsId], a.cell[1])) { toast('La tile di questa cella non esiste più (segnaposto).', 'error'); return; }
-        cutter.pickTile(tsId, a.cell[1]);
+        api.cutter().pickTile(tsId, a.cell[1]);
         S.base = TM.makeStamp(tsId, [a.cell[1]], 1, 1, spanFor(tsId, a.cell[1], 0));
         S.base.cells[0][2] = a.cell[2];
         S.ops = [];
@@ -263,6 +195,83 @@
       const d = G.dims(grid());
       S.selRect = Object.assign({}, S.selRect, { w: Math.min(region.w, d.w - S.selRect.x), h: Math.min(region.h, d.h - S.selRect.y) });
     }
+
+    return { paintCell, setOverride, pickTile, down, move, up, copy, paste, clearSelection, transformSelection, inMap, clampCell, inSel };
+  }
+
+  // opts: { getGrid() -> contenuto della griglia (bozza) | null, widget() -> componente griglia }
+  function create(opts) {
+    const S = {
+      tool: null, // null = strumenti della griglia
+      layer: 0,
+      base: null, // timbro scelto nella palette (orientamento 0)
+      ops: [], // rotazioni e specchi del timbro
+      hover: null,
+      drag: null,
+      selRect: null,
+      clipboard: null,
+      pasting: false,
+      showBlocked: false,
+      height: 360,
+    };
+    const byId = () => TM.tilesetIndex(DnD.store.state.tilesets);
+    const grid = () => opts.getGrid();
+    const widget = () => opts.widget();
+    const map = () => grid() && grid().tileMap;
+
+    // La TileMap della griglia: creata al primo tratto, sempre grande quanto la griglia.
+    function ensureMap() {
+      const g = grid();
+      if (!g.tileMap) {
+        const d = G.dims(g);
+        g.tileMap = TM.newGridMap(d.w, d.h);
+        g.tileMap.feetPerCell = g.feetPerCell || 5;
+      }
+      S.layer = Math.max(0, Math.min(g.tileMap.layers.length - 1, S.layer));
+      return g.tileMap;
+    }
+    const editable = () => {
+      const l = ensureMap().layers[S.layer];
+      if (l.locked) { toast('Il livello «' + l.name + '» è bloccato: sbloccalo per modificarlo.', 'error'); return false; }
+      return true;
+    };
+    // Modifica annullabile: fn() modifica la TileMap (restituisce false se non cambia nulla).
+    function edit(fn) {
+      const before = widget().tileSnapshot();
+      const was = JSON.stringify(map() || null);
+      ensureMap();
+      if (fn() === false || JSON.stringify(map()) === was) { widget().requestDraw(); return; }
+      widget().commitTiles(before);
+      renderLayers();
+    }
+
+    // ---------- Timbro ----------
+    const spanFor = (tsId, tileId, o) => { const m = map(); return TM.spanOf({ tilesets: [tsId], cellW: m ? m.cellW : 0, cellH: m ? m.cellH : 0 }, byId(), [0, tileId, o]); };
+    function fromPalette(st) {
+      if (!st.stamp) { S.base = null; return; }
+      const first = st.stamp.ids.find((x) => x !== null);
+      S.base = TM.makeStamp(st.stamp.tilesetId, st.stamp.ids, st.stamp.w, st.stamp.h, spanFor(st.stamp.tilesetId, first, 0));
+      S.ops = [];
+      if (!['pennello', 'rettangolo', 'riempi'].includes(S.tool)) setTool('pennello');
+      updateBrush();
+    }
+    function stamp() {
+      if (!S.base) return null;
+      const s = S.ops.reduce((acc, op) => TM.transformRegion(acc, op), S.base);
+      const b = byId();
+      // Trasformazioni non ammesse dalla tile: si dipinge con l'orientamento originale.
+      return Object.assign({}, s, { cells: s.cells.map((c) => (c && !T.orientAllowed(T.tileProps(b[c[0]], c[1]), c[2]) ? [c[0], c[1], 0] : c)) });
+    }
+    function transform(op) {
+      if (S.selRect && S.tool === 'selezione') { transformSelection(op); return; }
+      if (!S.base) { toast('Scegli prima un tile nella palette.', 'error'); return; }
+      S.ops.push(op);
+      updateBrush();
+      widget().requestDraw();
+    }
+
+    // ---------- Strumenti e selezione (fuori da create: strumentiTile) ----------
+    const { paintCell, setOverride, pickTile, down, move, up, copy, paste, clearSelection, transformSelection, inMap, clampCell, inSel } = strumentiTile(S, { ensureMap, editable, edit, map, grid, widget, byId, stamp, spanFor, setTool, updateUi, updateBrush, renderLayers, cutter: () => cutter });
 
     // ---------- Disegno sulla griglia ----------
     function drawRegion(ctx, view, region, x0, y0, s, alpha) {
