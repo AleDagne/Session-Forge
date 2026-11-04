@@ -1005,6 +1005,55 @@
     });
   });
 
+  test('Tile UI: pannello Tile, contagocce, pennello, blocco, selezione con copia e incolla (caratterizzazione)', () => {
+    conArchivioTile(() => {
+      const g = { w: 6, h: 4, feetPerCell: 5, tileMap: TM().newGridMap(6, 4) };
+      g.tileMap.tilesets = ['ts-casa'];
+      const span = TM().spanOf({ tilesets: ['ts-casa'], cellW: 0, cellH: 0 }, TM().tilesetIndex(DnD.store.state.tilesets), [0, tid(0, 2), 0]);
+      ok(TM().paintStamp(g.tileMap, 0, 0, 0, TM().makeStamp('ts-casa', [tid(0, 2)], 1, 1, span)), 'tile di partenza');
+      let commit = 0;
+      const fake = { tileSnapshot: () => JSON.stringify(g.tileMap), commitTiles() { commit++; }, requestDraw() {}, updateUi() {}, setTool() {} };
+      const p = DnD.uiPannelloTile.create({ getGrid: () => g, widget: () => fake });
+      p.refresh();
+      const strumento = (t) => [...p.node.querySelectorAll('.tile-panel-tools button.tool')].find((b) => b.textContent === t);
+      const oss = {};
+      oss.barra = [...p.node.querySelectorAll('.tile-panel-tools button')].map((b) => b.textContent);
+      strumento('💧 Contagocce').click();
+      p.painter.down({ x: 0, y: 0 });
+      oss.dopoContagocce = [p.painter.active(), strumento('🖌 Pennello').getAttribute('aria-pressed'), p.node.querySelector('.tile-brush').textContent];
+      p.painter.down({ x: 1, y: 1 });
+      p.painter.move({ x: 3, y: 1 }, null, true);
+      p.painter.up({ x: 3, y: 1 });
+      oss.dipinte = g.tileMap.layers[0].data.map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+      strumento('⛔ Blocco').click();
+      p.painter.down({ x: 5, y: 3 });
+      p.painter.up({ x: 5, y: 3 });
+      oss.blocco = g.tileMap.overrides;
+      strumento('⬚ Seleziona/sposta').click();
+      p.painter.down({ x: 1, y: 1 });
+      p.painter.move({ x: 2, y: 1 }, null, true);
+      p.painter.up({ x: 2, y: 1 });
+      [...p.node.querySelectorAll('button')].find((b) => b.textContent === 'Copia').click();
+      [...p.node.querySelectorAll('button')].find((b) => b.textContent === 'Incolla').click();
+      p.painter.down({ x: 2, y: 3 });
+      oss.incollate = g.tileMap.layers[0].data.map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+      oss.livelli = p.node.querySelector('.tile-layers').textContent.slice(0, 120);
+      oss.passi = commit;
+      p.reset();
+      oss.attivoDopoReset = p.painter.active();
+      eq(oss, {
+        barra: ['🖐 Griglia', '🖌 Pennello', '🧽 Gomma', '🪣 Riempi', '▭ Rettangolo', '💧 Contagocce', '⬚ Seleziona/sposta', '⛔ Blocco', '⟲', '⟳', '⇋', '⇵', 'Copia', 'Taglia', 'Incolla', 'Svuota'],
+        dopoContagocce: [true, 'true', 'Timbro 1×1'],
+        dipinte: [0, 7, 8, 9],
+        blocco: '-----------------------b',
+        incollate: [0, 7, 8, 9, 20, 21],
+        livelli: '👁🔓Sopra✎↑↓⧉🗑OpacitàSotto le pedineSopra le pedine Semitrasparente con una pedina sotto👁🔓Base✎↑↓⧉🗑OpacitàSotto le p',
+        passi: 3,
+        attivoDopoReset: false,
+      });
+    });
+  });
+
   test('TileSet: taglio con offset, margine e separazione (anche non divisibile e rettangolare)', () => {
     // offset 2, margine 1, separazione 1×2, tile 16×8: inizio a 3 px; 3 colonne (3+16+1+16+1+16 = 53, avanzo 54-1-53 = 0), 3 righe (3+8+2+8+2+8 = 31, avanzo 40-1-31 = 8).
     eq(TS().gridOf(54, 40, { tileW: 16, tileH: 8, offsetX: 2, offsetY: 2, margin: 1, sepX: 1, sepY: 2 }), { cols: 3, rows: 3, restX: 0, restY: 8 });
