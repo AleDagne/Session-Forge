@@ -47,17 +47,19 @@
   function editor(o) {
     const p = draftOf(o.player);
     const legendary = p.type === 'leggendario';
-    let mode = o.isNew && !legendary ? 'guidata' : 'scheda';
+    const stato = {
+      mode: o.isNew && !legendary ? 'guidata' : 'scheda',
+      page: 'personaggio',
+      pointBuy: false,
+      outs: [],
+      readers: [],
+    };
     if (o.isNew) p.sheet.wizard = { done: false, step: 0 };
-    let page = 'personaggio';
-    let pointBuy = false;
-    let outs = [];
-    let readers = [];
     const body = el('div', { class: 'char-body' });
     const status = el('span', { class: 'muted small char-status', 'aria-live': 'polite' });
 
     // Valori calcolati: si aggiornano a ogni modifica senza ridisegnare (il focus resta dov'è).
-    const out = (fn, cls, titleFn) => { const s = el('span', { class: cls || '' }); outs.push((c) => { s.textContent = fn(c); if (titleFn) s.title = titleFn(c); }); return s; };
+    const out = (fn, cls, titleFn) => { const s = el('span', { class: cls || '' }); stato.outs.push((c) => { s.textContent = fn(c); if (titleFn) s.title = titleFn(c); }); return s; };
     function recalc() {
       if (p.hpMode === 'auto' && p.hpMethod === 'media') {
         const c0 = calc(p);
@@ -65,17 +67,17 @@
         if (r) { p.maxHp = Math.max(1, Math.min(9999, r.total)); p.hpBasis = r.basis; p.hpDetail = r.detail; }
       }
       const c = calc(p);
-      for (const f of outs) f(c);
+      for (const f of stato.outs) f(c);
       status.textContent = c.missing.length ? '⚠ ' + c.missing.length + (c.missing.length === 1 ? ' campo da completare' : ' campi da completare') : '✓ Scheda completa';
       status.title = c.missing.map((x) => x.text).join('\n');
     }
     // I selettori che leggono dal DOM (icone, dimensione, fazione) passano nella bozza prima di ridisegnare.
-    const collect = () => { for (const r of readers) r(); };
+    const collect = () => { for (const r of stato.readers) r(); };
     function draw() {
       collect();
-      outs = [];
-      readers = [];
-      fill(body, mode === 'guidata' ? wizard() : mode === 'gioco' ? gameSheet(p, true) : sheetPages());
+      stato.outs = [];
+      stato.readers = [];
+      fill(body, stato.mode === 'guidata' ? wizard() : stato.mode === 'gioco' ? gameSheet(p, true) : sheetPages());
       recalc();
     }
     const set = (fn, redraw) => { fn(); if (redraw) draw(); else recalc(); };
@@ -84,14 +86,14 @@
       collect();
       const data = clone(p);
       data.name = (data.name || '').trim() || 'Senza nome';
-      if (mode === 'guidata' && close) data.sheet.wizard.done = true;
+      if (stato.mode === 'guidata' && close) data.sheet.wizard.done = true;
       const saved = DnD.dati.normalizeCreature(data, true);
       o.persist(saved);
       toast(close ? '«' + saved.name + '» salvato.' : 'Salvato.', 'success');
       if (close) o.done(saved);
       return saved;
     }
-    const modeBtn = (id, label) => el('button', { type: 'button', class: 'tab' + (mode === id ? ' active' : ''), role: 'tab', 'aria-selected': String(mode === id), text: label, onclick: () => { mode = id; drawAll(); } });
+    const modeBtn = (id, label) => el('button', { type: 'button', class: 'tab' + (stato.mode === id ? ' active' : ''), role: 'tab', 'aria-selected': String(stato.mode === id), text: label, onclick: () => { stato.mode = id; drawAll(); } });
     const head = el('div', { class: 'section-head no-print' }, el('h1', { text: o.heading || (o.isNew ? 'Nuovo giocatore' : 'Scheda di ' + p.name) }));
     const toolbar = el('div', { class: 'char-toolbar no-print' });
     function drawToolbar() {
@@ -115,14 +117,14 @@
     function sheetPages() {
       const caster = S.isCaster(p);
       const pages = PAGES.filter((x) => x.id !== 'incantesimi' || caster);
-      if (!pages.some((x) => x.id === page)) page = 'personaggio';
+      if (!pages.some((x) => x.id === stato.page)) stato.page = 'personaggio';
       return [
         el('div', { class: 'char-pagebar no-print' },
-          DnD.uiAsset.tabBar(pages, page, 'Pagine della scheda', 'scheda-pg-', (id) => { page = id; draw(); }, true),
+          DnD.uiAsset.tabBar(pages, stato.page, 'Pagine della scheda', 'scheda-pg-', (id) => { stato.page = id; draw(); }, true),
           (C.classInfo(p.classId, p.customClass) || {}).caster ? null : el('label', { class: 'check small' },
             el('input', { type: 'checkbox', checked: p.sheet.spellcaster, onchange: (e) => set(() => { p.sheet.spellcaster = e.target.checked; }, true) }), ' Incantatore',
             p.sheet.spellcaster ? el('select', { 'aria-label': 'Tipo di incantatore', onchange: (e) => set(() => { p.sheet.casterType = e.target.value; }) }, C.CASTER_TYPES.map((t) => opt(t, C.CASTER_NAMES[t], t === p.sheet.casterType))) : null)),
-        el('div', { class: 'char-sheet', role: 'tabpanel' }, page === 'storia' ? pageStory() : page === 'incantesimi' ? pageSpells() : pageMain()),
+        el('div', { class: 'char-sheet', role: 'tabpanel' }, stato.page === 'storia' ? pageStory() : stato.page === 'incantesimi' ? pageSpells() : pageMain()),
       ];
     }
 
@@ -175,14 +177,14 @@
     function abilitiesBlock() {
       const box = el('div', { class: 'char-abilities' });
       const cells = R.ABILITIES.map((ab) => {
-        const input = numberInput(p.abilities[ab], { min: 1, max: 30, class: 'char-base', 'aria-label': R.ABILITY_NAMES[ab] + ' (base)', disabled: pointBuy,
+        const input = numberInput(p.abilities[ab], { min: 1, max: 30, class: 'char-base', 'aria-label': R.ABILITY_NAMES[ab] + ' (base)', disabled: stato.pointBuy,
           oninput: (e) => { const v = readNumber(e.target); if (Number.isInteger(v) && v >= 1 && v <= 30) set(() => { p.abilities[ab] = v; }); } });
         return el('div', { class: 'char-ability' },
           el('div', { class: 'char-ability-name', text: R.ABILITY_NAMES[ab] }),
           out((c) => String(c.d.abilities[ab]), 'char-ability-score', (c) => 'Base ' + p.abilities[ab] + (R.racialBonus(c.race, ab) ? ' + razza ' + fmt(R.racialBonus(c.race, ab)) : '') + (p.asi[ab] ? ' + punti ' + p.asi[ab] : '') + (c.fx.abilities[ab] ? ' + talenti ' + c.fx.abilities[ab] : '') + ' = ' + c.d.abilities[ab]),
           out((c) => fmt(R.modifier(c.d.abilities[ab])), 'char-ability-mod'),
           el('div', { class: 'char-ability-base' }, 'base ', input),
-          pointBuy ? el('div', { class: 'asi-row' },
+          stato.pointBuy ? el('div', { class: 'asi-row' },
             el('button', { type: 'button', class: 'asi-btn', text: '−', 'aria-label': 'Abbassa ' + R.ABILITY_NAMES[ab], onclick: () => { if (S.canBuy(p.abilities, ab, p.abilities[ab] - 1)) set(() => { p.abilities[ab] -= 1; }, true); } }),
             el('button', { type: 'button', class: 'asi-btn', text: '+', 'aria-label': 'Alza ' + R.ABILITY_NAMES[ab], onclick: () => { if (S.canBuy(p.abilities, ab, p.abilities[ab] + 1)) set(() => { p.abilities[ab] += 1; }, true); else toast('Oltre il budget o il massimo di 15.', 'error'); } }))
             : el('div', { class: 'asi-row', title: 'Punti caratteristica' },
@@ -193,29 +195,29 @@
       const random = () => {
         const info = C.classInfo(p.classId, p.customClass);
         const r = R.randomizeAbilities({ mode: info ? 'classe' : 'random', source: '4d6', priority: info && info.priority }, DnD.dadi.randomInt);
-        pointBuy = false;
+        stato.pointBuy = false;
         set(() => { Object.assign(p.abilities, r.abilities); }, true);
         toast('4d6 (scartato il più basso): ' + R.ABILITIES.map((ab) => ab + ' ' + r.abilities[ab]).join(' · '));
       };
       const standard = () => {
         const info = C.classInfo(p.classId, p.customClass);
         const r = R.randomizeAbilities({ mode: info ? 'classe' : 'random', source: 'standard', priority: info && info.priority }, DnD.dadi.randomInt);
-        pointBuy = false;
+        stato.pointBuy = false;
         set(() => { Object.assign(p.abilities, r.abilities); }, true);
       };
       const buy = () => {
-        if (pointBuy) { pointBuy = false; draw(); return; }
+        if (stato.pointBuy) { stato.pointBuy = false; draw(); return; }
         if (!S.pointBuy(p.abilities).valid && !confirm('Acquisto punti: le caratteristiche ripartono da 8 con 27 punti da spendere. Continuare?')) return;
         if (!S.pointBuy(p.abilities).valid) Object.assign(p.abilities, S.pointBuyStart());
-        pointBuy = true;
+        stato.pointBuy = true;
         draw();
       };
       fill(box, el('div', { class: 'char-section-title', text: 'Caratteristiche' }),
         el('div', { class: 'head-actions' },
           el('button', { type: 'button', class: 'btn small', text: '🎲 Randomizza', onclick: random }),
-          el('button', { type: 'button', class: 'btn small' + (pointBuy ? ' active' : ''), text: pointBuy ? '✓ Acquisto punti' : 'Acquisto punti', 'aria-pressed': String(pointBuy), onclick: buy }),
+          el('button', { type: 'button', class: 'btn small' + (stato.pointBuy ? ' active' : ''), text: stato.pointBuy ? '✓ Acquisto punti' : 'Acquisto punti', 'aria-pressed': String(stato.pointBuy), onclick: buy }),
           el('button', { type: 'button', class: 'btn small', text: 'Array standard', onclick: standard })),
-        pointBuy ? out(() => { const r = S.pointBuy(p.abilities); return 'Acquisto punti: spesi ' + r.cost + ' su ' + K.POINT_BUY.budget + ' · rimasti ' + r.left + ' (8-15; costi 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9)'; }, 'small char-pointbuy')
+        stato.pointBuy ? out(() => { const r = S.pointBuy(p.abilities); return 'Acquisto punti: spesi ' + r.cost + ' su ' + K.POINT_BUY.budget + ' · rimasti ' + r.left + ' (8-15; costi 8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:7, 15:9)'; }, 'small char-pointbuy')
           : out((c) => 'Punti caratteristica: ' + R.asiPointsAssigned(p.asi) + ' assegnati su ' + c.asi + (c.asi < R.asiPointsAvailable(p.level) ? ' (talenti al posto dei punti)' : ''), 'muted small'),
         el('div', { class: 'char-ability-grid' }, cells));
       return el('section', { class: 'char-panel' }, box,
@@ -433,7 +435,7 @@
       const token = DnD.uiIcone.iconPicker(p.icon, false, 'Pedina');
       const grid = DnD.uiCreatureComuni.gridSizeEditor(p.gridSize, { size: () => { const r = st().races.find((x) => x.id === p.raceId); return r ? r.size : null; } });
       const world = DnD.uiMondoComuni.worldRefsEditor(p, { player: true });
-      readers.push(() => { const r1 = portrait.read(); if (r1.icon) p.sheet.portrait = r1.icon; const r2 = token.read(); if (r2.icon) p.icon = r2.icon; Object.assign(p, grid.read(), world.read()); });
+      stato.readers.push(() => { const r1 = portrait.read(); if (r1.icon) p.sheet.portrait = r1.icon; const r2 = token.read(); if (r2.icon) p.icon = r2.icon; Object.assign(p, grid.read(), world.read()); });
       const story = DnD.noteEditor.create({ html: p.sheet.story, label: 'Storia del personaggio', onChange: (h) => { p.sheet.story = DnD.note.sanitizeHtml(h); } });
       const ta = (key, label, src) => el('div', { class: 'char-textbox' }, el('textarea', { rows: 3, maxlength: 5000, value: (src || p.sheet)[key], 'aria-label': label, oninput: (e) => { (src || p.sheet)[key] = e.target.value; } }), el('div', { class: 'char-box-label', text: label }));
       return el('div', { class: 'char-cols char-cols-2' },
@@ -530,7 +532,7 @@
           wizardStep(name),
           el('div', { class: 'form-actions' },
             el('button', { type: 'button', class: 'btn', text: '← Indietro', disabled: step === 0, onclick: () => go(step - 1) }),
-            el('button', { type: 'button', class: 'btn', text: 'Esci e completa dopo', title: 'Passa alla Scheda: i dati restano', onclick: () => { mode = 'scheda'; drawAll(); } }),
+            el('button', { type: 'button', class: 'btn', text: 'Esci e completa dopo', title: 'Passa alla Scheda: i dati restano', onclick: () => { stato.mode = 'scheda'; drawAll(); } }),
             step < steps.length - 1 ? el('button', { type: 'button', class: 'btn primary', text: 'Avanti →', onclick: () => go(step + 1) })
               : el('button', { type: 'button', class: 'btn primary', text: '✓ Salva il personaggio', onclick: () => save(true) }))),
         el('aside', { class: 'char-wizard-preview', 'aria-label': 'Anteprima della scheda' }, gameSheet(p, false)));
@@ -613,7 +615,7 @@
       } }));
     }
     drawAll();
-    return { draft: p, save, setMode: (x) => { mode = x; drawAll(); } };
+    return { draft: p, save, setMode: (x) => { stato.mode = x; drawAll(); } };
   }
 
   const featText = (f) => [f.requirements ? 'req. ' + f.requirements : '',
