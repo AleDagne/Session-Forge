@@ -952,6 +952,59 @@
   const tileAt = (t, layer, x, y) => t.layers[layer].data[y * t.w + x];
   const mapWith = (w, h, ts, extra) => Object.assign(TM().newTiles('mappa', w, h), { tilesets: [ts.id] }, extra);
 
+  // Archivio finto per i componenti delle tile: lo stato con il TileSet «Casa», update sincrono.
+  function conArchivioTile(fn) {
+    const vero = DnD.store;
+    const st = DnD.dati.emptyState();
+    st.tilesets = [lTileset()];
+    DnD.store = { state: st, update(f) { f(this.state); return Promise.resolve({ ok: true }); }, save: () => Promise.resolve({ ok: true }), saved: () => Promise.resolve(), blobs: { get: async () => null, set: async () => {} } };
+    const raf = window.requestAnimationFrame;
+    window.requestAnimationFrame = () => 0; // niente adattamento differito della vista
+    try { return fn(st); } finally { DnD.store = vero; window.requestAnimationFrame = raf; }
+  }
+
+  test('Tile UI: ritagliatore in palette e in struttura, timbro, flag e selezione (caratterizzazione)', () => {
+    conArchivioTile((st) => {
+      const testi = (node, sel) => [...node.querySelectorAll(sel)].map((b) => b.textContent);
+      const cambi = [];
+      const pal = DnD.uiTile.cutter({ mode: 'palette', tilesetId: 'ts-casa', onChange: (x) => cambi.push(x) });
+      const oss = {};
+      oss.barra = testi(pal.node, '.tool-group button');
+      oss.stato = pal.node.querySelector('.tile-cutter > .muted.small').textContent;
+      oss.griglia = pal.node.querySelector('.tile-grid-info').textContent;
+      pal.pickTile('ts-casa', tid(0, 0));
+      oss.timbro = pal.state().stamp;
+      oss.cambi = cambi.length;
+      [...pal.node.querySelectorAll('button')].find((b) => b.textContent === '▨ Vuoto/escluso').click();
+      oss.esclusa = TS().isExcluded(st.tilesets[0], tid(0, 0));
+      const w = pal.node.querySelector('.tile-size-in');
+      w.value = '24';
+      w.dispatchEvent(new Event('input', { bubbles: true }));
+      oss.grigliaNuova = pal.node.querySelector('.tile-grid-info').textContent;
+      const str = DnD.uiTile.cutter({ mode: 'struttura', tilesetId: 'ts-casa' });
+      const clic = (t) => [...str.node.querySelectorAll('button')].find((b) => b.textContent === t).click();
+      oss.selezione0 = str.state().selection;
+      clic('Seleziona tutto');
+      oss.tutto = str.state().selection;
+      clic('Inverti');
+      oss.inverti = str.state().selection;
+      clic('Rileva dai pixel');
+      oss.pixel = str.state().selection;
+      oss.statoStruttura = str.node.querySelector('.tile-cutter > .muted.small').textContent;
+      eq(oss, {
+        barra: ['🖌 Timbro', '⬚ Seleziona (flag)', '⛔ Bloccante', '▨ Vuoto/escluso', '≋ Terreno difficile'],
+        stato: '48×48 px · nessun tile parziale · Clic = un tile, trascina = rettangolo di tile (timbro)',
+        griglia: '3 colonne × 3 righe = 9 tile',
+        timbro: { tilesetId: 'ts-casa', w: 1, h: 1, ids: [0] },
+        cambi: 1,
+        esclusa: true,
+        grigliaNuova: '2 colonne × 3 righe = 6 tile (da applicare)',
+        selezione0: '000100111', tutto: '111111111', inverti: '000000000', pixel: '000100111',
+        statoStruttura: '48×48 px · nessun tile parziale · 4 tile inclusi = celle della struttura · Clic o trascina per includere/escludere',
+      });
+    });
+  });
+
   test('TileSet: taglio con offset, margine e separazione (anche non divisibile e rettangolare)', () => {
     // offset 2, margine 1, separazione 1×2, tile 16×8: inizio a 3 px; 3 colonne (3+16+1+16+1+16 = 53, avanzo 54-1-53 = 0), 3 righe (3+8+2+8+2+8 = 31, avanzo 40-1-31 = 8).
     eq(TS().gridOf(54, 40, { tileW: 16, tileH: 8, offsetX: 2, offsetY: 2, margin: 1, sepX: 1, sepY: 2 }), { cols: 3, rows: 3, restX: 0, restY: 8 });
