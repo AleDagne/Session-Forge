@@ -5695,6 +5695,46 @@
     }
   });
 
+  test('Scheda UI: pagine della scheda, vista di gioco e personaggio salvato (caratterizzazione)', async () => {
+    const mem = new Map();
+    const backend = { name: 'memoria', get: async (k) => (mem.has(k) ? mem.get(k) : null), set: async (k, v) => { mem.set(k, v); }, clear: async () => mem.clear() };
+    const prevStore = DnD.store;
+    DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:0;top:0;width:1300px;height:900px;overflow:hidden;z-index:-1';
+    document.body.append(box);
+    const impronta = (t) => { let h = 7; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return t.length + ':' + h; };
+    const oss = {};
+    try {
+      const sid = S().current(DnD.store.state).id;
+      for (const [nome, p] of [['ladro', hero({ sessionId: sid })], ['mago', hero({ id: 'pm', name: 'Ilse', classId: 'mago', sessionId: sid })]]) {
+        let saved = null;
+        box.textContent = '';
+        DnD.uiScheda.editor({ player: p, isNew: false, host: box, persist: (x) => { saved = x; }, done: () => {} });
+        const tab = (t) => [...box.querySelectorAll('[role="tab"]')].find((b) => b.textContent.includes(t));
+        oss[nome] = { schede: [...box.querySelectorAll('[role="tab"]')].map((b) => b.textContent) };
+        for (const t of ['Personaggio', 'Storia', 'Incantesimi']) {
+          if (!tab(t)) continue;
+          tab(t).click();
+          oss[nome][t] = impronta(box.querySelector('.char-sheet').textContent);
+        }
+        tab('Vista di gioco').click();
+        oss[nome].gioco = impronta(box.querySelector('.char-body').textContent);
+        tab('Scheda').click();
+        [...box.querySelectorAll('button')].find((b) => b.textContent === 'Salva').click();
+        // Gli id casuali (sessione dell'archivio di prova) cambiano a ogni esecuzione: fuori dall'impronta.
+        oss[nome].salvato = impronta(JSON.stringify(saved).replace(/[0-9a-f]{32}/g, 'ID'));
+      }
+      eq(oss, {
+        ladro: { schede: ['🧭 Creazione guidata', '📜 Scheda', '🎲 Vista di gioco', 'Personaggio', 'Storia'], Personaggio: '3825:409138439', Storia: '907:2091806105', gioco: '492:4049697434', salvato: '1911:519571938' },
+        mago: { schede: ['🧭 Creazione guidata', '📜 Scheda', '🎲 Vista di gioco', 'Personaggio', 'Storia', 'Incantesimi'], Personaggio: '3772:1613311640', Storia: '907:2091806105', Incantesimi: '380:3420852292', gioco: '507:839275655', salvato: '1911:2791201518' },
+      }, 'testo delle pagine e personaggio salvato invariati');
+    } finally {
+      box.remove();
+      DnD.store = prevStore;
+    }
+  });
+
   // --- Luce, visione e nebbia di guerra (fase 5/5) ---
   const V = () => DnD.visione;
   const VC = () => DnD.condizioni;
