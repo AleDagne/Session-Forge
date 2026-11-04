@@ -42,107 +42,10 @@
     return p;
   }
 
-  // ---------- Editor (Scheda / Creazione guidata / Vista di gioco) ----------
-  // o: { player, isNew, persist(salvato), done(salvato | null), host, wrap(head, nodo), heading, submitText, submitClass }
-  function editor(o) {
-    const p = draftOf(o.player);
-    const legendary = p.type === 'leggendario';
-    const stato = {
-      mode: o.isNew && !legendary ? 'guidata' : 'scheda',
-      page: 'personaggio',
-      pointBuy: false,
-      outs: [],
-      readers: [],
-    };
-    if (o.isNew) p.sheet.wizard = { done: false, step: 0 };
-    const body = el('div', { class: 'char-body' });
-    const status = el('span', { class: 'muted small char-status', 'aria-live': 'polite' });
-
-    // Valori calcolati: si aggiornano a ogni modifica senza ridisegnare (il focus resta dov'è).
-    const out = (fn, cls, titleFn) => { const s = el('span', { class: cls || '' }); stato.outs.push((c) => { s.textContent = fn(c); if (titleFn) s.title = titleFn(c); }); return s; };
-    function recalc() {
-      if (p.hpMode === 'auto' && p.hpMethod === 'media') {
-        const c0 = calc(p);
-        const r = S.autoHp(p, R.modifier(c0.d.abilities.COS), c0.fx, 'media');
-        if (r) { p.maxHp = Math.max(1, Math.min(9999, r.total)); p.hpBasis = r.basis; p.hpDetail = r.detail; }
-      }
-      const c = calc(p);
-      for (const f of stato.outs) f(c);
-      status.textContent = c.missing.length ? '⚠ ' + c.missing.length + (c.missing.length === 1 ? ' campo da completare' : ' campi da completare') : '✓ Scheda completa';
-      status.title = c.missing.map((x) => x.text).join('\n');
-    }
-    // I selettori che leggono dal DOM (icone, dimensione, fazione) passano nella bozza prima di ridisegnare.
-    const collect = () => { for (const r of stato.readers) r(); };
-    function draw() {
-      collect();
-      stato.outs = [];
-      stato.readers = [];
-      fill(body, stato.mode === 'guidata' ? wizard() : stato.mode === 'gioco' ? gameSheet(p, true) : sheetPages());
-      recalc();
-    }
-    const set = (fn, redraw) => { fn(); if (redraw) draw(); else recalc(); };
-
-    function save(close) {
-      collect();
-      const data = clone(p);
-      data.name = (data.name || '').trim() || 'Senza nome';
-      if (stato.mode === 'guidata' && close) data.sheet.wizard.done = true;
-      const saved = DnD.dati.normalizeCreature(data, true);
-      o.persist(saved);
-      toast(close ? '«' + saved.name + '» salvato.' : 'Salvato.', 'success');
-      if (close) o.done(saved);
-      return saved;
-    }
-    const modeBtn = (id, label) => el('button', { type: 'button', class: 'tab' + (stato.mode === id ? ' active' : ''), role: 'tab', 'aria-selected': String(stato.mode === id), text: label, onclick: () => { stato.mode = id; drawAll(); } });
-    const head = el('div', { class: 'section-head no-print' }, el('h1', { text: o.heading || (o.isNew ? 'Nuovo giocatore' : 'Scheda di ' + p.name) }));
-    const toolbar = el('div', { class: 'char-toolbar no-print' });
-    function drawToolbar() {
-      const c = calc(p);
-      const lvMax = legendary ? 40 : 20;
-      fill(toolbar,
-        el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Modalità' }, legendary ? null : modeBtn('guidata', '🧭 Creazione guidata'), modeBtn('scheda', '📜 Scheda'), modeBtn('gioco', '🎲 Vista di gioco')),
-        status,
-        el('div', { class: 'head-actions' },
-          o.isNew ? null : el('button', { type: 'button', class: 'btn small', text: '⬆ Sali di livello', disabled: p.level >= lvMax, title: c.xp.canLevelUp ? 'Hai i PE per il livello ' + (p.level + 1) : '', onclick: () => levelUpDialog(save(false), (np) => { Object.assign(p, draftOf(np)); drawAll(); }) }),
-          el('button', { type: 'button', class: 'btn small', text: '🖨 Stampa', onclick: () => { collect(); printSheet(p); } }),
-          o.isNew ? null : el('button', { type: 'button', class: 'btn small', text: '⬇ Esporta', onclick: () => { collect(); exportCharacter(DnD.dati.normalizeCreature(clone(p), true)); } }),
-          el('button', { type: 'button', class: 'btn', text: 'Annulla', onclick: () => o.done(null) }),
-          el('button', { type: 'button', class: 'btn primary' + (o.submitClass ? ' ' + o.submitClass : ''), text: o.submitText || 'Salva', onclick: () => save(true) })));
-    }
-    function drawAll() { drawToolbar(); draw(); }
-    const root = el('div', { class: 'char-editor' }, toolbar, body);
-    (o.host).append(o.wrap ? o.wrap(head, root) : el('div', {}, head, root));
-
-    // ---------- Pagine della scheda ----------
-    function sheetPages() {
-      const caster = S.isCaster(p);
-      const pages = PAGES.filter((x) => x.id !== 'incantesimi' || caster);
-      if (!pages.some((x) => x.id === stato.page)) stato.page = 'personaggio';
-      return [
-        el('div', { class: 'char-pagebar no-print' },
-          DnD.uiAsset.tabBar(pages, stato.page, 'Pagine della scheda', 'scheda-pg-', (id) => { stato.page = id; draw(); }, true),
-          (C.classInfo(p.classId, p.customClass) || {}).caster ? null : el('label', { class: 'check small' },
-            el('input', { type: 'checkbox', checked: p.sheet.spellcaster, onchange: (e) => set(() => { p.sheet.spellcaster = e.target.checked; }, true) }), ' Incantatore',
-            p.sheet.spellcaster ? el('select', { 'aria-label': 'Tipo di incantatore', onchange: (e) => set(() => { p.sheet.casterType = e.target.value; }) }, C.CASTER_TYPES.map((t) => opt(t, C.CASTER_NAMES[t], t === p.sheet.casterType))) : null)),
-        el('div', { class: 'char-sheet', role: 'tabpanel' }, stato.page === 'storia' ? pageStory() : stato.page === 'incantesimi' ? pageSpells() : pageMain()),
-      ];
-    }
-
-    // Campo calcolato con «auto» e sovrascrittura: get(c) automatico, value() manuale (null = auto), setter.
-    function autoBox(label, autoText, detail, manual, onManual, attrs) {
-      const input = numberInput(manual === null ? '' : manual, Object.assign({ class: 'qty', placeholder: 'auto', 'aria-label': label + ' (a mano)' }, attrs, {
-        oninput: (e) => set(() => onManual(e.target.value.trim() === '' ? null : readNumber(e.target))),
-      }));
-      const badge = out((c) => (onManual.isManual(c) ? 'manuale' : 'auto'), 'char-badge');
-      return el('div', { class: 'char-box char-auto' },
-        el('div', { class: 'char-big' }, out(autoText, '', detail)),
-        el('div', { class: 'char-box-label', text: label }),
-        el('div', { class: 'char-auto-row' }, badge, input,
-          el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Torna al valore automatico', 'aria-label': 'Torna ad auto: ' + label, onclick: () => { input.value = ''; set(() => onManual(null)); } })));
-    }
-    const manualFn = (fn, isManual) => Object.assign(fn, { isManual });
-
-    // ---------- Pagina 1: Personaggio ----------
+  // Scheda del giocatore, pagina 1 «Personaggio»: intestazione, caratteristiche, salvezze, abilità, competenze,
+  // combattimento, punti ferita, attacchi, equipaggiamento, personalità e privilegi.
+  function paginaPersonaggio(stato, api) {
+    const { autoBox, draw, legendary, manualFn, o, out, p, recalc, set } = api;
     function pageMain() {
       return [header(), el('div', { class: 'char-cols' }, el('div', { class: 'char-col' }, abilitiesBlock(), savesBlock(), skillsBlock(), profsBlock()),
         el('div', { class: 'char-col' }, combatBlock(), hpBlock(), attacksBlock(), equipmentBlock()),
@@ -428,6 +331,112 @@
       drawList();
       return el('section', { class: 'char-panel' }, el('div', { class: 'char-section-title', text: 'Privilegi e tratti' }), box);
     }
+
+    return { pageMain, header, abilitiesBlock, savesBlock, skillsBlock, profsBlock, combatBlock, hpBlock, rollHp, attacksBlock, equipmentBlock, personalityBlock, featuresBlock, labeled };
+  }
+
+  // ---------- Editor (Scheda / Creazione guidata / Vista di gioco) ----------
+  // o: { player, isNew, persist(salvato), done(salvato | null), host, wrap(head, nodo), heading, submitText, submitClass }
+  function editor(o) {
+    const p = draftOf(o.player);
+    const legendary = p.type === 'leggendario';
+    const stato = {
+      mode: o.isNew && !legendary ? 'guidata' : 'scheda',
+      page: 'personaggio',
+      pointBuy: false,
+      outs: [],
+      readers: [],
+    };
+    if (o.isNew) p.sheet.wizard = { done: false, step: 0 };
+    const body = el('div', { class: 'char-body' });
+    const status = el('span', { class: 'muted small char-status', 'aria-live': 'polite' });
+
+    // Valori calcolati: si aggiornano a ogni modifica senza ridisegnare (il focus resta dov'è).
+    const out = (fn, cls, titleFn) => { const s = el('span', { class: cls || '' }); stato.outs.push((c) => { s.textContent = fn(c); if (titleFn) s.title = titleFn(c); }); return s; };
+    function recalc() {
+      if (p.hpMode === 'auto' && p.hpMethod === 'media') {
+        const c0 = calc(p);
+        const r = S.autoHp(p, R.modifier(c0.d.abilities.COS), c0.fx, 'media');
+        if (r) { p.maxHp = Math.max(1, Math.min(9999, r.total)); p.hpBasis = r.basis; p.hpDetail = r.detail; }
+      }
+      const c = calc(p);
+      for (const f of stato.outs) f(c);
+      status.textContent = c.missing.length ? '⚠ ' + c.missing.length + (c.missing.length === 1 ? ' campo da completare' : ' campi da completare') : '✓ Scheda completa';
+      status.title = c.missing.map((x) => x.text).join('\n');
+    }
+    // I selettori che leggono dal DOM (icone, dimensione, fazione) passano nella bozza prima di ridisegnare.
+    const collect = () => { for (const r of stato.readers) r(); };
+    function draw() {
+      collect();
+      stato.outs = [];
+      stato.readers = [];
+      fill(body, stato.mode === 'guidata' ? wizard() : stato.mode === 'gioco' ? gameSheet(p, true) : sheetPages());
+      recalc();
+    }
+    const set = (fn, redraw) => { fn(); if (redraw) draw(); else recalc(); };
+
+    function save(close) {
+      collect();
+      const data = clone(p);
+      data.name = (data.name || '').trim() || 'Senza nome';
+      if (stato.mode === 'guidata' && close) data.sheet.wizard.done = true;
+      const saved = DnD.dati.normalizeCreature(data, true);
+      o.persist(saved);
+      toast(close ? '«' + saved.name + '» salvato.' : 'Salvato.', 'success');
+      if (close) o.done(saved);
+      return saved;
+    }
+    const modeBtn = (id, label) => el('button', { type: 'button', class: 'tab' + (stato.mode === id ? ' active' : ''), role: 'tab', 'aria-selected': String(stato.mode === id), text: label, onclick: () => { stato.mode = id; drawAll(); } });
+    const head = el('div', { class: 'section-head no-print' }, el('h1', { text: o.heading || (o.isNew ? 'Nuovo giocatore' : 'Scheda di ' + p.name) }));
+    const toolbar = el('div', { class: 'char-toolbar no-print' });
+    function drawToolbar() {
+      const c = calc(p);
+      const lvMax = legendary ? 40 : 20;
+      fill(toolbar,
+        el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Modalità' }, legendary ? null : modeBtn('guidata', '🧭 Creazione guidata'), modeBtn('scheda', '📜 Scheda'), modeBtn('gioco', '🎲 Vista di gioco')),
+        status,
+        el('div', { class: 'head-actions' },
+          o.isNew ? null : el('button', { type: 'button', class: 'btn small', text: '⬆ Sali di livello', disabled: p.level >= lvMax, title: c.xp.canLevelUp ? 'Hai i PE per il livello ' + (p.level + 1) : '', onclick: () => levelUpDialog(save(false), (np) => { Object.assign(p, draftOf(np)); drawAll(); }) }),
+          el('button', { type: 'button', class: 'btn small', text: '🖨 Stampa', onclick: () => { collect(); printSheet(p); } }),
+          o.isNew ? null : el('button', { type: 'button', class: 'btn small', text: '⬇ Esporta', onclick: () => { collect(); exportCharacter(DnD.dati.normalizeCreature(clone(p), true)); } }),
+          el('button', { type: 'button', class: 'btn', text: 'Annulla', onclick: () => o.done(null) }),
+          el('button', { type: 'button', class: 'btn primary' + (o.submitClass ? ' ' + o.submitClass : ''), text: o.submitText || 'Salva', onclick: () => save(true) })));
+    }
+    function drawAll() { drawToolbar(); draw(); }
+    const root = el('div', { class: 'char-editor' }, toolbar, body);
+    (o.host).append(o.wrap ? o.wrap(head, root) : el('div', {}, head, root));
+
+    // ---------- Pagine della scheda ----------
+    function sheetPages() {
+      const caster = S.isCaster(p);
+      const pages = PAGES.filter((x) => x.id !== 'incantesimi' || caster);
+      if (!pages.some((x) => x.id === stato.page)) stato.page = 'personaggio';
+      return [
+        el('div', { class: 'char-pagebar no-print' },
+          DnD.uiAsset.tabBar(pages, stato.page, 'Pagine della scheda', 'scheda-pg-', (id) => { stato.page = id; draw(); }, true),
+          (C.classInfo(p.classId, p.customClass) || {}).caster ? null : el('label', { class: 'check small' },
+            el('input', { type: 'checkbox', checked: p.sheet.spellcaster, onchange: (e) => set(() => { p.sheet.spellcaster = e.target.checked; }, true) }), ' Incantatore',
+            p.sheet.spellcaster ? el('select', { 'aria-label': 'Tipo di incantatore', onchange: (e) => set(() => { p.sheet.casterType = e.target.value; }) }, C.CASTER_TYPES.map((t) => opt(t, C.CASTER_NAMES[t], t === p.sheet.casterType))) : null)),
+        el('div', { class: 'char-sheet', role: 'tabpanel' }, stato.page === 'storia' ? pageStory() : stato.page === 'incantesimi' ? pageSpells() : pageMain()),
+      ];
+    }
+
+    // Campo calcolato con «auto» e sovrascrittura: get(c) automatico, value() manuale (null = auto), setter.
+    function autoBox(label, autoText, detail, manual, onManual, attrs) {
+      const input = numberInput(manual === null ? '' : manual, Object.assign({ class: 'qty', placeholder: 'auto', 'aria-label': label + ' (a mano)' }, attrs, {
+        oninput: (e) => set(() => onManual(e.target.value.trim() === '' ? null : readNumber(e.target))),
+      }));
+      const badge = out((c) => (onManual.isManual(c) ? 'manuale' : 'auto'), 'char-badge');
+      return el('div', { class: 'char-box char-auto' },
+        el('div', { class: 'char-big' }, out(autoText, '', detail)),
+        el('div', { class: 'char-box-label', text: label }),
+        el('div', { class: 'char-auto-row' }, badge, input,
+          el('button', { type: 'button', class: 'icon-btn', text: '↺', title: 'Torna al valore automatico', 'aria-label': 'Torna ad auto: ' + label, onclick: () => { input.value = ''; set(() => onManual(null)); } })));
+    }
+    const manualFn = (fn, isManual) => Object.assign(fn, { isManual });
+
+    // ---------- Pagina 1: Personaggio (fuori da editor: paginaPersonaggio) ----------
+    const { pageMain, header, abilitiesBlock, savesBlock, skillsBlock, profsBlock, combatBlock, hpBlock, rollHp, attacksBlock, equipmentBlock, personalityBlock, featuresBlock, labeled } = paginaPersonaggio(stato, { autoBox, draw, legendary, manualFn, o, out, p, recalc, set });
 
     // ---------- Pagina 2: Storia ----------
     function pageStory() {
