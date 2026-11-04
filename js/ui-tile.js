@@ -42,6 +42,105 @@
     }
   }
 
+  // Ritagliatore: flag dei tile selezionati, rilevamento dei tile vuoti, nuova dimensione del tile.
+  function flagEDimensione(S, api) {
+    const { current, source, emit, fillSelects, fit, refresh, vp, wIn, hIn, threshold, isStructure } = api;
+    async function saveTs(ts) {
+      const res = await UT.saveTileset(ts);
+      vp.requestDraw();
+      emit();
+      return res;
+    }
+    function toggleFlag(flag) {
+      const ts = current();
+      const s = source();
+      if (!ts || !S.picked.size) { toast('Seleziona prima uno o più tile con lo strumento «Seleziona».', 'error'); return; }
+      const copy = clone(ts);
+      const ids = [...S.picked].map((i) => T.tileId(s.id, i % s.cols, Math.floor(i / s.cols)));
+      const allOn = ids.every((id) => TL.flagsOf(copy, id)[flag]);
+      TL.setFlag(copy, ids, flag, !allOn);
+      saveTs(copy);
+      toast(TL.FLAG_NAMES[flag] + (allOn ? ' tolto da ' : ' impostato su ') + ids.length + (ids.length === 1 ? ' tile.' : ' tile.'));
+    }
+    async function alphaOf(s) {
+      if (S.alphaCache && S.alphaCache.id === s.imageId) return S.alphaCache.alpha;
+      const data = await DnD.immagini.get(s.imageId);
+      if (!data) return null;
+      const r = await DnD.immaginiLib.readAlpha(data);
+      S.alphaCache = { id: s.imageId, alpha: r.alpha };
+      return r.alpha;
+    }
+    async function detectEmpty() {
+      const ts = current();
+      const s = source();
+      if (!ts || !s) return;
+      const pct = Number(threshold.value);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) { toast('La soglia deve essere tra 0 e 100%.', 'error'); return; }
+      const alpha = await alphaOf(s);
+      if (!alpha) { toast('L\'immagine non è disponibile.', 'error'); return; }
+      const copy = clone(ts);
+      copy.threshold = pct / 100;
+      const bits = TL.detectEmpty(copy, T.sourceOf(copy, s.id), alpha, pct / 100);
+      await saveTs(copy);
+      const count = (bits.match(/1/g) || []).length;
+      toast(count + (count === 1 ? ' tile vuoto escluso' : ' tile vuoti esclusi') + ' (meno del ' + pct + '% di pixel non trasparenti). Restano modificabili a mano.');
+    }
+
+    async function applySize() {
+      const ts = current();
+      const s = source();
+      const tw = Number(wIn.value);
+      const th = Number(hIn.value);
+      if (!ts || !s || !TL.validSize(tw) || !TL.validSize(th)) return;
+      const uses = TL.usage(DnD.store.state, ts.id);
+      const apply = async () => {
+        const copy = clone(ts);
+        const oldCols = s.cols;
+        const oldRows = s.rows;
+        TL.applySize(copy, s.id, tw, th);
+        const saved = DnD.dati.normalizeTileset(copy);
+        const prevSel = S.selection;
+        const res = await DnD.store.update((st) => {
+          st.tilesets[st.tilesets.findIndex((x) => x.id === saved.id)] = saved;
+          rebuildImageTemplates(st, saved, s.id, oldCols, oldRows);
+        });
+        if (!res.ok) { toast('TileSet NON salvato: ' + res.message, 'error'); return; }
+        const ns = T.sourceOf(saved, s.id);
+        if (isStructure) S.selection = TL.remapBits(prevSel, oldCols, oldRows, ns.cols, ns.rows, '0');
+        S.picked = new Set();
+        refresh();
+        fit();
+        emit();
+        toast('Dimensione del tile: ' + tw + '×' + th + ' px · ' + TL.gridText(TL.grid(ns.imageW, ns.imageH, tw, th)) + '.', 'success');
+      };
+      const asNew = async () => {
+        const copy = TL.copyWithSize(ts, s.id, tw, th, DnD.dadi.uid());
+        const res = await UT.saveTileset(copy);
+        if (!res.ok) return;
+        const ns = T.sourceOf(res.tileset, s.id);
+        if (isStructure) S.selection = TL.remapBits(S.selection, s.cols, s.rows, ns.cols, ns.rows, '0');
+        S.tsId = last.tilesetId = res.tileset.id;
+        S.picked = new Set();
+        refresh();
+        fit();
+        emit();
+        toast('Creato il TileSet «' + res.tileset.name + '».', 'success');
+      };
+      if (!uses.length) { apply(); return; }
+      openDialog('TileSet già in uso', el('div', {},
+        el('p', { text: 'Il TileSet «' + ts.name + '» è usato in:' }),
+        el('ul', {}, uses.slice(0, 12).map((u) => el('li', { text: u }))),
+        uses.length > 12 ? el('p', { class: 'muted small', text: '…e altri ' + (uses.length - 12) + '.' }) : null,
+        el('p', { class: 'muted small', text: 'Con «Applica a tutti» i tile restano sulle stesse coordinate (colonna, riga) con i loro flag; le strutture da immagine si ricostruiscono. «Salva come nuovo tileset» crea una copia con la nuova dimensione e lascia invariato l\'originale.' })), [
+        { text: 'Annulla', onclick: () => { fillSelects(); } },
+        { text: 'Salva come nuovo tileset', onclick: () => { asNew(); } },
+        { text: 'Applica a tutti', class: 'primary', onclick: () => { apply(); } },
+      ]);
+    }
+
+    return { saveTs, toggleFlag, alphaOf, detectEmpty, applySize };
+  }
+
   // opts: { mode: 'struttura' | 'palette', tilesetId, srcId, selection (struttura), container (trascina/incolla),
   //         onChange({ tilesetId, srcId, selection, stamp }), height }
   function cutter(opts) {
@@ -328,99 +427,8 @@
       if (S.tool === 'timbro') emit();
     }
 
-    // ---------- Flag, tile vuoti, dimensione ----------
-    async function saveTs(ts) {
-      const res = await UT.saveTileset(ts);
-      vp.requestDraw();
-      emit();
-      return res;
-    }
-    function toggleFlag(flag) {
-      const ts = current();
-      const s = source();
-      if (!ts || !S.picked.size) { toast('Seleziona prima uno o più tile con lo strumento «Seleziona».', 'error'); return; }
-      const copy = clone(ts);
-      const ids = [...S.picked].map((i) => T.tileId(s.id, i % s.cols, Math.floor(i / s.cols)));
-      const allOn = ids.every((id) => TL.flagsOf(copy, id)[flag]);
-      TL.setFlag(copy, ids, flag, !allOn);
-      saveTs(copy);
-      toast(TL.FLAG_NAMES[flag] + (allOn ? ' tolto da ' : ' impostato su ') + ids.length + (ids.length === 1 ? ' tile.' : ' tile.'));
-    }
-    async function alphaOf(s) {
-      if (S.alphaCache && S.alphaCache.id === s.imageId) return S.alphaCache.alpha;
-      const data = await DnD.immagini.get(s.imageId);
-      if (!data) return null;
-      const r = await DnD.immaginiLib.readAlpha(data);
-      S.alphaCache = { id: s.imageId, alpha: r.alpha };
-      return r.alpha;
-    }
-    async function detectEmpty() {
-      const ts = current();
-      const s = source();
-      if (!ts || !s) return;
-      const pct = Number(threshold.value);
-      if (!Number.isFinite(pct) || pct < 0 || pct > 100) { toast('La soglia deve essere tra 0 e 100%.', 'error'); return; }
-      const alpha = await alphaOf(s);
-      if (!alpha) { toast('L\'immagine non è disponibile.', 'error'); return; }
-      const copy = clone(ts);
-      copy.threshold = pct / 100;
-      const bits = TL.detectEmpty(copy, T.sourceOf(copy, s.id), alpha, pct / 100);
-      await saveTs(copy);
-      const count = (bits.match(/1/g) || []).length;
-      toast(count + (count === 1 ? ' tile vuoto escluso' : ' tile vuoti esclusi') + ' (meno del ' + pct + '% di pixel non trasparenti). Restano modificabili a mano.');
-    }
-
-    async function applySize() {
-      const ts = current();
-      const s = source();
-      const tw = Number(wIn.value);
-      const th = Number(hIn.value);
-      if (!ts || !s || !TL.validSize(tw) || !TL.validSize(th)) return;
-      const uses = TL.usage(DnD.store.state, ts.id);
-      const apply = async () => {
-        const copy = clone(ts);
-        const oldCols = s.cols;
-        const oldRows = s.rows;
-        TL.applySize(copy, s.id, tw, th);
-        const saved = DnD.dati.normalizeTileset(copy);
-        const prevSel = S.selection;
-        const res = await DnD.store.update((st) => {
-          st.tilesets[st.tilesets.findIndex((x) => x.id === saved.id)] = saved;
-          rebuildImageTemplates(st, saved, s.id, oldCols, oldRows);
-        });
-        if (!res.ok) { toast('TileSet NON salvato: ' + res.message, 'error'); return; }
-        const ns = T.sourceOf(saved, s.id);
-        if (isStructure) S.selection = TL.remapBits(prevSel, oldCols, oldRows, ns.cols, ns.rows, '0');
-        S.picked = new Set();
-        refresh();
-        fit();
-        emit();
-        toast('Dimensione del tile: ' + tw + '×' + th + ' px · ' + TL.gridText(TL.grid(ns.imageW, ns.imageH, tw, th)) + '.', 'success');
-      };
-      const asNew = async () => {
-        const copy = TL.copyWithSize(ts, s.id, tw, th, DnD.dadi.uid());
-        const res = await UT.saveTileset(copy);
-        if (!res.ok) return;
-        const ns = T.sourceOf(res.tileset, s.id);
-        if (isStructure) S.selection = TL.remapBits(S.selection, s.cols, s.rows, ns.cols, ns.rows, '0');
-        S.tsId = last.tilesetId = res.tileset.id;
-        S.picked = new Set();
-        refresh();
-        fit();
-        emit();
-        toast('Creato il TileSet «' + res.tileset.name + '».', 'success');
-      };
-      if (!uses.length) { apply(); return; }
-      openDialog('TileSet già in uso', el('div', {},
-        el('p', { text: 'Il TileSet «' + ts.name + '» è usato in:' }),
-        el('ul', {}, uses.slice(0, 12).map((u) => el('li', { text: u }))),
-        uses.length > 12 ? el('p', { class: 'muted small', text: '…e altri ' + (uses.length - 12) + '.' }) : null,
-        el('p', { class: 'muted small', text: 'Con «Applica a tutti» i tile restano sulle stesse coordinate (colonna, riga) con i loro flag; le strutture da immagine si ricostruiscono. «Salva come nuovo tileset» crea una copia con la nuova dimensione e lascia invariato l\'originale.' })), [
-        { text: 'Annulla', onclick: () => { fillSelects(); } },
-        { text: 'Salva come nuovo tileset', onclick: () => { asNew(); } },
-        { text: 'Applica a tutti', class: 'primary', onclick: () => { apply(); } },
-      ]);
-    }
+    // ---------- Flag, tile vuoti, dimensione (fuori da cutter: flagEDimensione) ----------
+    const { saveTs, toggleFlag, alphaOf, detectEmpty, applySize } = flagEDimensione(S, { current, source, emit, fillSelects, fit, refresh, vp, wIn, hIn, threshold, isStructure });
 
     // ---------- Importazione ----------
     async function importFile(f) {
