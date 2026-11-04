@@ -46,18 +46,21 @@
   //         onChange({ tilesetId, srcId, selection, stamp }), height }
   function cutter(opts) {
     const isStructure = opts.mode === 'struttura';
-    let tsId = opts.tilesetId || last.tilesetId;
-    let srcId = opts.srcId || 0;
-    let selection = opts.selection || '';      // struttura: tile inclusi
-    let picked = new Set();                     // tile selezionati (indici) per i flag o per il timbro
-    let tool = isStructure ? 'includi' : 'timbro';
-    let rectMode = false;
-    let drag = null;
-    let numbers = last.numbers;
-    let alphaCache = null;
+    const S = {
+      tsId: opts.tilesetId || last.tilesetId,
+      srcId: opts.srcId || 0,
+      selection: opts.selection || '', // struttura: tile inclusi
+      picked: new Set(), // tile selezionati (indici) per i flag o per il timbro
+      tool: isStructure ? 'includi' : 'timbro',
+      rectMode: false,
+      drag: null,
+      numbers: last.numbers,
+      alphaCache: null,
+      fitted: null,
+    };
 
-    const current = () => findTs(tsId);
-    const source = () => { const ts = current(); return ts ? T.sourceOf(ts, srcId) : null; };
+    const current = () => findTs(S.tsId);
+    const source = () => { const ts = current(); return ts ? T.sourceOf(ts, S.srcId) : null; };
     const n = () => { const s = source(); return s ? s.cols * s.rows : 0; };
 
     // ---------- DOM ----------
@@ -72,7 +75,7 @@
     const gridInfo = el('span', { class: 'tile-grid-info', 'aria-live': 'polite' });
     const applyBtn = el('button', { type: 'button', class: 'btn small primary', text: 'Applica', title: 'Applica la nuova dimensione del tile' });
     const threshold = numberInput(5, { min: 0, max: 100, step: 1, 'aria-label': 'Soglia dei tile vuoti (%)', class: 'tile-size-in' });
-    const numbersBox = el('input', { type: 'checkbox', checked: numbers });
+    const numbersBox = el('input', { type: 'checkbox', checked: S.numbers });
     const status = el('div', { class: 'muted small', 'aria-live': 'polite' });
     const toolBtns = {};
     const toolList = isStructure ? [['includi', '✚ Includi/escludi'], ['seleziona', '⬚ Seleziona (flag)']] : [['timbro', '🖌 Timbro'], ['seleziona', '⬚ Seleziona (flag)']];
@@ -87,8 +90,8 @@
     const selBar = isStructure ? el('div', { class: 'tool-group' },
       btn('Seleziona tutto', () => setSelection('1'.repeat(n()))),
       btn('Deseleziona', () => setSelection('0'.repeat(n()))),
-      btn('Inverti', () => setSelection(TL.invertBits(selection))),
-      el('label', { class: 'check small' }, el('input', { type: 'checkbox', onchange: (e) => { rectMode = e.target.checked; } }), ' Rettangolo'),
+      btn('Inverti', () => setSelection(TL.invertBits(S.selection))),
+      el('label', { class: 'check small' }, el('input', { type: 'checkbox', onchange: (e) => { S.rectMode = e.target.checked; } }), ' Rettangolo'),
       btn('Rileva dai pixel', () => { const ts = current(); if (ts) setSelection(TL.notExcluded(ts, source())); })) : null;
     function btn(text, onclick) { return el('button', { type: 'button', class: 'btn small', text, onclick }); }
 
@@ -118,16 +121,16 @@
 
     // ---------- Stato ----------
     function emit() {
-      if (opts.onChange) opts.onChange({ tilesetId: tsId, srcId, selection, stamp: stamp() });
+      if (opts.onChange) opts.onChange({ tilesetId: S.tsId, srcId: S.srcId, selection: S.selection, stamp: stamp() });
     }
     function setSelection(bits) {
-      selection = bits;
+      S.selection = bits;
       updateStatus();
       vp.requestDraw();
       emit();
     }
     function setTool(k) {
-      tool = k;
+      S.tool = k;
       for (const [id, b] of Object.entries(toolBtns)) { b.classList.toggle('active', id === k); b.setAttribute('aria-pressed', String(id === k)); }
       updateStatus();
     }
@@ -135,8 +138,8 @@
     function stamp() {
       const s = source();
       const ts = current();
-      if (isStructure || !s || !picked.size) return null;
-      const idx = [...picked];
+      if (isStructure || !s || !S.picked.size) return null;
+      const idx = [...S.picked];
       const xs = idx.map((i) => i % s.cols);
       const ys = idx.map((i) => Math.floor(i / s.cols));
       const x0 = Math.min(...xs);
@@ -148,7 +151,7 @@
         for (let x = 0; x < w; x++) {
           const i = (y0 + y) * s.cols + x0 + x;
           const id = T.tileId(s.id, x0 + x, y0 + y);
-          ids.push(picked.has(i) && !T.isExcluded(ts, id) ? id : null);
+          ids.push(S.picked.has(i) && !T.isExcluded(ts, id) ? id : null);
         }
       }
       return ids.some((x) => x !== null) ? { tilesetId: ts.id, w, h, ids } : null;
@@ -156,17 +159,17 @@
 
     function fillSelects() {
       const list = tilesets();
-      if (!list.some((t) => t.id === tsId)) tsId = list.length ? list[0].id : null;
-      clear(tsSel).append(...(list.length ? list.map((t) => el('option', { value: t.id, text: t.name, selected: t.id === tsId }))
+      if (!list.some((t) => t.id === S.tsId)) S.tsId = list.length ? list[0].id : null;
+      clear(tsSel).append(...(list.length ? list.map((t) => el('option', { value: t.id, text: t.name, selected: t.id === S.tsId }))
         : [el('option', { value: '', text: 'Nessun TileSet: importa un\'immagine' })]));
       const ts = current();
-      if (ts && !T.sourceOf(ts, srcId)) srcId = ts.sources[0].id;
-      clear(srcSel).append(...(ts ? ts.sources.map((s) => el('option', { value: String(s.id), text: s.name, selected: s.id === srcId })) : []));
+      if (ts && !T.sourceOf(ts, S.srcId)) S.srcId = ts.sources[0].id;
+      clear(srcSel).append(...(ts ? ts.sources.map((s) => el('option', { value: String(s.id), text: s.name, selected: s.id === S.srcId })) : []));
       srcSel.hidden = !ts || ts.sources.length < 2;
       const s = source();
       wIn.value = s ? String(Math.round(s.tileW)) : '';
       hIn.value = s ? String(Math.round(s.tileH)) : '';
-      if (isStructure && s && selection.length !== s.cols * s.rows) selection = TL.notExcluded(ts, s);
+      if (isStructure && s && S.selection.length !== s.cols * s.rows) S.selection = TL.notExcluded(ts, s);
       updateGridInfo();
     }
     function updateGridInfo() {
@@ -186,10 +189,10 @@
       if (!ts || !s) { status.textContent = 'Importa un\'immagine per iniziare.'; return; }
       const partial = TL.partialTiles(s).length;
       const parts = [s.imageW + '×' + s.imageH + ' px', partial ? partial + ' tile parziali (◩)' : 'nessun tile parziale'];
-      if (isStructure) parts.push((selection.match(/1/g) || []).length + ' tile inclusi = celle della struttura');
-      if (picked.size) parts.push(picked.size + ' selezionati');
-      parts.push(tool === 'includi' ? 'Clic o trascina per includere/escludere' + (rectMode ? ' (rettangolo)' : '')
-        : tool === 'timbro' ? 'Clic = un tile, trascina = rettangolo di tile (timbro)'
+      if (isStructure) parts.push((S.selection.match(/1/g) || []).length + ' tile inclusi = celle della struttura');
+      if (S.picked.size) parts.push(S.picked.size + ' selezionati');
+      parts.push(S.tool === 'includi' ? 'Clic o trascina per includere/escludere' + (S.rectMode ? ' (rettangolo)' : '')
+        : S.tool === 'timbro' ? 'Clic = un tile, trascina = rettangolo di tile (timbro)'
           : 'Clic = un tile, Ctrl/Maiusc = aggiungi, trascina = rettangolo');
       status.textContent = parts.join(' · ');
     }
@@ -233,11 +236,11 @@
           if (x > W || y > H || x + w < 0 || y + h < 0) continue;
           const id = T.tileId(s.id, col, row);
           const f = TL.flagsOf(ts, id);
-          if (isStructure && selection[i] !== '1') { ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x, y, w, h); }
+          if (isStructure && S.selection[i] !== '1') { ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x, y, w, h); }
           if (f.excluded) { ctx.fillStyle = c.excluded; ctx.fillRect(x, y, w, h); }
           if (f.blocking) { ctx.fillStyle = c.blocking; ctx.fillRect(x, y, w, h); }
           if (f.difficult) { ctx.fillStyle = DIFFICULT; ctx.fillRect(x, y, w, h); }
-          if (picked.has(i)) { ctx.fillStyle = c.selected; ctx.fillRect(x, y, w, h); }
+          if (S.picked.has(i)) { ctx.fillStyle = c.selected; ctx.fillRect(x, y, w, h); }
           ctx.strokeStyle = c.cut;
           ctx.lineWidth = 1;
           ctx.setLineDash(r.sw < s.tileW || r.sh < s.tileH ? [3, 3] : []);
@@ -245,7 +248,7 @@
           ctx.setLineDash([]);
           if (w >= 18 && h >= 14) {
             const marks = (r.sw < s.tileW || r.sh < s.tileH ? '◩' : '') + (f.blocking ? '⛔' : '') + (f.difficult ? '≋' : '');
-            const text = (numbers ? String(i) : '') + (marks ? (numbers ? ' ' : '') + marks : '');
+            const text = (S.numbers ? String(i) : '') + (marks ? (S.numbers ? ' ' : '') + marks : '');
             if (text) {
               ctx.fillStyle = c.labelBg;
               ctx.fillRect(x + 1, y + 1, ctx.measureText(text).width + 4, 12);
@@ -255,9 +258,9 @@
           }
         }
       }
-      if (drag && drag.rect) {
-        const a = drag.a;
-        const b = drag.b;
+      if (S.drag && S.drag.rect) {
+        const a = S.drag.a;
+        const b = S.drag.b;
         const [ax, ay, bx, by] = [a % s.cols, Math.floor(a / s.cols), b % s.cols, Math.floor(b / s.cols)];
         const r0 = T.tileRect(s, Math.min(ax, bx), Math.min(ay, by));
         const r1 = T.tileRect(s, Math.max(ax, bx), Math.max(ay, by));
@@ -292,37 +295,37 @@
     function onDown(e, p) {
       const i = tileAt(p);
       if (i < 0) return;
-      if (tool === 'includi') {
-        const value = selection[i] === '1' ? '0' : '1';
-        drag = { a: i, b: i, value, rect: rectMode };
-        if (!rectMode) setSelection(TL.setBits(selection, [i], value === '1'));
+      if (S.tool === 'includi') {
+        const value = S.selection[i] === '1' ? '0' : '1';
+        S.drag = { a: i, b: i, value, rect: S.rectMode };
+        if (!S.rectMode) setSelection(TL.setBits(S.selection, [i], value === '1'));
         return;
       }
-      if (tool === 'seleziona' && !(e.ctrlKey || e.shiftKey || e.metaKey)) picked = new Set();
-      if (tool === 'timbro') picked = new Set();
-      drag = { a: i, b: i, rect: true, base: new Set(picked) };
-      picked.add(i);
+      if (S.tool === 'seleziona' && !(e.ctrlKey || e.shiftKey || e.metaKey)) S.picked = new Set();
+      if (S.tool === 'timbro') S.picked = new Set();
+      S.drag = { a: i, b: i, rect: true, base: new Set(S.picked) };
+      S.picked.add(i);
       vp.requestDraw();
     }
     function onMove(e, p) {
-      if (!drag) return;
+      if (!S.drag) return;
       const i = tileAt(p);
-      if (i < 0 || i === drag.b) return;
-      drag.b = i;
+      if (i < 0 || i === S.drag.b) return;
+      S.drag.b = i;
       const s = source();
-      if (tool === 'includi' && !drag.rect) { if (selection[i] !== drag.value) setSelection(TL.setBits(selection, [i], drag.value === '1')); return; }
-      if (tool !== 'includi') picked = new Set([...drag.base, ...TL.rectIndices(s.cols, drag.a, i)]);
+      if (S.tool === 'includi' && !S.drag.rect) { if (S.selection[i] !== S.drag.value) setSelection(TL.setBits(S.selection, [i], S.drag.value === '1')); return; }
+      if (S.tool !== 'includi') S.picked = new Set([...S.drag.base, ...TL.rectIndices(s.cols, S.drag.a, i)]);
       vp.requestDraw();
     }
     function onUp() {
-      const d = drag;
-      drag = null;
+      const d = S.drag;
+      S.drag = null;
       if (!d) return;
       const s = source();
-      if (tool === 'includi' && d.rect) setSelection(TL.setBits(selection, TL.rectIndices(s.cols, d.a, d.b), d.value === '1'));
+      if (S.tool === 'includi' && d.rect) setSelection(TL.setBits(S.selection, TL.rectIndices(s.cols, d.a, d.b), d.value === '1'));
       updateStatus();
       vp.requestDraw();
-      if (tool === 'timbro') emit();
+      if (S.tool === 'timbro') emit();
     }
 
     // ---------- Flag, tile vuoti, dimensione ----------
@@ -335,20 +338,20 @@
     function toggleFlag(flag) {
       const ts = current();
       const s = source();
-      if (!ts || !picked.size) { toast('Seleziona prima uno o più tile con lo strumento «Seleziona».', 'error'); return; }
+      if (!ts || !S.picked.size) { toast('Seleziona prima uno o più tile con lo strumento «Seleziona».', 'error'); return; }
       const copy = clone(ts);
-      const ids = [...picked].map((i) => T.tileId(s.id, i % s.cols, Math.floor(i / s.cols)));
+      const ids = [...S.picked].map((i) => T.tileId(s.id, i % s.cols, Math.floor(i / s.cols)));
       const allOn = ids.every((id) => TL.flagsOf(copy, id)[flag]);
       TL.setFlag(copy, ids, flag, !allOn);
       saveTs(copy);
       toast(TL.FLAG_NAMES[flag] + (allOn ? ' tolto da ' : ' impostato su ') + ids.length + (ids.length === 1 ? ' tile.' : ' tile.'));
     }
     async function alphaOf(s) {
-      if (alphaCache && alphaCache.id === s.imageId) return alphaCache.alpha;
+      if (S.alphaCache && S.alphaCache.id === s.imageId) return S.alphaCache.alpha;
       const data = await DnD.immagini.get(s.imageId);
       if (!data) return null;
       const r = await DnD.immaginiLib.readAlpha(data);
-      alphaCache = { id: s.imageId, alpha: r.alpha };
+      S.alphaCache = { id: s.imageId, alpha: r.alpha };
       return r.alpha;
     }
     async function detectEmpty() {
@@ -380,15 +383,15 @@
         const oldRows = s.rows;
         TL.applySize(copy, s.id, tw, th);
         const saved = DnD.dati.normalizeTileset(copy);
-        const prevSel = selection;
+        const prevSel = S.selection;
         const res = await DnD.store.update((st) => {
           st.tilesets[st.tilesets.findIndex((x) => x.id === saved.id)] = saved;
           rebuildImageTemplates(st, saved, s.id, oldCols, oldRows);
         });
         if (!res.ok) { toast('TileSet NON salvato: ' + res.message, 'error'); return; }
         const ns = T.sourceOf(saved, s.id);
-        if (isStructure) selection = TL.remapBits(prevSel, oldCols, oldRows, ns.cols, ns.rows, '0');
-        picked = new Set();
+        if (isStructure) S.selection = TL.remapBits(prevSel, oldCols, oldRows, ns.cols, ns.rows, '0');
+        S.picked = new Set();
         refresh();
         fit();
         emit();
@@ -399,9 +402,9 @@
         const res = await UT.saveTileset(copy);
         if (!res.ok) return;
         const ns = T.sourceOf(res.tileset, s.id);
-        if (isStructure) selection = TL.remapBits(selection, s.cols, s.rows, ns.cols, ns.rows, '0');
-        tsId = last.tilesetId = res.tileset.id;
-        picked = new Set();
+        if (isStructure) S.selection = TL.remapBits(S.selection, s.cols, s.rows, ns.cols, ns.rows, '0');
+        S.tsId = last.tilesetId = res.tileset.id;
+        S.picked = new Set();
         refresh();
         fit();
         emit();
@@ -425,14 +428,14 @@
         const image = await UT.importImage(f);
         const ts = T.newTileset(DnD.dadi.uid(), image.name);
         const src = UT.addImageSource(ts, image);
-        alphaCache = { id: image.imageId, alpha: image.alpha };
+        S.alphaCache = { id: image.imageId, alpha: image.alpha };
         const res = await UT.saveTileset(ts);
         for (const w of image.warnings) toast('⚠ ' + w);
         if (!res.ok) return;
-        tsId = last.tilesetId = res.tileset.id;
-        srcId = src.id;
-        selection = isStructure ? TL.notExcluded(res.tileset, T.sourceOf(res.tileset, src.id)) : '';
-        picked = new Set();
+        S.tsId = last.tilesetId = res.tileset.id;
+        S.srcId = src.id;
+        S.selection = isStructure ? TL.notExcluded(res.tileset, T.sourceOf(res.tileset, src.id)) : '';
+        S.picked = new Set();
         refresh();
         fit();
         emit();
@@ -442,8 +445,8 @@
       }
     }
 
-    tsSel.addEventListener('change', () => { tsId = last.tilesetId = tsSel.value; srcId = 0; selection = ''; picked = new Set(); refresh(); fit(); emit(); });
-    srcSel.addEventListener('change', () => { srcId = Number(srcSel.value); selection = ''; picked = new Set(); refresh(); fit(); emit(); });
+    tsSel.addEventListener('change', () => { S.tsId = last.tilesetId = tsSel.value; S.srcId = 0; S.selection = ''; S.picked = new Set(); refresh(); fit(); emit(); });
+    srcSel.addEventListener('change', () => { S.srcId = Number(srcSel.value); S.selection = ''; S.picked = new Set(); refresh(); fit(); emit(); });
     file.addEventListener('change', () => { const f = file.files[0]; file.value = ''; if (f) importFile(f); });
     for (const [inp, pre] of [[wIn, wPre], [hIn, hPre]]) {
       inp.addEventListener('input', updateGridInfo);
@@ -451,35 +454,34 @@
       pre.addEventListener('change', () => { if (pre.value) inp.value = pre.value; pre.value = ''; updateGridInfo(); });
     }
     applyBtn.addEventListener('click', applySize);
-    numbersBox.addEventListener('change', () => { numbers = last.numbers = numbersBox.checked; vp.requestDraw(); });
+    numbersBox.addEventListener('change', () => { S.numbers = last.numbers = numbersBox.checked; vp.requestDraw(); });
     UT.acceptImages(opts.container || node, () => node.isConnected && !node.closest('[hidden]') && !document.querySelector('dialog[open]'), importFile);
 
     // La vista si adatta all'immagine quando cambia il TileSet o la sorgente mostrati.
-    let fitted = null;
     function refresh() {
       fillSelects();
-      setTool(tool);
+      setTool(S.tool);
       updateStatus();
-      const key = tsId + ':' + srcId;
-      if (key !== fitted && source()) { fitted = key; requestAnimationFrame(fit); }
+      const key = S.tsId + ':' + S.srcId;
+      if (key !== S.fitted && source()) { S.fitted = key; requestAnimationFrame(fit); }
       vp.requestDraw();
     }
     refresh();
 
     return {
       node, refresh, fit,
-      state: () => ({ tilesetId: tsId, srcId, selection, stamp: stamp() }),
-      select: (id, sid) => { tsId = last.tilesetId = id; srcId = sid || 0; selection = ''; picked = new Set(); refresh(); fit(); },
+      state: () => ({ tilesetId: S.tsId, srcId: S.srcId, selection: S.selection, stamp: stamp() }),
+      select: (id, sid) => { S.tsId = last.tilesetId = id; S.srcId = sid || 0; S.selection = ''; S.picked = new Set(); refresh(); fit(); },
       // Contagocce: sceglie un tile come timbro.
       pickTile: (id, tileId) => {
         const ts = findTs(id);
         if (!ts) return;
         const c = T.tileCoords(tileId);
-        tsId = last.tilesetId = id;
-        srcId = c.src;
+        S.tsId = last.tilesetId = id;
+        S.srcId = c.src;
         fillSelects();
         const s = source();
-        picked = new Set([c.row * s.cols + c.col]);
+        S.picked = new Set([c.row * s.cols + c.col]);
         setTool('timbro');
         vp.requestDraw();
         emit();
