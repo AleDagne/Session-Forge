@@ -2992,7 +2992,10 @@
     const mem = new Map();
     const backend = { name: 'memoria', get: async (k) => (mem.has(k) ? mem.get(k) : null), set: async (k, v) => { mem.set(k, v); }, clear: async () => mem.clear() };
     const prevStore = DnD.store;
+    // Anche la larghezza delle schede della versione precedente: senza layout salvato, load() la riprende.
+    const OLD_KEY = 'dnd-battaglie:larghezza-schede';
     const prevLayout = localStorage.getItem(LC().KEY);
+    const prevOld = localStorage.getItem(OLD_KEY);
     DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
     const st = DnD.store.state;
     const hero = DnD.dati.normalizeCreature({ name: 'Aria', classId: 'guerriero', maxHp: 20 }, true);
@@ -3006,12 +3009,14 @@
     document.body.append(box);
     try {
       localStorage.removeItem(LC().KEY);
+      localStorage.removeItem(OLD_KEY);
       DnD.sezioni.combattimento.render(box);
       await fn(box, DnD.store.state);
     } finally {
       box.remove();
       DnD.store = prevStore;
       if (prevLayout === null) localStorage.removeItem(LC().KEY); else localStorage.setItem(LC().KEY, prevLayout);
+      if (prevOld !== null) localStorage.setItem(OLD_KEY, prevOld);
     }
   }
   // Attende qualche frame (con un tempo massimo: in una scheda nascosta i frame non arrivano).
@@ -6956,7 +6961,8 @@
 
   test('Online 3: vista del party calcolata una volta per aggiornamento (filtro.inBlocco, audit A24)', async () => {
     const F = NET().filtro;
-    const raw = await (await fetch('test/fixture/archivio-v18.json', { cache: 'no-store' })).json();
+    if (location.protocol === 'file:') return; // fetch delle fixture solo da server (come il test di migrazione)
+    const raw = JSON.parse(await leggiFixture('archivio-v18.json'));
     const st = DnD.dati.normalizeState(raw.state || raw);
     const opz = (pid) => ({ personaggioId: pid, master: 'M', rivelati: {}, incontrati: new Set() });
     const ids = [st.players[0].id, (st.players[1] || st.players[0]).id];
