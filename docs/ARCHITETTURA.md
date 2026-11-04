@@ -124,11 +124,15 @@ condiviso è un unico oggetto **`S`**, così le parti lo leggono e lo modificano
 
 ## Versioni e migrazioni dei dati
 
-- Versione del modello: `modello.VERSION` (oggi **18**), salvata nello stato e nei file esportati.
+- Versione del modello: `modello.VERSION` (oggi **19**: provenienza degli incantesimi, solo normalizzazione), salvata nello stato e nei file esportati.
 - I dati grezzi (salvati o importati) passano da `migrazioni-tile.migrateRaw` (v5-v7) e da
   `migrateV8 … migrateV18` (`stato/migrazioni.js`), poi dalla normalizzazione (`stato/normalizza.js`).
 - Cambiare lo schema: nuova funzione `migrateVNN` in fila, `VERSION` + 1, fixture nuova in `test/fixture/`, sezione
   «Modello dati» del README.
+- Gli incantesimi dell'SRD 5.1 sono dati generati (`js/dati/srd-incantesimi.js`) da uno strumento di sviluppo fuori
+  dall'app (`strumenti/estrai-srd.js`, Node + `pdftotext`, non in cache). L'analisi del testo (`js/srd-analisi.js`,
+  livello regole) è la stessa usata dallo strumento e provata dai test; l'importazione nella libreria è in
+  `js/stato/srd.js` (livello stato), che salva tramite lo store ricevuto e annulla tutto se la scrittura non riesce.
 - Le preferenze di visualizzazione (`localStorage`, chiavi `dnd-battaglie:…`) non hanno versione: si leggono con
   valori di ripiego.
 

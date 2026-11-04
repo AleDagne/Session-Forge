@@ -7638,6 +7638,219 @@
     });
   });
 
+  // ---------- Incantesimi dell'SRD 5.1 (dati/srd-incantesimi.js, srd-analisi.js, stato/srd.js) ----------
+  const SRDA = () => DnD.srdAnalisi;
+  const SRDS = () => DnD.srd;
+  const srdVoce = (nome) => DnD.datiSrd.incantesimi.find((v) => v.name === nome);
+
+  test('SRD: struttura di ogni voce estratta (campi, livello, scuola, classi, id stabile)', () => {
+    const lista = DnD.datiSrd.incantesimi;
+    const errori = [];
+    for (const v of lista) {
+      const n = DnD.dati.normalizeSpell(v);
+      if (!/^srd51-it-[a-z0-9-]+$/.test(v.id) || v.id !== SRDA().slug(v.name)) errori.push(v.name + ': id');
+      if (!v.name || !v.castingTime || !v.range || !v.duration || !v.description) errori.push(v.name + ': campo vuoto');
+      if (!Number.isInteger(v.level) || v.level < 0 || v.level > 9) errori.push(v.name + ': livello');
+      if (!DnD.magie.SCHOOLS.includes(v.school)) errori.push(v.name + ': scuola');
+      if (!v.classes.length || v.classes.some((c) => !DnD.classi.IDS.includes(c))) errori.push(v.name + ': classi');
+      if (v.fonte !== 'SRD 5.1 IT' || v.modificato !== false || v.meccanicaVerificata !== false) errori.push(v.name + ': provenienza');
+      if (v.components.M !== Boolean(v.components.material)) errori.push(v.name + ': materiale');
+      // La normalizzazione non taglia nulla.
+      for (const k of ['name', 'castingTime', 'range', 'duration', 'description', 'higherLevels']) if (n[k] !== v[k]) errori.push(v.name + ': ' + k + ' tagliato');
+      if (n.components.material !== v.components.material || n.effect.dice !== v.effect.dice) errori.push(v.name + ': normalizzazione');
+    }
+    eq(errori, []);
+    eq(new Set(lista.map((v) => v.id)).size, lista.length, 'id unici');
+  });
+
+  test('SRD: conteggio atteso (319 incantesimi; per livello come l\'SRD 5.1)', () => {
+    const lista = DnD.datiSrd.incantesimi;
+    eq(lista.length, 319);
+    eq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((l) => lista.filter((v) => v.level === l).length), [24, 49, 54, 42, 31, 37, 31, 20, 16, 15]);
+    eq([srdVoce('Palla di fuoco').classes, srdVoce('Cura ferite').classes, srdVoce('Deflagrazione occulta').classes],
+      [['mago', 'stregone'], ['bardo', 'chierico', 'druido', 'paladino', 'ranger'], ['warlock']]);
+  });
+
+  test('SRD: intestazione, campi, concentrazione e rituale da testi di prova', () => {
+    const A = SRDA();
+    eq(A.intestazione('Ammaliamento di 2° livello (rituale)'), { level: 2, school: 'ammaliamento', ritual: true, resto: '' });
+    eq(A.intestazione('Trucchetto di necromanzia'), { level: 0, school: 'necromanzia', ritual: false, resto: '' });
+    eq(A.intestazione('Ammaliamento di 2° livello Tempo di lancio: 1 azione').resto, 'Tempo di lancio: 1 azione');
+    eq(A.intestazione('Trappola meccanica'), null);
+    const c = A.campi('Tempo di lancio: 1 azione Gittata: 9 metri Componenti: V, S, M (una goccia di sangue, o due) Durata: Concentrazione, fino a 1 minuto L\'incantatore sceglie.');
+    eq(c, { castingTime: '1 azione', range: '9 metri', components: { V: true, S: true, M: true, material: 'una goccia di sangue, o due' }, duration: 'Concentrazione, fino a 1 minuto', resto: 'L\'incantatore sceglie.' });
+    eq(A.campi('Tempo di lancio: 1 azione Gittata: Contatto Componente: V, S Durata: 7 giorni').components, { V: true, S: true, M: false, material: '' }, '«Componente:» del PDF');
+    eq([A.concentrazione(c.duration), A.concentrazione('1 ora'), A.concentrazione('Istantanea')], [true, false, false]);
+    eq([A.rituale('Divinazione di 1° livello (rituale)', '1 minuto'), A.rituale('Divinazione di 1° livello', '1 minuto'), A.rituale('', '10 minuti (rituale)')], [true, false, true]);
+    eq(A.livelliSuperiori('Testo.\nAi livelli superiori. Più dadi.'), { description: 'Testo.', higherLevels: 'Più dadi.' });
+    eq(A.separaLista('Luce Mano magica Luci danzanti Boh', ['Luce', 'Luci danzanti', 'Mano magica']), { nomi: ['Luce', 'Mano magica', 'Luci danzanti'], ignoti: ['Boh'] });
+  });
+
+  test('SRD: rilevamento della meccanica su casi noti, vuoto se ambiguo', () => {
+    const R = (description, higherLevels, level) => SRDA().rilevaMeccanica({ description, higherLevels: higherLevels || '', level: level === undefined ? 3 : level, range: '' });
+    const ts = R('Ogni creatura deve effettuare un tiro salvezza su Destrezza. In caso di fallimento, subisce 8d6 danni da fuoco, o la metà dei danni in caso di successo.',
+      'Quando l\'incantatore lancia questo incantesimo usando uno slot di 4° livello o superiore, i danni aumentano di 1d6 per ogni slot di livello superiore al 3°.');
+    eq([ts.rilevata, ts.effect], [true, { type: 'salvezza', dice: '8d6', damageType: 'fuoco', upcastDice: '1d6', saveAbility: 'DES', halfOnSave: true, addMod: false }]);
+    const att = R('L\'incantatore effettua un attacco a distanza con incantesimo. Se il colpo va a segno, il bersaglio subisce 1d10 danni da fuoco.', '', 0);
+    eq([att.effect.type, att.effect.dice, att.effect.damageType, att.effect.upcastDice], ['attacco', '1d10', 'fuoco', '']);
+    const cura = R('Una creatura recupera un numero di punti ferita pari a 1d8 + il modificatore di caratteristica da incantatore.', 'la guarigione aumenta di 1d8 per ogni slot di livello superiore al 1°.', 1);
+    eq([cura.effect.type, cura.effect.dice, cura.effect.addMod, cura.effect.upcastDice], ['cura', '1d8', true, '1d8']);
+    const blocco = R('Il bersaglio deve superare un tiro salvezza su Saggezza, altrimenti rimane paralizzato.');
+    eq([blocco.rilevata, blocco.effect.type, blocco.effect.saveAbility, blocco.effect.dice, blocco.effect.halfOnSave], [true, 'salvezza', 'SAG', '', false]);
+    const vantaggio = R('Il bersaglio ottiene vantaggio ai tiri salvezza su Destrezza.');
+    eq([vantaggio.rilevata, vantaggio.effect.type], [false, 'nessuno'], 'il vantaggio non è un tiro imposto');
+    // Ambiguo: due tipi di danno, o danni senza attacco né salvezza.
+    const due = R('Ogni creatura deve effettuare un tiro salvezza su Destrezza e subisce 4d6 danni da fuoco e 4d6 danni radiosi.');
+    eq([due.rilevata, due.effect, /più danni/.test(due.note[0])], [false, SRDA().rilevaMeccanica({ description: '' }).effect, true]);
+    eq(R('Il bersaglio subisce 3d6 danni da fuoco.').rilevata, false, 'danni senza tiro');
+    // Sui dati: Palla di fuoco e Cura ferite come atteso, nessuna voce verificata.
+    eq(srdVoce('Palla di fuoco').effect, ts.effect);
+    eq(srdVoce('Colpo infuocato').effect.type, 'nessuno', 'fuoco e radiosi: lasciato senza tiro');
+    ok(DnD.datiSrd.incantesimi.every((v) => v.meccanicaVerificata === false));
+    eq(DnD.validazione.validateSpell(DnD.dati.normalizeSpell(srdVoce('Blocca persone'))), {}, 'tiro salvezza senza danni valido');
+  });
+
+  test('SRD: importazione idempotente (rilanciarla non crea doppioni)', () => {
+    const st = DnD.dati.emptyState();
+    const voci = ['Luce', 'Fulmine', 'Scudo'].map(srdVoce);
+    const prima = st.spells.length;
+    const r1 = SRDS().applica(st.spells, SRDS().confronta(st.spells, voci), {}, () => 'x');
+    eq([r1.esito.aggiunti, r1.spells.length - prima, st.spells.length], [3, 3, prima], 'la libreria data non cambia');
+    const fulmine = r1.spells.find((s) => s.id === 'srd51-it-fulmine');
+    eq([fulmine.srdId, fulmine.fonte, fulmine.modificato, fulmine.meccanicaVerificata, fulmine.name], ['srd51-it-fulmine', 'SRD 5.1 IT', false, false, 'Fulmine']);
+    const confronto = SRDS().confronta(r1.spells, voci);
+    eq(confronto.map((x) => x.stato), ['presente', 'presente', 'presente']);
+    const r2 = SRDS().applica(r1.spells, confronto, { 'srd51-it-luce': 'copia' }, () => 'x');
+    eq([r2.esito.presenti, r2.spells.length], [3, r1.spells.length]);
+  });
+
+  test('SRD: conflitti (tieni il mio, sostituisci, importa come copia, applica a tutti)', () => {
+    const st = DnD.dati.emptyState();
+    const mia = st.spells.find((s) => s.name === 'Palla di fuoco');
+    st.players.push(DnD.dati.normalizeCreature({ id: 'p', name: 'Maga', classId: 'mago', spellcasting: { known: [mia.id] } }, true));
+    const voci = [srdVoce('Palla di fuoco'), srdVoce('Cura ferite'), srdVoce('Luce')];
+    const conf = SRDS().confronta(st.spells, voci);
+    eq(conf.map((x) => [x.stato, x.motivo]), [['conflitto', 'nome'], ['conflitto', 'nome'], ['nuovo', '']]);
+    // Senza scelta: tieni il mio.
+    const tieni = SRDS().applica(st.spells, conf, {}, () => 'c');
+    eq([tieni.esito.tenuti, tieni.esito.aggiunti, tieni.spells.find((s) => s.id === mia.id).fonte], [2, 1, '']);
+    // Sostituisci: stesso id (la giocatrice lo conosce ancora), testo dell'SRD.
+    const sost = SRDS().applica(st.spells, conf, { 'srd51-it-palla-di-fuoco': 'sostituisci' }, () => 'c');
+    const nuova = sost.spells.find((s) => s.id === mia.id);
+    eq([nuova.srdId, nuova.fonte, nuova.description === srdVoce('Palla di fuoco').description, st.players[0].spellcasting.known], ['srd51-it-palla-di-fuoco', 'SRD 5.1 IT', true, [mia.id]]);
+    eq(sost.spells.filter((s) => s.name === 'Palla di fuoco').length, 1, 'nessun doppione');
+    // Copia: nome «(SRD)», la mia resta.
+    let n = 0;
+    const copia = SRDS().applica(st.spells, conf, { 'srd51-it-palla-di-fuoco': 'copia' }, () => 'copia' + (++n));
+    eq([copia.spells.find((s) => s.id === 'copia1').name, copia.spells.find((s) => s.id === mia.id).description === mia.description], ['Palla di fuoco (SRD)', true]);
+    // Applica a tutti: la stessa scelta per ogni conflitto.
+    const tutti = Object.fromEntries(conf.filter((x) => x.stato === 'conflitto').map((x) => [x.voce.id, 'copia']));
+    const rTutti = SRDS().applica(st.spells, conf, tutti, () => 'k' + (++n));
+    eq([rTutti.esito.copie, rTutti.esito.aggiunti, rTutti.spells.filter((s) => / \(SRD\)$/.test(s.name)).map((s) => s.name)], [2, 1, ['Palla di fuoco (SRD)', 'Cura ferite (SRD)']]);
+    eq(SRDS().nomeCopia(copia.spells, 'Palla di fuoco'), 'Palla di fuoco (SRD 2)');
+    // Un SRD importato e poi modificato è in conflitto (non viene sovrascritto senza conferma).
+    const lib = SRDS().applica([], SRDS().confronta([], [srdVoce('Luce')]), {}, () => 'x').spells;
+    lib[0].description = 'Mia luce.';
+    SRDS().segnaModifiche(lib[0]);
+    eq(SRDS().confronta(lib, [srdVoce('Luce')]).map((x) => [x.stato, x.motivo]), [['conflitto', 'modificato']]);
+    eq(SRDS().applica(lib, SRDS().confronta(lib, [srdVoce('Luce')]), {}, () => 'x').spells[0].description, 'Mia luce.');
+  });
+
+  test('SRD: incantesimo modificato e ripristino dell\'originale', () => {
+    const lib = SRDS().applica([], SRDS().confronta([], [srdVoce('Fulmine')]), {}, () => 'x').spells;
+    const sp = DnD.dati.normalizeSpell(Object.assign(JSON.parse(JSON.stringify(lib[0])), { meccanicaVerificata: true }));
+    eq(SRDS().segnaModifiche(sp).modificato, false, 'confermare la meccanica non è una modifica');
+    sp.effect.dice = '9d6';
+    eq(SRDS().segnaModifiche(sp).modificato, true);
+    sp.effect.dice = '8d6';
+    eq(SRDS().segnaModifiche(sp).modificato, false, 'tornato uguale all\'originale');
+    sp.description += ' Aggiunta.';
+    SRDS().segnaModifiche(sp);
+    const orig = SRDS().ripristina(sp);
+    eq([orig.id, orig.modificato, orig.description, orig.meccanicaVerificata, SRDS().diverso(orig)], [sp.id, false, srdVoce('Fulmine').description, false, false]);
+    // Copia: il ripristino tiene il nome della copia.
+    const copia = SRDS().daCatalogo(srdVoce('Fulmine'), 'cp', 'Fulmine (SRD)');
+    copia.range = '1 metro';
+    eq([SRDS().segnaModifiche(copia).modificato, SRDS().ripristina(copia).name, SRDS().ripristina(copia).range], [true, 'Fulmine (SRD)', srdVoce('Fulmine').range]);
+    let msg = '';
+    try { SRDS().ripristina(DnD.dati.emptyState().spells[0]); } catch (e) { msg = e.message; }
+    ok(/non viene dall'SRD/.test(msg));
+  });
+
+  test('SRD: filtri per fonte e «da verificare»', () => {
+    const st = DnD.dati.emptyState();
+    const lib = SRDS().applica(st.spells, SRDS().confronta(st.spells, [srdVoce('Luce'), srdVoce('Scudo')]), {}, () => 'x').spells;
+    eq(lib.filter((s) => SRDS().fonteDi(s) === 'srd').map((s) => s.name), ['Luce', 'Scudo']);
+    eq(lib.filter((s) => SRDS().fonteDi(s) === 'mie').length, st.spells.length);
+    eq(lib.filter(SRDS().daVerificare).map((s) => s.name), ['Luce', 'Scudo'], 'quelli creati nell\'app sono già verificati');
+    SRDS().conferma(lib.find((s) => s.name === 'Luce'));
+    eq(lib.filter(SRDS().daVerificare).map((s) => s.name), ['Scudo']);
+    // Dati salvati prima della v19: meccanica verificata, nessuna fonte.
+    const vecchio = DnD.dati.normalizeSpell({ name: 'Vecchio', level: 1 });
+    eq([vecchio.fonte, vecchio.srdId, vecchio.modificato, vecchio.meccanicaVerificata, vecchio.ritual, vecchio.higherLevels], ['', '', false, true, false, '']);
+  });
+
+  test('SRD: quota piena, importazione annullata senza salvataggi parziali', async () => {
+    const backend = fakeBackend();
+    const realSet = backend.set;
+    let piena = false;
+    backend.set = (k, v) => (piena ? Promise.reject(Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError' })) : realSet(k, v));
+    const store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    await store.save();
+    const prima = store.state.spells;
+    const nuove = SRDS().applica(prima, SRDS().confronta(prima, DnD.datiSrd.incantesimi), {}, () => 'x').spells;
+    piena = true;
+    const esito = await SRDS().salvaLibreria(store, nuove);
+    eq([esito.ok, /spazio di archiviazione/.test(esito.message), store.state.spells === prima, store.state.spells.length], [false, true, true, prima.length]);
+    ok(!/srd51-it-/.test(backend.data.stato), 'sul disco nessun incantesimo dell\'SRD');
+    piena = false;
+    eq((await SRDS().salvaLibreria(store, nuove)).ok, true);
+    ok(/srd51-it-fulmine/.test(backend.data.stato), 'con spazio libero si salva tutto');
+  });
+
+  test('SRD: esportazione e importazione (archivio e singola sessione)', () => {
+    const st = DnD.dati.emptyState();
+    st.spells = SRDS().applica(st.spells, SRDS().confronta(st.spells, [srdVoce('Fulmine'), srdVoce('Luce')]), {}, () => 'x').spells;
+    SRDS().conferma(st.spells.find((s) => s.name === 'Luce'));
+    const back = DnD.dati.importJSON(DnD.dati.exportJSON(st));
+    const f = back.spells.find((s) => s.id === 'srd51-it-fulmine');
+    eq([f.fonte, f.srdId, f.meccanicaVerificata, f.higherLevels === srdVoce('Fulmine').higherLevels, back.spells.find((s) => s.id === 'srd51-it-luce').meccanicaVerificata], ['SRD 5.1 IT', 'srd51-it-fulmine', false, true, true]);
+    eq(SRDS().confronta(back.spells, [srdVoce('Fulmine')])[0].stato, 'presente', 'dopo l\'importazione resta idempotente');
+    // Sessione: l'incantesimo conosciuto da un nemico viaggia con la sessione e non si duplica.
+    const sess = S().current(st);
+    st.npcs.push(Object.assign(DnD.dati.normalizeCreature({ id: 'mago', name: 'Mago', classId: 'mago', spellcasting: { known: ['srd51-it-fulmine'] } }), { sessionId: sess.id }));
+    const file = JSON.parse(JSON.stringify(S().exportSession(st, sess.id)));
+    eq(file.spells.map((s) => [s.id, s.fonte]), [['srd51-it-fulmine', 'SRD 5.1 IT']]);
+    const dst = DnD.dati.emptyState();
+    let n = 0;
+    S().importSession(dst, file, () => 'n' + (++n));
+    S().importSession(dst, file, () => 'n' + (++n));
+    eq(dst.spells.filter((s) => s.id === 'srd51-it-fulmine').length, 1);
+  });
+
+  test('SRD: il generatore di nemici sceglie gli incantesimi importati della classe giusta', () => {
+    const lib = SRDS().applica([], SRDS().confronta([], DnD.datiSrd.incantesimi), {}, () => 'x').spells;
+    for (const [classe, tipo] of [['chierico', 'completo'], ['warlock', 'patto'], ['ranger', 'mezzo']]) {
+      const r = GEN().chooseSpells(lib, classe, classe, 9, DnD.classi.slotTable(tipo, 9));
+      ok(r.known.length > 0 && !r.warnings.length, classe + ': incantesimi scelti senza avvisi');
+      ok(r.known.every((id) => { const s = lib.find((x) => x.id === id); return s.classes.includes(classe) && s.fonte === 'SRD 5.1 IT'; }), classe + ': solo della sua lista');
+    }
+    const mago = gen('mago', 5, {}, genCtx(genRace(), lib)).creature;
+    ok(mago.spellcasting.known.length && mago.spellcasting.known.every((id) => /^srd51-it-/.test(id) && lib.find((x) => x.id === id).classes.includes('mago')));
+  });
+
+  test('SRD: testo di attribuzione presente (dati, Magie, Impostazioni, README, LICENZE)', async () => {
+    const A = DnD.datiSrd.ATTRIBUZIONE;
+    ok(/^Questo lavoro include materiale del System Reference Document 5\.1 \(“SRD 5\.1”\) di Wizards of the Coast LLC/.test(A), 'testo');
+    ok(A.includes('https://creativecommons.org/licenses/by/4.0/legalcode.it') && DnD.datiSrd.LICENZA_URL === 'https://creativecommons.org/licenses/by/4.0/legalcode.it', 'licenza');
+    ok(DnD.uiSrd.attribuzione().textContent.includes(A), 'componente dell\'interfaccia');
+    if (location.protocol === 'file:') return;
+    for (const file of ['README.md', 'LICENZE.md']) {
+      const t = await (await fetch(file, { cache: 'no-store' })).text();
+      ok(t.includes(A), file + ' contiene l\'attribuzione alla lettera');
+    }
+  });
+
   // solo: facoltativo, esegue solo i test il cui nome contiene questo testo.
   async function runTests(solo) {
     const results = [];

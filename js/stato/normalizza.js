@@ -149,14 +149,23 @@
       name: str(sp.name, 60) || 'Incantesimo',
       level: int(sp.level, 0, 0, 9),
       school: DnD.magie.SCHOOLS.includes(sp.school) ? sp.school : 'invocazione',
-      castingTime: str(sp.castingTime, 60),
-      range: str(sp.range, 60),
-      components: { V: Boolean(comp.V), S: Boolean(comp.S), M: Boolean(comp.M), material: str(comp.material, 200) },
-      duration: str(sp.duration, 60),
+      // Limiti ampi: i testi dell'SRD (tempo di lancio delle reazioni, materiali, descrizioni lunghe) ci stanno interi.
+      castingTime: str(sp.castingTime, 200),
+      range: str(sp.range, 120),
+      components: { V: Boolean(comp.V), S: Boolean(comp.S), M: Boolean(comp.M), material: str(comp.material, 600) },
+      duration: str(sp.duration, 80),
       concentration: Boolean(sp.concentration),
+      ritual: Boolean(sp.ritual),
       area: Boolean(sp.area),
       classes: [...new Set(arr(sp.classes).filter((x) => DnD.classi.IDS.includes(x)))],
-      description: str(sp.description, 5000),
+      description: str(sp.description, 20000),
+      higherLevels: str(sp.higherLevels, 4000),
+      // Provenienza (v19): fonte ('' = creato nell'app, «SRD 5.1 IT»), incantesimo SRD d'origine, modificato rispetto
+      // all'originale, effetto meccanico confermato (quelli creati a mano sono verificati per definizione).
+      fonte: str(sp.fonte, 40),
+      srdId: typeof sp.srdId === 'string' && /^srd51-it-[a-z0-9-]{1,60}$/.test(sp.srdId) ? sp.srdId : '',
+      modificato: Boolean(sp.modificato),
+      meccanicaVerificata: sp.meccanicaVerificata === undefined ? true : Boolean(sp.meccanicaVerificata),
       effect: {
         type: DnD.magie.EFFECTS.includes(e.type) ? e.type : 'nessuno',
         dice: dice(e.dice),

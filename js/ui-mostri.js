@@ -351,7 +351,11 @@
           field('Bonus di attacco', el('div', { class: 'input-row' }, numberInput(m.innate.attackOverride, { class: 'qty', placeholder: 'auto', oninput: (e) => { m.innate.attackOverride = e.target.value.trim() === '' ? null : readNumber(e.target); refresh(); } }),
             out(() => 'auto ' + signed(M.prof(m) + M.mod(m, m.innate.ability)))))),
         ...m.innate.spells.map((s, j) => el('div', { class: 'input-row' },
-          el('select', { 'aria-label': 'Incantesimo', onchange: (e) => { s.spellId = e.target.value; } }, spells.map((sp) => opt(sp.id, sp.name + ' (' + DnD.magie.levelName(sp.level) + ')', sp.id === s.spellId))),
+          // Raggruppati per livello e in ordine di nome (la libreria può contenere tutto l'SRD).
+          el('select', { 'aria-label': 'Incantesimo', onchange: (e) => { s.spellId = e.target.value; } }, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((lv) => {
+            const group = spells.filter((sp) => sp.level === lv).sort((a, b) => a.name.localeCompare(b.name, 'it'));
+            return group.length ? el('optgroup', { label: DnD.magie.levelName(lv) }, group.map((sp) => opt(sp.id, sp.name + (sp.fonte ? ' · SRD' : ''), sp.id === s.spellId))) : null;
+          })),
           el('select', { 'aria-label': 'Frequenza', onchange: (e) => { s.freq = e.target.value; drawInnate(); } }, opt('volonta', 'A volontà', s.freq === 'volonta'), opt('giorno', 'N al giorno', s.freq === 'giorno')),
           s.freq === 'giorno' ? numberInput(s.uses, { class: 'qty', min: 1, max: 9, 'aria-label': 'Usi al giorno', oninput: (e) => { s.uses = readNumber(e.target); } }) : null,
           el('button', { type: 'button', class: 'icon-btn danger', text: '✕', 'aria-label': 'Togli', onclick: () => { m.innate.spells.splice(j, 1); drawInnate(); } }))),

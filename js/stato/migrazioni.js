@@ -124,6 +124,9 @@
     return raw;
   }
 
+  // Versione 19 (incantesimi dell'SRD 5.1): solo normalizzazione. Gli incantesimi ricevono rituale, testo «Ai livelli
+  // superiori», fonte vuota (creati nell'app), nessun legame con l'SRD e meccanica verificata.
+
   // Esempi originali del Mondo (dati/mondo.js), condivisi con tutte le sessioni: { factions, cities, worldNpcs, quests }.
 
   DnD.migrazioni = {

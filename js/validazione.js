@@ -197,7 +197,8 @@
     const e = s.effect;
     const dice = DnD.dadi.parseExpr(e.dice);
     if (e.dice && (!dice || dice.count < 1)) errors['effect.dice'] = 'Usa il formato NdM, ad esempio 8d6 o 3d4+3.';
-    else if (!e.dice && e.type !== 'nessuno') errors['effect.dice'] = 'Indica il dado di danno o di cura.';
+    // Il tiro salvezza può non avere danni (solo la condizione inflitta, es. Blocca persone).
+    else if (!e.dice && e.type !== 'nessuno' && e.type !== 'salvezza') errors['effect.dice'] = 'Indica il dado di danno o di cura.';
     if (e.upcastDice) {
       const up = DnD.dadi.parseExpr(e.upcastDice);
       if (!up || up.count < 1) errors['effect.upcastDice'] = 'Usa il formato NdM, ad esempio 1d6.';

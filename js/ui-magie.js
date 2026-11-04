@@ -1,4 +1,5 @@
-// Sezione Magie: libreria degli incantesimi con filtri, ricerca e form.
+// Sezione Magie: libreria degli incantesimi con filtri (anche per fonte e «Da verificare»), ricerca, form,
+// importazione dall'SRD 5.1 (DnD.uiSrd) e ripristino degli originali SRD modificati.
 (function (DnD) {
   'use strict';
 
@@ -7,7 +8,8 @@
   const C = DnD.classi;
   let editing = null;
   let root = null;
-  const filters = { level: '', school: '', cls: '', text: '' };
+  const filters = { level: '', school: '', cls: '', text: '', fonte: '', verifica: false };
+  const SRD = DnD.srd;
 
   // Riassunto dell'effetto meccanico (usato anche nei form e nel combattimento).
   function effectSummary(sp) {
@@ -37,14 +39,34 @@
       .filter((s) => filters.level === '' || s.level === Number(filters.level))
       .filter((s) => !filters.school || s.school === filters.school)
       .filter((s) => !filters.cls || s.classes.includes(filters.cls))
+      .filter((s) => !filters.fonte || SRD.fonteDi(s) === filters.fonte)
+      .filter((s) => !filters.verifica || SRD.daVerificare(s))
       .filter((s) => !t || s.name.toLowerCase().includes(t) || s.description.toLowerCase().includes(t))
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'it'));
   }
 
   function duplicate(s) {
-    const copy = Object.assign(JSON.parse(JSON.stringify(s)), { id: DnD.dadi.uid(), name: (s.name + ' (copia)').slice(0, 60) });
+    // La copia è dell'utente: non è più legata all'originale SRD.
+    const copy = Object.assign(JSON.parse(JSON.stringify(s)), { id: DnD.dadi.uid(), name: (s.name + ' (copia)').slice(0, 60), fonte: '', srdId: '', modificato: false });
     DnD.store.update((st) => { st.spells.splice(st.spells.indexOf(s) + 1, 0, copy); });
     toast('Incantesimo duplicato.');
+    render();
+  }
+
+  // Rimette il testo e l'effetto dell'SRD (stesso id: chi lo conosce lo tiene).
+  async function restore(s) {
+    if (!confirm('Ripristinare l\'originale SRD di "' + s.name + '"? Le tue modifiche andranno perse.')) return;
+    const orig = SRD.ripristina(s);
+    const r = await DnD.store.update((st) => { const i = st.spells.findIndex((x) => x.id === s.id); if (i >= 0) st.spells[i] = orig; });
+    toast(r.ok ? 'Originale SRD ripristinato.' : 'Ripristino non salvato: ' + r.message, r.ok ? 'success' : 'error');
+    editing = null;
+    render();
+  }
+
+  // Coda «Da verificare»: conferma l'effetto proposto.
+  async function confirmMechanics(s) {
+    const r = await DnD.store.update((st) => { const x = st.spells.find((y) => y.id === s.id); if (x) SRD.conferma(x); });
+    toast(r.ok ? 'Meccanica di "' + s.name + '" confermata.' : 'Conferma non salvata: ' + r.message, r.ok ? 'success' : 'error');
     render();
   }
 
@@ -87,6 +109,13 @@
       importInput.value = '';
       if (f) importList(f);
     } });
+    const credits = el('div');
+    // Descrizione: breve nell'elenco (il testo completo a richiesta), intera nella coda «Da verificare».
+    const text = (s) => {
+      const full = s.description + (s.higherLevels ? '\nAi livelli superiori. ' + s.higherLevels : '');
+      if (filters.verifica || full.length <= 260) return full ? el('p', { class: 'muted small srd-text', text: full }) : null;
+      return el('details', { class: 'small' }, el('summary', { class: 'muted', text: s.description.slice(0, 220).trim() + '…' }), el('p', { class: 'muted srd-text', text: full }));
+    };
     const draw = () => {
       const list = filtered();
       clear(results).append(list.length
@@ -94,17 +123,26 @@
           el('div', { class: 'card-title' }, el('h3', { text: s.name }), el('span', { class: 'tag accent', text: M.levelName(s.level) })),
           el('p', { class: 'muted small', text: M.SCHOOL_NAMES[s.school] + ' · ' + [s.castingTime, s.range, s.duration].filter(Boolean).join(' · ') }),
           el('div', { class: 'tags' },
+            SRD.fonteDi(s) === 'srd' ? el('span', { class: 'tag accent', text: 'SRD', title: 'Dal System Reference Document 5.1' }) : null,
+            s.modificato ? el('span', { class: 'tag', text: 'Modificato' }) : null,
+            SRD.daVerificare(s) ? el('span', { class: 'tag danger', text: 'Da verificare', title: 'Effetto meccanico proposto in automatico, non ancora confermato' }) : null,
             s.concentration ? el('span', { class: 'tag', text: 'Concentrazione' }) : null,
+            s.ritual ? el('span', { class: 'tag', text: 'Rituale' }) : null,
             s.area ? el('span', { class: 'tag', text: 'Ad area' }) : null,
             el('span', { class: 'tag', text: 'Componenti: ' + componentsText(s.components) })),
-          el('p', { class: 'small', text: effectSummary(s) }),
-          s.description ? el('p', { class: 'muted small', text: s.description }) : null,
+          el('p', { class: 'small' }, filters.verifica ? el('strong', { text: 'Effetto proposto: ' }) : '', effectSummary(s)),
+          text(s),
           el('p', { class: 'muted small', text: 'Classi: ' + (s.classes.map((id) => C.CLASSES[id].name).join(', ') || '—') }),
           el('div', { class: 'card-actions' },
-            el('button', { class: 'btn', text: 'Modifica', onclick: () => { editing = s.id; render(); } }),
+            SRD.daVerificare(s) && filters.verifica ? el('button', { class: 'btn primary', text: 'Conferma', title: 'L\'effetto proposto è corretto', onclick: () => confirmMechanics(s) }) : null,
+            el('button', { class: 'btn', text: filters.verifica ? 'Correggi' : 'Modifica', onclick: () => { editing = s.id; render(); } }),
             el('button', { class: 'btn', text: 'Duplica', onclick: () => duplicate(s) }),
+            s.modificato && SRD.originale(s) ? el('button', { class: 'btn', text: 'Ripristina originale SRD', onclick: () => restore(s) }) : null,
             el('button', { class: 'btn danger', text: 'Elimina', onclick: () => remove(s) })))))
-        : el('p', { class: 'empty', text: DnD.store.state.spells.length ? 'Nessun incantesimo corrisponde ai filtri.' : 'La libreria è vuota. Crea un incantesimo con «Nuovo incantesimo».' }));
+        : el('p', { class: 'empty', text: DnD.store.state.spells.length ? (filters.verifica ? 'Nessun incantesimo da verificare.' : 'Nessun incantesimo corrisponde ai filtri.') : 'La libreria è vuota. Crea un incantesimo con «Nuovo incantesimo» o importali con «Importa dall\'SRD».' }));
+      // Attribuzione dell'SRD sotto l'elenco quando la libreria contiene incantesimi importati.
+      clear(credits);
+      if (DnD.store.state.spells.some((s) => SRD.fonteDi(s) === 'srd')) DnD.ui.fill(credits, DnD.uiSrd.attribuzione());
     };
     const select = (key, label, options) => el('select', {
       'aria-label': label, onchange: (e) => { filters[key] = e.target.value; draw(); },
@@ -113,6 +151,7 @@
       el('div', { class: 'section-head' },
         el('h1', { text: 'Magie' }),
         el('div', { class: 'head-actions' },
+          el('button', { class: 'btn', text: '📜 Importa dall\'SRD', title: 'Incantesimi del System Reference Document 5.1 in italiano', onclick: () => DnD.uiSrd.apri(() => render()) }),
           el('button', { class: 'btn', text: '⬆ Importa JSON', title: 'Aggiungi incantesimi da un file (quelli con lo stesso nome vengono saltati)', onclick: () => importInput.click() }), importInput,
           el('button', { class: 'btn', text: '⬇ Esporta JSON', title: 'Esporta gli incantesimi mostrati', onclick: exportList }),
           el('button', { class: 'btn primary', text: '+ Nuovo incantesimo', onclick: () => { editing = 'new'; render(); } }))),
@@ -120,8 +159,11 @@
         el('input', { type: 'search', placeholder: 'Cerca per nome o descrizione…', 'aria-label': 'Cerca incantesimi', value: filters.text, oninput: (e) => { filters.text = e.target.value; draw(); } }),
         select('level', 'Livello', [['', 'Tutti i livelli']].concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((l) => [String(l), M.levelName(l)]))),
         select('school', 'Scuola', [['', 'Tutte le scuole']].concat(M.SCHOOLS.map((s) => [s, M.SCHOOL_NAMES[s]]))),
-        select('cls', 'Classe', [['', 'Tutte le classi']].concat(C.IDS.filter((id) => C.CLASSES[id].caster).map((id) => [id, C.CLASSES[id].name])))),
-      results);
+        select('cls', 'Classe', [['', 'Tutte le classi']].concat(C.IDS.filter((id) => C.CLASSES[id].caster).map((id) => [id, C.CLASSES[id].name]))),
+        select('fonte', 'Fonte', [['', 'Tutte le fonti'], ['srd', 'SRD 5.1'], ['mie', 'Creati da me']]),
+        el('label', { class: 'check small', title: 'Incantesimi con l\'effetto meccanico proposto in automatico, da confermare o correggere' },
+          el('input', { type: 'checkbox', checked: filters.verifica, onchange: (e) => { filters.verifica = e.target.checked; draw(); } }), ' Da verificare')),
+      results, credits);
     draw();
   }
 
@@ -133,16 +175,19 @@
       name: textInput(s.name, { maxlength: 60 }),
       level: el('select', {}, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((l) => el('option', { value: String(l), text: M.levelName(l), selected: l === s.level }))),
       school: el('select', {}, M.SCHOOLS.map((x) => el('option', { value: x, text: M.SCHOOL_NAMES[x], selected: x === s.school }))),
-      castingTime: textInput(s.castingTime, { maxlength: 60, placeholder: '1 azione' }),
-      range: textInput(s.range, { maxlength: 60, placeholder: '18 m' }),
-      duration: textInput(s.duration, { maxlength: 60, placeholder: 'Istantanea' }),
+      castingTime: textInput(s.castingTime, { maxlength: 200, placeholder: '1 azione' }),
+      range: textInput(s.range, { maxlength: 120, placeholder: '18 m' }),
+      duration: textInput(s.duration, { maxlength: 80, placeholder: 'Istantanea' }),
       V: el('input', { type: 'checkbox', checked: s.components.V }),
       S: el('input', { type: 'checkbox', checked: s.components.S }),
       M: el('input', { type: 'checkbox', checked: s.components.M }),
-      material: textInput(s.components.material, { maxlength: 200, placeholder: 'materiale', 'aria-label': 'Componente materiale' }),
+      material: textInput(s.components.material, { maxlength: 600, placeholder: 'materiale', 'aria-label': 'Componente materiale' }),
       concentration: el('input', { type: 'checkbox', checked: s.concentration }),
+      ritual: el('input', { type: 'checkbox', checked: s.ritual }),
+      higherLevels: el('textarea', { rows: 2, value: s.higherLevels }),
+      verified: el('input', { type: 'checkbox', checked: s.meccanicaVerificata }),
       area: el('input', { type: 'checkbox', checked: s.area }),
-      description: el('textarea', { rows: 4, value: s.description }),
+      description: el('textarea', { rows: s.description.length > 600 ? 10 : 4, value: s.description }),
       type: el('select', {}, M.EFFECTS.map((t) => el('option', { value: t, text: M.EFFECT_NAMES[t], selected: t === s.effect.type }))),
       dice: textInput(s.effect.dice, { placeholder: 'es. 8d6' }),
       damageType: textInput(s.effect.damageType, { maxlength: 40, placeholder: 'es. fuoco' }),
@@ -191,6 +236,7 @@
           el('label', { class: 'check' }, inp.S, ' Somatica (S)'),
           el('label', { class: 'check' }, inp.M, ' Materiale (M)'),
           el('label', { class: 'check' }, inp.concentration, ' Concentrazione'),
+          el('label', { class: 'check' }, inp.ritual, ' Rituale'),
           el('label', { class: 'check' }, inp.area, ' Ad area (più bersagli)')),
         materialField),
       el('fieldset', {},
@@ -200,13 +246,17 @@
           return el('label', { class: 'check' }, classChecks[id], ' ' + C.CLASSES[id].name);
         }))),
       field('Descrizione', inp.description),
+      field('Ai livelli superiori', inp.higherLevels),
       el('fieldset', {},
         el('legend', { text: 'Effetto meccanico (facoltativo)' }),
         field('Tipo', inp.type),
         effectFields,
-        inflictBox),
+        inflictBox,
+        el('label', { class: 'check', title: 'Tolto: l\'incantesimo resta nel filtro «Da verificare»' }, inp.verified, ' Effetto meccanico verificato')),
+      SRD.originale(s) ? el('p', { class: 'muted small', text: 'Dall\'SRD 5.1' + (s.modificato ? ', modificato.' : '.') + ' Se cambi i campi l\'incantesimo risulta modificato e puoi ripristinare l\'originale.' }) : null,
       el('div', { class: 'form-actions' },
         el('button', { type: 'button', class: 'btn', text: 'Annulla', onclick: () => { editing = null; render(); } }),
+        existing && existing.modificato && SRD.originale(existing) ? el('button', { type: 'button', class: 'btn', text: 'Ripristina originale SRD', onclick: () => restore(existing) }) : null,
         el('button', { type: 'submit', class: 'btn primary', text: 'Salva incantesimo' })));
 
     form.addEventListener('submit', (ev) => {
@@ -221,9 +271,14 @@
         components: { V: inp.V.checked, S: inp.S.checked, M: inp.M.checked, material: inp.M.checked ? inp.material.value.trim() : '' },
         duration: inp.duration.value.trim(),
         concentration: inp.concentration.checked,
+        ritual: inp.ritual.checked,
         area: inp.area.checked,
         classes: C.IDS.filter((id) => classChecks[id] && classChecks[id].checked),
         description: inp.description.value.trim(),
+        higherLevels: inp.higherLevels.value.trim(),
+        fonte: s.fonte,
+        srdId: s.srdId,
+        meccanicaVerificata: inp.verified.checked,
         effect: {
           type: inp.type.value,
           dice: inp.dice.value.trim().toLowerCase(),
@@ -236,7 +291,8 @@
         inflict,
       };
       if (!showErrors(form, DnD.validazione.validateSpell(data))) return;
-      const normalized = DnD.dati.normalizeSpell(data);
+      // Incantesimo dell'SRD: «modificato» se ora differisce dall'originale (tornato uguale: non più modificato).
+      const normalized = SRD.segnaModifiche(DnD.dati.normalizeSpell(data));
       DnD.store.update((st) => {
         const i = st.spells.findIndex((x) => x.id === normalized.id);
         if (i >= 0) st.spells[i] = normalized;

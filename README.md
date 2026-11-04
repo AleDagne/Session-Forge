@@ -191,7 +191,8 @@ calcolato dal colore, leggibile su entrambi gli sfondi; strutture e oggetti con 
   [Personaggi leggendari](#personaggi-leggendari)) e **⚑ Party** (vedi [Party](#party)). Ogni scheda mostra PF attuali,
   dadi vita e sfinimento, e ha **🛏 Risorse…** (vedi [Riposi e risorse](#riposi-e-risorse)).
 - **Magie** – libreria degli incantesimi. **⬇ Esporta JSON** salva gli incantesimi mostrati (con i filtri) e **⬆ Importa JSON**
-  li aggiunge alla libreria (id nuovi; quelli con un nome già presente vengono saltati e segnalati).
+  li aggiunge alla libreria (id nuovi; quelli con un nome già presente vengono saltati e segnalati). Filtri per livello,
+  scuola, classe, **fonte** (SRD 5.1 / creati da me) e **Da verificare**. Vedi [Incantesimi dall'SRD 5.1](#incantesimi-dallsrd-51).
 - **Asset** – quattro schede (Biomi ed Eventi: vedi [Esplorazione](#esplorazione)):
   - **Strutture**: forma predefinita (fino a 20×20), forma personalizzata a celle (fino a 10×10) oppure
     **Da immagine** (vedi [Tile](#tile)), colore libero, **Blocca la vista** (di base sì; *Finestra* e *Grata*
@@ -273,6 +274,44 @@ procedura della Guida del Dungeon Master (CS difensivo da PF effettivi e CA, off
 bonus per colpire o CD, media dei due) e mostra il risultato accanto al CS dichiarato, senza cambiarlo.
 Tre creature d'esempio **originali** (una bestia GS 1, un costrutto GS 5, un drago giovane GS 8) sono
 condivise con tutte le sessioni, modificabili ed eliminabili.
+
+## Incantesimi dall'SRD 5.1
+
+**📜 Importa dall'SRD** (sezione Magie) aggiunge alla libreria i 319 incantesimi del System Reference Document 5.1 in
+italiano, nel formato della libreria, con i nomi del PDF (possono differire da quelli dei manuali: è voluto). Nessuna
+rete: i dati sono nel file `js/dati/srd-incantesimi.js`, generato una volta dallo strumento di sviluppo
+`strumenti/estrai-srd.js` dal PDF `fonti/SRD_CC_v5.1_IT.pdf` (il rapporto dell'estrazione è `docs/IMPORT_SRD.md`).
+
+- **Anteprima**: elenco con ricerca, filtri per livello, scuola e classe, «Testo» per leggere la descrizione,
+  selezione singola o **Seleziona tutti** (gli incantesimi mostrati), conteggio. Ogni voce dice se è *nuova*, *già
+  importata* o in *conflitto*.
+- **Conflitti** (stesso nome di un incantesimo della libreria, compresi gli esempi originali, stesso id, o un
+  incantesimo SRD già importato e poi modificato): per ognuno **Tieni il mio** (predefinito), **Sostituisci** (il testo
+  dell'SRD prende il posto del tuo con lo stesso id: personaggi e creature che lo conoscono lo tengono) o **Importa come
+  copia** («Nome (SRD)»); **Applica a tutti** imposta la stessa scelta. Nessun incantesimo tuo viene sovrascritto senza
+  conferma.
+- **Idempotente**: rilanciare l'importazione non crea doppioni (quelli già importati e non modificati restano come sono).
+  Se lo spazio del browser è esaurito, l'importazione è annullata per intero con un errore chiaro: nessun salvataggio
+  parziale.
+- Gli incantesimi importati hanno il badge **SRD**, sono **modificabili** come gli altri e partecipano a Esporta/Importa
+  (archivio e singola sessione) e alla condivisione tra sessioni (la libreria Magie è globale). Se li modifichi compare
+  **Modificato** e il pulsante **Ripristina originale SRD** (stesso id). «Duplica» crea una copia tua, non più legata
+  all'SRD.
+- **Effetto meccanico** proposto in automatico dal testo con regole semplici (dado e tipo di danno, attacco con
+  incantesimo, tiro salvezza con caratteristica e «metà dei danni», cura con modificatore, dado extra per slot
+  superiore); se il testo è ambiguo resta «Nessun tiro automatico». Le proposte vanno controllate: il filtro **Da
+  verificare** mostra il testo completo accanto all'effetto proposto, con **Conferma** (meccanica verificata) e
+  **Correggi** (apre il form; la casella «Effetto meccanico verificato» la toglie dalla coda).
+- Le **liste per classe** dell'SRD (Bardo, Chierico, Druido, Paladino, Ranger, Stregone, Warlock, Mago) riempiono le
+  classi di ogni incantesimo: le usano subito il filtro per classe dei form di Giocatori e Nemici, la creazione guidata
+  dei giocatori, il generatore automatico di nemici e gli incantesimi innati delle creature (raggruppati per livello).
+
+### Crediti e licenze
+
+Il testo seguente, richiesto dalla licenza, compare anche nelle Impostazioni («Crediti e licenze»), sotto l'elenco
+delle Magie quando la libreria contiene incantesimi importati e in `LICENZE.md`:
+
+> Questo lavoro include materiale del System Reference Document 5.1 (“SRD 5.1”) di Wizards of the Coast LLC disponibile al sito https://dnd.wizards.com/it/resources/systems-reference-document. L’SRD 5.1 è concesso in licenza sotto l’Attribuzione 4.0 Internazionale di Creative Commons disponibile al sito https://creativecommons.org/licenses/by/4.0/legalcode.it.
 
 ## Boss
 
@@ -712,7 +751,7 @@ conservato come dato (costo 2, leggibile con `DnD.collisioni.cellInfo`). Nel Com
 disegnate in sola lettura: prima i livelli sotto, poi le pedine, poi quelli sopra. Lo **sfondo** sta sotto
 tutto (sotto TileMap, strutture e pedine).
 
-### Modello dati (versione 18)
+### Modello dati (versione 19)
 
 ```
 npcs: [{ type: 'standard', …scheda… , gridSize: { auto, w, h } }
@@ -733,6 +772,9 @@ pathTemplates: [{ id, name, description, path }]   modelli di percorso, comuni a
 equipment: [{ id, name, category, description, weight, cost: { amount, unit }, rarity, attunement, icon, tags, speedBonus (m), weapon, armor }]
 combattimento: { …, freeMovement }   (i combattenti precedenti con «speed» in metri ricevono la velocità a piedi)
 mapObjects: [{ id, name, otype, icon, mode, tiles, container, interactive, hidden, blocks, state, lock, trap, contents, coins }]
+spells: [{ id, name, level, school, castingTime, range, components: { V, S, M, material }, duration, concentration, ritual,
+           area, classes, description, higherLevels, fonte ('' | 'SRD 5.1 IT'), srdId (voce SRD d'origine), modificato,
+           meccanicaVerificata, effect: { type, dice, damageType, upcastDice, saveAbility, halfOnSave, addMod }, inflict }]
 griglia: { w, h, feetPerCell, background: { kind, color, imageId, fit, x, y, scale, opacity, pxPerCell },
            structures, items (oggetti di mappa piazzati, con stato e contenuto propri), labels, zones, tileMap }
 griglia (esplorazione): { …, kind: 'battaglia' | 'esplorazione', scale: { value, unit: ft|m|km|mi },
@@ -853,6 +895,11 @@ bloccavano, anche un modello di oggetto di mappa; le copie già piazzate diventa
 quell'oggetto dentro; le griglie restano 50×50 senza sfondo, con la TileMap portata alla dimensione della
 griglia; le strutture da immagine mantengono tile selezionati e flag; le pedine `size` diventano `w × h`. Si
 aggiungono il catalogo base, gli oggetti di mappa d'esempio e le creature d'esempio.
+
+**Versione 19** (incantesimi dell'SRD 5.1): solo normalizzazione. Gli incantesimi ricevono `ritual` e `higherLevels`
+vuoti, `fonte` vuota (creati nell'app), nessun `srdId`, `modificato: false` e `meccanicaVerificata: true`; i limiti di
+lunghezza dei testi crescono (descrizione fino a 20 000 caratteri) perché quelli dell'SRD ci stiano interi. Il tiro
+salvezza senza dado di danno (solo la condizione inflitta) è ora valido.
 
 ### Collisioni con poligoni (TileMap delle versioni precedenti)
 
@@ -1945,6 +1992,13 @@ js/dati/classi.js          tabella delle 12 classi e degli slot incantesimo
 js/dati/equipaggiamento.js armi e armature predefinite per classe (generatore di nemici)
 js/generatore.js      logica pura del generatore di nemici
 js/magie.js           logica pura degli incantesimi
+js/dati/srd-incantesimi.js incantesimi dell'SRD 5.1 in italiano e testo di attribuzione (generato da strumenti/estrai-srd.js)
+js/srd-analisi.js     analisi del testo dell'SRD: intestazioni, campi, concentrazione, rituale, liste per classe, meccanica
+js/stato/srd.js       incantesimi SRD nella libreria: confronto, conflitti, importazione, modificato e ripristino, salvataggio tutto o niente
+js/ui-srd.js          finestra «Importa dall'SRD» (anteprima, filtri, conflitti) e attribuzione
+strumenti/estrai-srd.js strumento di sviluppo (Node + pdftotext, fuori dall'app): estrae gli incantesimi dal PDF
+fonti/                PDF dell'SRD 5.1 in italiano (fonte dello strumento, non usato dall'app)
+LICENZE.md            licenze e attribuzioni (SRD 5.1, CC BY 4.0)
 js/dati/nomi.js            lista dei nomi casuali (copiata da nomi.txt)
 js/dati/colori.js          palette dei 14 colori delle pedine e bordo di contrasto
 js/dati/libreria-icone.js  icone predefinite (SVG originali) per pedine e oggetti, con dimensione suggerita
@@ -1986,7 +2040,7 @@ js/oggetti-mappa.js   logica pura degli oggetti di mappa: stato, serrature, trap
 js/validazione.js     validazione dei form con messaggi in italiano
 js/stato/normalizza.js normalizzazione delle entità salvate e importate (creature, griglie, combattimenti, sessioni…)
 js/stato/esempi.js    dati d'esempio dello stato nuovo e party predefiniti
-js/stato/migrazioni.js migrazioni dei dati grezzi dalla versione 8 alla 18
+js/stato/migrazioni.js migrazioni dei dati grezzi dalla versione 8 alla 19
 js/dati.js            facciata dello stato (DnD.dati): stato vuoto, caricamento (migrazioni + normalizzazione), import/export
 js/stato/archivio.js  unico punto che scrive su disco: IndexedDB con ripiego su localStorage, coda di scrittura, dati danneggiati
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)

@@ -159,7 +159,11 @@
           el('button', { type: 'button', class: 'btn small', text: '⬇ Esporta sessione corrente', onclick: exportSession }),
           el('button', { type: 'button', class: 'btn small', text: '⬆ Importa archivio o sessione', onclick: () => fileInput.click() }),
           el('button', { type: 'button', class: 'btn small danger', text: 'Cancella tutti i dati', onclick: clearAll }),
-          fileInput)));
+          fileInput)),
+      // Testo di attribuzione dell'SRD 5.1 (obbligatorio per la licenza CC BY 4.0).
+      el('details', { class: 'settings-group' }, el('summary', { text: 'Crediti e licenze' }),
+        el('p', { class: 'small', text: 'Gli incantesimi importabili nella sezione Magie vengono dal System Reference Document 5.1 in italiano.' }),
+        DnD.uiSrd.attribuzione()));
 
     const gear = el('button', {
       type: 'button', class: 'icon-btn footer-btn', id: 'settings-btn', title: 'Impostazioni', 'aria-label': 'Impostazioni',

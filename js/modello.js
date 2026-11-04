@@ -8,7 +8,7 @@
   'use strict';
 
   // Versione del modello dei dati (vedi le migrazioni in dati.js e il README, «Modello dati»).
-  const VERSION = 18;
+  const VERSION = 19;
   const DICE_HISTORY_MAX = 20;
   const LOG_MAX = 500;
 
