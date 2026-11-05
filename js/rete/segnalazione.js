@@ -15,14 +15,14 @@
   // Server STUN: impostazione locale (un indirizzo per riga), vuota = predefiniti.
   function stun() {
     try {
-      const v = JSON.parse(localStorage.getItem(CHIAVE_STUN) || 'null');
+      const v = JSON.parse(DnD.archivioLocale.preferenze.getItem(CHIAVE_STUN) || 'null');
       if (Array.isArray(v)) return v.filter((x) => typeof x === 'string' && /^stuns?:/.test(x)).slice(0, 5);
     } catch (e) { /* predefiniti */ }
     return STUN_PREDEFINITI.slice();
   }
   function salvaStun(list) {
     const v = (list || []).map((x) => x.trim()).filter((x) => /^stuns?:\S+$/.test(x)).slice(0, 5);
-    try { localStorage.setItem(CHIAVE_STUN, JSON.stringify(v.length ? v : null)); } catch (e) { /* non essenziale */ }
+    try { DnD.archivioLocale.preferenze.setItem(CHIAVE_STUN, JSON.stringify(v.length ? v : null)); } catch (e) { /* non essenziale */ }
     return v.length ? v : STUN_PREDEFINITI.slice();
   }
   const configurazione = (urls) => ({ iceServers: (urls || stun()).length ? [{ urls: urls || stun() }] : [] });
@@ -92,14 +92,14 @@
 
   const manuale = {
     // Master: crea l'offerta. Restituisce { codice, accetta(codiceRisposta) -> Promise<trasporto>, annulla() }.
-    // opts: { nome, comprimi, stun, maxRicevuto, registro }
+    // opts: { nome, comprimi, stun, maxRicevuto, registro, partita }
     async ospita(opts) {
       const o = opts || {};
       const pc = new RTCPeerConnection(configurazione(o.stun));
       const canale = pc.createDataChannel('session-forge', { ordered: true });
       await pc.setLocalDescription(await pc.createOffer());
       await raccogli(pc);
-      const inv = K().invito(pc.localDescription.sdp, o.nome, Date.now());
+      const inv = K().invito(pc.localDescription.sdp, o.nome, Date.now(), o.partita);
       const codice = await K().codifica(inv, { comprimi: o.comprimi });
       const reg = o.registro || K().registro();
       return {
@@ -116,7 +116,7 @@
         annulla: () => { try { pc.close(); } catch (e) { /* già chiusa */ } },
       };
     },
-    // Giocatore: legge l'invito e crea la risposta. Restituisce { codice, master, connessione: Promise<trasporto>, annulla() }.
+    // Giocatore: legge l'invito e crea la risposta. Restituisce { codice, master, partita, connessione: Promise<trasporto>, annulla() }.
     async unisciti(codiceInvito, opts) {
       const o = opts || {};
       const inv = await K().decodifica(codiceInvito);
@@ -129,7 +129,7 @@
       await raccogli(pc);
       const codice = await K().codifica(K().risposta(pc.localDescription.sdp, inv.id, Date.now()), { comprimi: o.comprimi });
       return {
-        codice, master: inv.master, candidati: candidati(pc.localDescription.sdp),
+        codice, master: inv.master, partita: K().partitaDi(inv), candidati: candidati(pc.localDescription.sdp),
         connessione: apertura(pc, canale, { maxRicevuto: o.maxRicevuto }, Math.max(APERTURA_MS, inv.scade - Date.now() + APERTURA_MS)),
         annulla: () => { try { pc.close(); } catch (e) { /* già chiusa */ } },
       };

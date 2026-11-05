@@ -1,19 +1,19 @@
 // Service worker minimale: mette in cache i file dell'app per l'uso offline.
 // Aumenta CACHE quando modifichi i file, così i client scaricano la nuova versione.
-const CACHE = 'session-forge-v104';
+const CACHE = 'session-forge-v105';
 const FILES = [
-  './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './css/dadi.css', './icons/icon.svg', './js/impostazioni.js',
+  './', './index.html', './manifest.json', './css/style.css', './css/boss.css', './css/leggendario.css', './css/dadi.css', './css/portale.css', './icons/icon.svg', './js/stato/archivio-locale.js', './js/impostazioni.js',
   './js/config.js', './js/dati/misure.js', './js/modello.js', './js/dadi.js', './js/regole.js', './js/statistiche.js', './js/combattenti.js', './js/dati/classi.js', './js/magie.js', './js/dati/srd-incantesimi.js', './js/srd-analisi.js', './js/dati/equipaggiamento.js', './js/dati/nomi.js', './js/dati/colori.js',
   './js/dati/libreria-icone.js', './js/icone.js', './js/immagini.js', './js/dati/suoni.js', './js/audio.js', './js/tileset.js', './js/tile.js', './js/tilemap.js', './js/collisioni.js',
   './js/griglia.js', './js/migrazioni-tile.js', './js/dati/visione.js', './js/visione.js', './js/condizioni.js', './js/dati/riposi.js', './js/riposi.js', './js/movimento.js', './js/layout-combattimento.js', './js/dati/creature.js', './js/dati/leggendario.js', './js/ia-comportamento.js', './js/creature.js', './js/boss.js', './js/biomi.js', './js/eventi.js',
   './js/esplorazione.js', './js/percorso.js', './js/dati/scheda.js', './js/scheda.js', './js/leggendario.js', './js/attrezzatura.js', './js/oggetti-mappa.js', './js/dati/mondo.js', './js/fazioni.js', './js/party.js', './js/citta.js', './js/npc.js', './js/quest.js', './js/dati/difficolta.js', './js/difficolta.js', './js/dati/scene.js', './js/scene.js', './js/dati/ia.js',
-  './js/ia.js', './js/combattimento.js', './js/note.js', './js/validazione.js', './js/stato/normalizza.js', './js/stato/esempi.js', './js/stato/migrazioni.js', './js/dati.js', './js/stato/archivio.js', './js/sessioni.js', './js/stato/srd.js', './js/generatore.js', './js/rete/protocollo.js', './js/rete/trasporto.js', './js/rete/codici.js', './js/rete/segnalazione.js', './js/rete/filtro.js', './js/rete/immagini.js', './js/rete/intenzioni.js', './js/rete/valutazione.js', './js/rete/sessione.js', './js/ui-comune.js', './js/ui-condizioni.js', './js/ui-riposi.js', './js/ui-difficolta.js',
+  './js/ia.js', './js/combattimento.js', './js/note.js', './js/validazione.js', './js/stato/normalizza.js', './js/stato/esempi.js', './js/stato/migrazioni.js', './js/dati.js', './js/stato/profili.js', './js/stato/archivio.js', './js/sessioni.js', './js/stato/srd.js', './js/stato/unione.js', './js/stato/backup.js', './js/generatore.js', './js/rotte.js', './js/rete/protocollo.js', './js/rete/trasporto.js', './js/rete/codici.js', './js/rete/segnalazione.js', './js/rete/filtro.js', './js/rete/immagini.js', './js/rete/intenzioni.js', './js/rete/valutazione.js', './js/rete/sessione.js', './js/ui-comune.js', './js/ui-condizioni.js', './js/ui-riposi.js', './js/ui-difficolta.js',
   './js/ui-icone.js', './js/ui-razze.js', './js/ui-srd.js', './js/ui-magie.js', './js/ui-incantesimi.js', './js/ui-asset.js', './js/ui-oggetti-mappa.js',
   './js/ui-ia.js', './js/ui-mondo-comuni.js', './js/ui-creature-comuni.js', './js/ui-scheda.js', './js/ui-creature.js', './js/ui-mostri.js', './js/ui-boss.js', './js/ui-percorso.js', './js/ui-leggendario.js',
   './js/ui-generatore.js', './js/ui-tileset.js', './js/ui-tile.js', './js/ui-strutture.js', './js/ui-attrezzatura.js', './js/ui-biomi.js',
   './js/ui-eventi.js', './js/ui-mondo.js', './js/ui-party.js', './js/ui-npc.js', './js/ui-quest.js', './js/ui-scene.js', './js/note-editor.js', './js/ui-note.js', './js/ui-dadi.js', './js/ui-colonne.js', './js/ui-griglia-disegno.js', './js/ui-griglia-pannello.js', './js/ui-griglia-puntatore.js', './js/ui-griglia.js', './js/ui-pannello-tile.js', './js/ui-visione.js',
   './js/ui-mappa-esplorazione.js', './js/ui-editor-griglie.js', './js/ui-combattimento-incantesimi.js', './js/ui-combattimento-creature.js', './js/ui-combattimento-preparazione.js', './js/ui-combattimento-ia.js', './js/ui-combattimento-mondo.js', './js/ui-combattimento.js', './js/ui-esplorazione.js', './js/ui-sessioni.js',
-  './js/ui-suoni.js', './js/ui-impostazioni.js', './js/ui-online.js', './js/app.js',
+  './js/ui-suoni.js', './js/ui-impostazioni.js', './js/ui-backup.js', './js/ui-online.js', './js/ui-portale.js', './js/app.js',
 ];
 
 self.addEventListener('install', (event) => {

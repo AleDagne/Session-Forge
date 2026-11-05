@@ -9,8 +9,8 @@
 
   // opts: { key, left: { title, label, head: [nodi], body: [nodi] }, center: nodo, right: { … } }
   function columns(opts) {
-    let P = LC.load(localStorage, opts.key);
-    const store = () => LC.save(localStorage, P, opts.key);
+    let P = LC.load(DnD.archivioLocale.preferenze, opts.key);
+    const store = () => LC.save(DnD.archivioLocale.preferenze, P, opts.key);
     const layout = el('div', { class: 'combat-layout' });
     function apply() {
       layout.style.setProperty('--left-w', P.left + 'px');
@@ -80,7 +80,7 @@
     const tabs = el('div', { class: 'tabs combat-tabs', role: 'tablist', 'aria-label': 'Pannelli' }, tabBtn('entita', opts.left.title), tabBtn('turni', opts.right.title));
     layout.append(left, divider('left'), opts.center, divider('right'), right, tabs);
     apply();
-    return { layout, reset: () => { P = LC.reset(localStorage, opts.key); apply(); } };
+    return { layout, reset: () => { P = LC.reset(DnD.archivioLocale.preferenze, opts.key); apply(); } };
   }
 
   DnD.uiColonne = { columns };

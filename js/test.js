@@ -2994,8 +2994,8 @@
     const prevStore = DnD.store;
     // Anche la larghezza delle schede della versione precedente: senza layout salvato, load() la riprende.
     const OLD_KEY = 'dnd-battaglie:larghezza-schede';
-    const prevLayout = localStorage.getItem(LC().KEY);
-    const prevOld = localStorage.getItem(OLD_KEY);
+    const prevLayout = DnD.archivioLocale.preferenze.getItem(LC().KEY);
+    const prevOld = DnD.archivioLocale.preferenze.getItem(OLD_KEY);
     DnD.store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
     const st = DnD.store.state;
     const hero = DnD.dati.normalizeCreature({ name: 'Aria', classId: 'guerriero', maxHp: 20 }, true);
@@ -3008,15 +3008,15 @@
     box.style.cssText = 'position:fixed;left:0;top:0;width:1500px;height:900px;overflow:hidden;z-index:-1;background:var(--bg)';
     document.body.append(box);
     try {
-      localStorage.removeItem(LC().KEY);
-      localStorage.removeItem(OLD_KEY);
+      DnD.archivioLocale.preferenze.removeItem(LC().KEY);
+      DnD.archivioLocale.preferenze.removeItem(OLD_KEY);
       DnD.sezioni.combattimento.render(box);
       await fn(box, DnD.store.state);
     } finally {
       box.remove();
       DnD.store = prevStore;
-      if (prevLayout === null) localStorage.removeItem(LC().KEY); else localStorage.setItem(LC().KEY, prevLayout);
-      if (prevOld !== null) localStorage.setItem(OLD_KEY, prevOld);
+      if (prevLayout === null) DnD.archivioLocale.preferenze.removeItem(LC().KEY); else DnD.archivioLocale.preferenze.setItem(LC().KEY, prevLayout);
+      if (prevOld !== null) DnD.archivioLocale.preferenze.setItem(OLD_KEY, prevOld);
     }
   }
   // Attende qualche frame (con un tempo massimo: in una scheda nascosta i frame non arrivano).
@@ -3043,16 +3043,16 @@
         ok(shown('.combat-tabs') && shown('.combat-entities') && !shown('.combat-turns'), 'schede sotto la griglia');
         box.querySelector('[data-layout-tab="turni"]').click();
         ok(shown('.combat-turns') && !shown('.combat-entities'), 'scheda Turni');
-        eq(JSON.parse(localStorage.getItem(LC().KEY)).tab, 'turni', 'scheda ricordata');
+        eq(JSON.parse(DnD.archivioLocale.preferenze.getItem(LC().KEY)).tab, 'turni', 'scheda ricordata');
         return;
       }
       eq([w('.combat-entities'), w('.combat-turns')], [340, 300], 'larghezze predefinite');
       box.querySelector('[data-collapse="left"]').click();
       ok(layout.classList.contains('left-closed') && w('.combat-entities') < 60, 'colonna sinistra chiusa');
-      eq(JSON.parse(localStorage.getItem(LC().KEY)).leftOpen, false, 'stato ricordato');
+      eq(JSON.parse(DnD.archivioLocale.preferenze.getItem(LC().KEY)).leftOpen, false, 'stato ricordato');
       const d = box.querySelector('[data-divider="right"]');
       d.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-      eq(JSON.parse(localStorage.getItem(LC().KEY)).right, 320, 'divisore da tastiera (la colonna destra si allarga verso sinistra)');
+      eq(JSON.parse(DnD.archivioLocale.preferenze.getItem(LC().KEY)).right, 320, 'divisore da tastiera (la colonna destra si allarga verso sinistra)');
       [...box.querySelectorAll('button')].find((b) => b.textContent === 'Reimposta layout').click();
       eq([layout.classList.contains('left-closed'), w('.combat-entities'), w('.combat-turns')], [false, 340, 300], 'reimposta layout');
     });
@@ -7849,6 +7849,405 @@
       const t = await (await fetch(file, { cache: 'no-store' })).text();
       ok(t.includes(A), file + ' contiene l\'attribuzione alla lettera');
     }
+  });
+
+  // ======================= Fase «Portale, profili locali e backup» =======================
+  const RT = () => DnD.rotte;
+  const AR = () => DnD.archivio;
+  const AL = () => DnD.archivioLocale;
+  const PRF = () => DnD.profili;
+
+  test('Router: rotte su hash, rotta sconosciuta al portale, ripristino al ricaricamento', () => {
+    const sez = DnD.config.SECTIONS;
+    eq(RT().analizza('#/home', sez), { modo: 'home' });
+    eq(RT().analizza('#/master/nemici', sez), { modo: 'master', sezione: 'nemici' });
+    eq(RT().analizza('#/master', sez), { modo: 'master', sezione: null });
+    eq(RT().analizza('#/gioca', sez), { modo: 'gioca' });
+    eq(RT().analizza('#/online/ospita', sez), { modo: 'ospita' });
+    eq(RT().analizza('#/online/unisciti', sez), { modo: 'unisciti' });
+    for (const h of ['#/boh', '#/master/inesistente', '#/online/altro', '#/home/x', '#/master/nemici/1']) eq(RT().analizza(h, sez), { modo: 'home', sconosciuta: true }, h);
+    eq(RT().analizza('', sez), { modo: null });
+    for (const r of [{ modo: 'home' }, { modo: 'master', sezione: 'magie' }, { modo: 'gioca' }, { modo: 'ospita' }, { modo: 'unisciti' }]) {
+      eq(RT().analizza(RT().formatta(r), sez), r, 'andata e ritorno ' + r.modo);
+    }
+    // Avvio: hash vuoto -> portale, o l'ultima sezione con «Salta il portale»; la schermata di gioco non sopravvive.
+    eq(RT().iniziale({ hash: '', sezioni: sez, salta: false, ultimaSezione: 'magie' }), { modo: 'home' });
+    eq(RT().iniziale({ hash: '', sezioni: sez, salta: true, ultimaSezione: 'magie' }), { modo: 'master', sezione: 'magie' });
+    eq(RT().iniziale({ hash: '', sezioni: sez, salta: true, ultimaSezione: 'sparita' }), { modo: 'master', sezione: sez[0] });
+    eq(RT().iniziale({ hash: '#/master/razze', sezioni: sez, salta: false }), { modo: 'master', sezione: 'razze' });
+    eq(RT().iniziale({ hash: '#/gioca', sezioni: sez, salta: true }), { modo: 'home', interrotta: true });
+    eq(RT().iniziale({ hash: '#/xyz', sezioni: sez, salta: true }), { modo: 'home', sconosciuta: true });
+  });
+
+  test('Modalità: Giocatore e Spettatore senza accesso alle sezioni del Master', () => {
+    for (const modalita of ['giocatore', 'spettatore']) {
+      for (const s of DnD.config.SECTIONS) eq(RT().consentita({ modo: 'master', sezione: s }, modalita), false, modalita + ' ' + s);
+      eq([RT().consentita({ modo: 'gioca' }, modalita), RT().consentita({ modo: 'home' }, modalita), RT().consentita({ modo: 'ospita' }, modalita)], [true, true, false], modalita);
+    }
+    ok(DnD.config.SECTIONS.every((s) => RT().consentita({ modo: 'master', sezione: s }, 'master')), 'il Master vede tutto');
+  });
+
+  // Ambiente in memoria con i dati di un browser di prima dei profili (fixture + stato dell'archivio di esempio).
+  async function ambientePrima(guasto) {
+    const fx = JSON.parse(await leggiFixture('profili-prima.json'));
+    const statoTesto = await leggiFixture('archivio-v18.json');
+    const env = AR().ambienteMemoria(AL().memoria(), guasto);
+    const vecchio = await env.apriDb('dnd-battaglie');
+    await vecchio.set('stato', statoTesto);
+    for (const [k, v] of Object.entries(fx.database)) await vecchio.set(k, v);
+    for (const [k, v] of Object.entries(fx.localStorage)) env.storage.setItem(k, v);
+    return { env, fx, statoTesto };
+  }
+  const contenuto = (env, nome) => Object.fromEntries(env.dbs.get(nome) || []);
+  const chiaviLocali = (env) => AL().chiaviDi(env.storage).sort();
+
+  test('Profili: migrazione dei dati di prima nel profilo «Master», con backup esportabile', async () => {
+    if (location.protocol === 'file:') return;
+    const { env, fx, statoTesto } = await ambientePrima();
+    const prima = contenuto(env, 'dnd-battaglie');
+    const r = await AR().migraProfili(env);
+    eq([r.ok, r.fatto, r.backupSalvato], [true, true, true]);
+    const reg = PRF().normalizzaRegistro(AL().leggiRegistro(env.storage));
+    eq([reg.versione, reg.attivo, reg.profili.map((p) => p.nome), reg.profili[0].nuovo, reg.migrazione.dbVecchio], [1, 'master', ['Master'], false, 'dnd-battaglie']);
+    // Database copiato (con in più il backup), quello vecchio intatto.
+    const nuovo = contenuto(env, 'sessionforge-master');
+    for (const [k, v] of Object.entries(prima)) eq(nuovo[k], v, 'chiave ' + k);
+    eq(contenuto(env, 'dnd-battaglie'), prima, 'database vecchio non toccato');
+    // Chiavi di localStorage spostate sotto il prefisso del profilo; le altre restano.
+    for (const [k, v] of Object.entries(fx.localStorage)) {
+      if (!k.startsWith('dnd-battaglie:')) { eq(env.storage.getItem(k), v, 'chiave estranea'); continue; }
+      eq([env.storage.getItem(k), env.storage.getItem('sessionforge-master:' + k.slice(14))], [null, v], k);
+    }
+    // La vista delle preferenze del profilo legge le chiavi di sempre.
+    const pref = AL().vista(env.storage, AL().nomi('master').prefisso);
+    eq(pref.getItem('dnd-battaglie:sezione'), 'nemici');
+    // Il backup è un archivio esportato: si reimporta con le stesse sessioni, immagini e suoni.
+    const b = JSON.parse(r.backup);
+    eq([b.kind, Object.keys(b.images), Object.keys(b.suoni.file), b.backupMigrazione.preferenze['dnd-battaglie:sezione']], ['archivio', ['prova'], ['prova'], 'nemici']);
+    eq(DnD.dati.importJSON(r.backup).sessions.length, DnD.dati.importJSON(statoTesto).sessions.length, 'backup reimportabile');
+    eq(nuovo['backup-migrazione'], r.backup, 'backup conservato nel profilo');
+    // Seconda volta: niente da fare.
+    eq((await AR().migraProfili(env)).fatto, false);
+  });
+
+  test('Profili: migrazione non riuscita, tutto torna com\'era (rollback)', async () => {
+    if (location.protocol === 'file:') return;
+    for (const fase of ['copia', 'registro']) {
+      const guasto = (azione, nome, k) => { if (fase === 'copia' && azione === 'scrivi' && nome === 'sessionforge-master' && k === 'img:prova') throw Object.assign(new Error('spazio esaurito'), { name: 'QuotaExceededError' }); };
+      const { env } = await ambientePrima(guasto);
+      const primaDb = contenuto(env, 'dnd-battaglie');
+      const primaLocali = Object.fromEntries(chiaviLocali(env).map((k) => [k, env.storage.getItem(k)]));
+      if (fase === 'registro') {
+        const set = env.storage.setItem;
+        env.storage.setItem = (k, v) => { if (k === AL().REGISTRO) throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' }); set(k, v); };
+      }
+      const errore = console.error;
+      console.error = () => {};
+      let r;
+      try { r = await AR().migraProfili(env); } finally { console.error = errore; }
+      eq([r.ok, r.fatto, /spazio di archiviazione del browser esaurito/.test(r.errore), typeof r.backup], [false, false, true, 'string'], fase);
+      eq(AL().leggiRegistro(env.storage), null, fase + ': nessun registro');
+      eq(env.dbs.has('sessionforge-master'), false, fase + ': database nuovo eliminato');
+      eq(contenuto(env, 'dnd-battaglie'), primaDb, fase + ': database vecchio intatto');
+      eq(Object.fromEntries(chiaviLocali(env).map((k) => [k, env.storage.getItem(k)])), primaLocali, fase + ': localStorage come prima');
+    }
+  });
+
+  test('Profili: primo avvio senza dati e database illeggibile (migrazione rimandata)', async () => {
+    const env = AR().ambienteMemoria(AL().memoria());
+    const r = await AR().migraProfili(env);
+    eq([r.ok, r.primoAvvio, env.dbs.has('dnd-battaglie')], [true, true, false], 'il database aperto per controllare si elimina');
+    const reg = PRF().normalizzaRegistro(AL().leggiRegistro(env.storage));
+    eq([reg.attivo, reg.profili[0].nuovo, reg.portale.salta], ['master', true, false]);
+    const rotto = AR().ambienteMemoria(AL().memoria(), (azione, nome) => { if (azione === 'apri' && nome === 'dnd-battaglie') throw new Error('IndexedDB bloccato'); });
+    rotto.elencaDb = async () => null;
+    rotto.storage.setItem('dnd-battaglie:sezione', 'magie');
+    const errore = console.error;
+    console.error = () => {};
+    let r2;
+    try { r2 = await AR().migraProfili(rotto); } finally { console.error = errore; }
+    eq([r2.ok, r2.rimanda, AL().leggiRegistro(rotto.storage), rotto.storage.getItem('dnd-battaglie:sezione')], [false, true, null, 'magie']);
+    // Solo preferenze, nessuno stato: si spostano, ma resta un primo avvio (guida, nessun backup da proporre).
+    const pref = AR().ambienteMemoria(AL().memoria());
+    pref.storage.setItem('dnd-battaglie:impostazioni', '{"theme":"scuro"}');
+    eq((await AR().migraProfili(pref)).ok, true);
+    const rp = PRF().normalizzaRegistro(AL().leggiRegistro(pref.storage));
+    eq([rp.profili[0].nuovo, rp.migrazione.vuoto, pref.storage.getItem('sessionforge-master:impostazioni')], [true, true, '{"theme":"scuro"}']);
+  });
+
+  test('Profili: archivi separati (database IndexedDB e chiavi di localStorage distinti)', async () => {
+    eq(AL().nomi('luca'), { db: 'sessionforge-luca', prefisso: 'sessionforge-luca:' });
+    eq(AL().nomi(null), { db: 'dnd-battaglie', prefisso: 'dnd-battaglie:' }, 'prima della migrazione: nomi di sempre');
+    const base = AL().memoria();
+    const a = AL().vista(base, AL().nomi('anna').prefisso);
+    const b = AL().vista(base, AL().nomi('bruno').prefisso);
+    a.setItem('dnd-battaglie:impostazioni', 'A');
+    b.setItem('dnd-battaglie:impostazioni', 'B');
+    a.setItem('dnd-battaglie:online-partite', '[]');
+    eq([a.getItem('dnd-battaglie:impostazioni'), b.getItem('dnd-battaglie:impostazioni'), b.getItem('dnd-battaglie:online-partite')], ['A', 'B', null]);
+    eq([a.length, a.chiavi(), AL().chiaviDi(base).sort()], [2, ['dnd-battaglie:impostazioni', 'dnd-battaglie:online-partite'], ['sessionforge-anna:impostazioni', 'sessionforge-anna:online-partite', 'sessionforge-bruno:impostazioni']]);
+    a.clear();
+    eq(AL().chiaviDi(base), ['sessionforge-bruno:impostazioni'], 'svuotare un profilo non tocca l\'altro');
+    // IndexedDB vero: due database, due stati.
+    if (typeof indexedDB === 'undefined') return;
+    const nomi = ['sessionforge-prova-a-' + Date.now(), 'sessionforge-prova-b-' + Date.now()];
+    try {
+      const sa = await DnD.dati.openStore(a, { dbName: nomi[0] });
+      const sb = await DnD.dati.openStore(b, { dbName: nomi[1] });
+      eq([sa.backend, sb.backend], ['IndexedDB', 'IndexedDB']);
+      await sa.update((st) => { st.sessions[0].name = 'Campagna di Anna'; });
+      await sb.update((st) => { st.sessions[0].name = 'Campagna di Bruno'; });
+      await sa.blobs.set('img:x', 'data:image/png;base64,AAAA');
+      const ra = await DnD.dati.openStore(a, { dbName: nomi[0] });
+      const rb = await DnD.dati.openStore(b, { dbName: nomi[1] });
+      eq([ra.state.sessions[0].name, rb.state.sessions[0].name, await rb.blobs.get('img:x')], ['Campagna di Anna', 'Campagna di Bruno', null]);
+      for (const s of [sa, sb, ra, rb]) await s.chiudi();
+    } finally {
+      for (const n of nomi) await AR().eliminaIdb(n);
+    }
+  });
+
+  test('Profili: crea, cambia, modifica, duplica ed elimina (con i loro archivi)', async () => {
+    const env = AR().ambienteMemoria(AL().memoria());
+    await AR().migraProfili(env);
+    const G = AR().gestoreProfili(env);
+    const luca = G.crea({ nome: 'Luca', ruolo: 'giocatore' });
+    eq([luca.id, luca.ruolo, G.elenco().length, G.attivo().id], ['luca', 'giocatore', 2, 'master']);
+    eq(G.crea({ nome: 'Luca' }).id, 'luca-2', 'id unico');
+    G.attiva('luca');
+    eq(G.attivo().id, 'luca', 'cambio del profilo attivo');
+    eq(AL().attivoDi(AL().leggiRegistro(env.storage)), 'luca');
+    // Dati del profilo di Luca: database e preferenze.
+    const db = await env.apriDb('sessionforge-luca');
+    await db.set('stato', '{"x":1}');
+    env.storage.setItem('sessionforge-luca:impostazioni', 'L');
+    const copia = await G.duplica('luca', 'Luca bis');
+    eq([copia.id, contenuto(env, 'sessionforge-luca-bis').stato, env.storage.getItem('sessionforge-luca-bis:impostazioni')], ['luca-bis', '{"x":1}', 'L']);
+    eq(G.modifica('luca', { nome: 'Luca R.', colore: '#123456' }).nome, 'Luca R.');
+    await G.elimina('luca');
+    eq([env.dbs.has('sessionforge-luca'), env.storage.getItem('sessionforge-luca:impostazioni'), G.elenco().map((p) => p.id).includes('luca')], [false, null, false]);
+    eq(G.attivo().id, 'master', 'eliminato l\'attivo: diventa attivo il primo rimasto');
+    eq(contenuto(env, 'sessionforge-luca-bis').stato, '{"x":1}', 'la copia resta');
+    let errore = null;
+    try { G.attiva('sparito'); } catch (e) { errore = e.message; }
+    eq(errore, 'Profilo non trovato.');
+  });
+
+
+  test('Online: gettone di rientro legato alla partita (invito con id), preferenza spettatore, partite per profilo', async () => {
+    const K = DnD.rete.codici;
+    const inv = K.invito('v=0', 'Dario', 1000, 'partita-1');
+    eq([inv.partita, K.partitaDi(inv), K.partitaDi(K.invito('v=0', 'Dario', 1000)), K.partitaDi({ partita: '<script>' })], ['partita-1', 'partita-1', null, null]);
+    const dec = await K.decodifica(await K.codifica(inv, { comprimi: false }));
+    eq(K.partitaDi(dec), 'partita-1', 'l\'id attraversa il codice');
+    // Partite e gettoni stanno nelle preferenze del profilo: un altro profilo non li vede.
+    const base = AL().memoria();
+    const a = AL().vista(base, AL().nomi('anna').prefisso);
+    const b = AL().vista(base, AL().nomi('bruno').prefisso);
+    a.setItem('dnd-battaglie:online-partite', JSON.stringify([{ partita: 'partita-1', master: 'Dario', gettone: 'g-anna' }]));
+    eq([JSON.parse(a.getItem('dnd-battaglie:online-partite'))[0].gettone, b.getItem('dnd-battaglie:online-partite')], ['g-anna', null]);
+  });
+
+  test('Online: la prova con il trasporto in memoria funziona ancora, con la preferenza «spettatore» nel saluto', async () => {
+    let chiesto = null;
+    const { g, m } = await onlinePair(onlineState(), { giocatore: { spettatore: true }, richiesta: (r) => { chiesto = r.spettatore; r.accetta({ spettatore: true }); } });
+    eq([chiesto, g.stato().stato, g.stato().spettatore, Boolean(g.stato().gettone)], [true, 'attivo', true, true]);
+    m.termina();
+    let senza = null;
+    const due = await onlinePair(onlineState(), { richiesta: (r) => { senza = r.spettatore; r.accetta({ personaggioId: 'pg1' }); } });
+    eq([senza, due.g.stato().stato, due.g.stato().spettatore], [false, 'attivo', false], 'senza preferenza: come prima');
+    due.m.termina();
+  });
+
+  test('Backup su cartella: nome, scrittura verificata, rotazione delle ultime 10, permesso scaduto, errori', async () => {
+    const BK = DnD.backup;
+    const ora = new Date(2026, 10, 4, 9, 5, 7).getTime();
+    eq(BK.nomeFile('Session Forge', 'Giulia Rossi', ora), 'session-forge-giulia-rossi-2026-11-04-090507.json');
+    const c = BK.cartellaMemoria();
+    c.file.set('appunti.txt', 'non toccare');
+    c.file.set('session-forge-luca-2026-01-01-000000.json', '{}'); // copie di un altro profilo
+    const testo = JSON.stringify({ app: 'Session Forge', kind: 'archivio' });
+    let ultimo = null;
+    for (let i = 0; i < 12; i++) {
+      ultimo = await BK.esegui(c, testo, { app: 'Session Forge', profilo: 'Giulia', ora: ora + i * 60000 });
+      ok(ultimo.ok, 'backup ' + i);
+    }
+    const miei = [...c.file.keys()].filter((n) => n.startsWith('session-forge-giulia-')).sort();
+    eq(miei.length, 10, 'restano le ultime 10');
+    eq([miei[0], miei[9], ultimo.eliminati], ['session-forge-giulia-2026-11-04-090707.json', 'session-forge-giulia-2026-11-04-091607.json', ['session-forge-giulia-2026-11-04-090607.json']]);
+    ok(c.file.has('appunti.txt') && c.file.has('session-forge-luca-2026-01-01-000000.json'), 'gli altri file restano');
+    // File scritto male: la verifica lo scopre e il backup non risulta salvato.
+    const rotta = BK.cartellaMemoria({ corrompi: true });
+    const r = await BK.esegui(rotta, testo, { app: 'Session Forge', profilo: 'Giulia', ora });
+    eq([r.ok, /verifica non riuscita/.test(r.errore)], [false, true]);
+    // Permesso scaduto: nessuna scrittura, si chiede di riautorizzare.
+    const scaduta = BK.cartellaMemoria({ permesso: 'prompt' });
+    const p = await BK.esegui(scaduta, testo, { app: 'Session Forge', profilo: 'Giulia', ora });
+    eq([p.ok, p.permesso, scaduta.file.size, /Riautorizza/.test(p.errore)], [false, true, 0, true]);
+    eq(await scaduta.chiediPermesso(), 'granted');
+    ok((await BK.esegui(scaduta, testo, { app: 'Session Forge', profilo: 'Giulia', ora })).ok, 'dopo la riautorizzazione');
+    // Disco pieno.
+    const piena = BK.cartellaMemoria({ guasto: () => { throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' }); } });
+    const q = await BK.esegui(piena, testo, { app: 'Session Forge', profilo: 'Giulia', ora });
+    eq([q.ok, q.errore], [false, 'Backup non salvato: spazio esaurito sul disco della cartella di backup.']);
+  });
+
+  test('Backup: quando tocca all\'automatico e al promemoria di 7 giorni (disattivabile)', () => {
+    const BK = DnD.backup;
+    const ora = Date.UTC(2026, 10, 4);
+    const min = 60000;
+    eq(BK.normalizzaStato({ intervallo: 0 }).intervallo, 10, 'predefinito 10 minuti');
+    eq([BK.dovuto({}, ora, true), BK.dovuto({}, ora, false)], [true, false], 'solo se ci sono modifiche');
+    const fatto = { intervallo: 10, ultimo: ora - 5 * min, ultimoTipo: 'cartella' };
+    eq([BK.dovuto(fatto, ora, true), BK.dovuto(Object.assign({}, fatto, { intervallo: 3 }), ora, true)], [false, true]);
+    eq(BK.dovuto({ ultimo: ora - min, ultimoTipo: 'esportazione' }, ora, true), true, 'un\'esportazione a mano non ferma la cartella');
+    const giorno = 24 * 60 * min;
+    eq([BK.promemoria({}, ora), BK.promemoria({ ultimo: ora - 6 * giorno }, ora), BK.promemoria({ ultimo: ora - 8 * giorno }, ora)], [true, false, true]);
+    eq([BK.promemoria({ ultimo: ora - 8 * giorno, rimandato: ora - giorno }, ora), BK.promemoria({ promemoria: false }, ora)], [false, false], 'rimandato o spento');
+  });
+
+  test('Archivio: errori di quota e di archiviazione negata con messaggi chiari, mai «salvato» per finta', async () => {
+    const quota = Object.assign(new Error('x'), { name: 'QuotaExceededError' });
+    const negata = Object.assign(new Error('The operation is insecure.'), { name: 'SecurityError' });
+    ok(/spazio di archiviazione del browser esaurito/.test(DnD.dati.saveErrorMessage(quota)));
+    ok(/non permette di salvare dati/.test(DnD.dati.saveErrorMessage(negata)));
+    const backend = fakeBackend();
+    const store = await DnD.dati.openStore({ getItem: () => null, setItem() {}, removeItem() {} }, { backend });
+    let segnalato = null;
+    store.onSaveError = (e) => { segnalato = e.name; };
+    backend.set = () => Promise.reject(quota);
+    const r = await store.update((st) => { st.sessions[0].name = 'X'; });
+    eq([r.ok, segnalato, /esaurito/.test(r.message), store.salvate < store.modifiche], [false, 'QuotaExceededError', true, true], 'il backup automatico vede che non è salvato');
+    // Registro dei profili non scrivibile (archiviazione negata): il primo avvio lo dice, senza registro a metà.
+    const env = AR().ambienteMemoria(AL().memoria());
+    env.storage.setItem = () => { throw negata; };
+    const m = await AR().migraProfili(env);
+    eq([m.ok, /non permette di salvare/.test(m.errore)], [false, true]);
+  });
+
+  test('Importazione: anteprima, conflitti (tieni, sostituisci, duplica) e versione più recente rifiutata', () => {
+    const U2 = DnD.unione;
+    const mio = DnD.dati.emptyState();
+    const sid = mio.sessions[0].id;
+    mio.players.push(DnD.dati.normalizeCreature({ id: 'pg1', name: 'Mira', sessionId: sid, maxHp: 10 }, true));
+    mio.races.push(DnD.dati.normalizeRace({ id: 'r1', name: 'Elfo' }));
+    const loro = JSON.parse(JSON.stringify(mio));
+    loro.players[loro.players.length - 1].name = 'Mira (loro)';
+    loro.races[loro.races.length - 1].name = 'Elfo dei boschi';
+    loro.npcs.push(DnD.dati.normalizeCreature({ id: 'n-nuovo', name: 'Troll', sessionId: sid, maxHp: 30 }, false));
+    const imp = DnD.dati.normalizeState(loro);
+    const a = U2.anteprima(mio, imp);
+    eq([a.aggiunti.map((x) => x.nome), a.conflitti.map((x) => x.col + ':' + x.id).sort()], [['Troll'], ['players:pg1', 'races:r1']]);
+    eq(a.perTipo.players.conflitti, 1);
+    let n = 0;
+    const uid = () => 'nuovo-' + (++n);
+    const u = U2.unisci(mio, imp, { 'players:pg1': 'sostituisci', 'races:r1': 'duplica' }, uid);
+    eq(u.players.find((p) => p.id === 'pg1').name, 'Mira (loro)', 'sostituito');
+    eq([u.races.find((r) => r.id === 'r1').name, u.races.find((r) => r.id === 'nuovo-1').name], ['Elfo', 'Elfo dei boschi (importato)'], 'duplicato');
+    ok(u.npcs.some((x) => x.id === 'n-nuovo'), 'nuovo aggiunto');
+    const t = U2.unisci(mio, imp, U2.tutte(a.conflitti, 'tieni'), uid);
+    eq([t.players.find((p) => p.id === 'pg1').name, t.races.find((r) => r.id === 'r1').name], ['Mira', 'Elfo'], 'tenuti i miei');
+    eq(mio.players.find((p) => p.id === 'pg1').name, 'Mira', 'lo stato di partenza non cambia');
+    // Sessione in conflitto duplicata: copia con id nuovi e con i suoi personaggi.
+    imp.sessions[0].name = 'Sessione loro';
+    const d = U2.unisci(mio, imp, { ['sessions:' + sid]: 'duplica' }, DnD.dadi.uid);
+    eq(d.sessions.length, 2);
+    const copia = d.sessions.find((s) => s.id !== sid);
+    ok(d.players.some((p) => p.sessionId === copia.id && p.name === 'Mira (loro)'), 'il personaggio segue la sessione duplicata');
+    // Versione più recente: rifiutata con un messaggio chiaro; più vecchia: migrata.
+    let errore = null;
+    try { DnD.dati.importJSON(JSON.stringify(Object.assign({}, loro, { version: DnD.modello.VERSION + 1 }))); } catch (e) { errore = e.message; }
+    eq(errore, 'Il backup proviene da una versione più recente dell\'app.');
+    eq(DnD.dati.importJSON(JSON.stringify(Object.assign({}, loro, { version: 12 }))).version, DnD.modello.VERSION, 'versione vecchia migrata');
+  });
+
+  test('PIN locale: impronta salata, verifica, PIN non valido, nessun PIN in chiaro', async () => {
+    const pin = await PRF().creaPin('2468');
+    ok(!JSON.stringify(pin).includes('2468'), 'il PIN non si salva');
+    eq([await PRF().verificaPin('2468', pin), await PRF().verificaPin('2469', pin), await PRF().verificaPin('', pin), await PRF().verificaPin('2468', null)], [true, false, false, false]);
+    const altro = await PRF().creaPin('2468');
+    ok(altro.sale !== pin.sale && altro.hash !== pin.hash, 'sale diverso, impronta diversa');
+    for (const bad of ['123', '123456789', 'abcd', '12 4']) {
+      let e = null;
+      try { await PRF().creaPin(bad); } catch (x) { e = x.message; }
+      eq(e, 'Il PIN deve avere da 4 a 8 cifre.', bad);
+    }
+    const p = PRF().normalizzaProfilo({ id: 'giulia', nome: 'Giulia', pin });
+    eq(p.pin, pin, 'il PIN resta nel profilo');
+    eq(PRF().normalizzaProfilo({ id: 'x', pin: { sale: 'zz', hash: 'zz' } }).pin, null, 'impronta non valida scartata');
+    // Sblocco per scheda: il profilo con PIN resta bloccato finché non lo si inserisce.
+    const prima = AL().sbloccato('giulia-prova');
+    AL().sblocca('giulia-prova');
+    ok(AL().sbloccato('giulia-prova') && !prima);
+    AL().sblocca(null);
+    ok(!AL().sbloccato('giulia-prova'));
+  });
+
+  test('Portale: «Salta il portale» salvato nel registro e usato all\'avvio', async () => {
+    const env = AR().ambienteMemoria(AL().memoria());
+    await AR().migraProfili(env);
+    const G = AR().gestoreProfili(env);
+    eq(G.portale().salta, false);
+    G.impostaPortale({ salta: true });
+    const reg = AL().leggiRegistro(env.storage);
+    eq(PRF().normalizzaRegistro(reg).portale.salta, true, 'salvato');
+    eq(RT().iniziale({ hash: '', sezioni: DnD.config.SECTIONS, salta: G.portale().salta, ultimaSezione: 'nemici' }), { modo: 'master', sezione: 'nemici' });
+    G.impostaPortale({ salta: false });
+    eq(RT().iniziale({ hash: '', sezioni: DnD.config.SECTIONS, salta: G.portale().salta, ultimaSezione: 'nemici' }), { modo: 'home' });
+  });
+
+  test('«Cancella tutti i dati»: del profilo (database e dati, non gli altri profili) e di tutti', async () => {
+    const env = AR().ambienteMemoria(AL().memoria());
+    await AR().migraProfili(env);
+    const G = AR().gestoreProfili(env);
+    G.crea({ nome: 'Luca' });
+    const vm = AL().vista(env.storage, AL().nomi('master').prefisso);
+    const vl = AL().vista(env.storage, AL().nomi('luca').prefisso);
+    for (const v of [vm, vl]) { v.setItem('dnd-battaglie:impostazioni', '{}'); v.setItem('dnd-battaglie:online-partite', '[]'); v.setItem('dnd-battaglie:backup', '{}'); }
+    const dbm = await env.apriDb('sessionforge-master');
+    const dbl = await env.apriDb('sessionforge-luca');
+    const store = await DnD.dati.openStore(vm, { backend: dbm });
+    await dbm.set('img:x', 'data:image/png;base64,AAAA');
+    await dbm.set('cartella-backup', { kind: 'directory' });
+    await dbl.set('stato', '{"di":"luca"}');
+    await store.clearAll();
+    eq([await dbm.get('img:x'), await dbm.get('cartella-backup'), typeof (await dbm.get('stato'))], [null, null, 'string'], 'profilo svuotato (resta lo stato vuoto)');
+    eq([vm.getItem('dnd-battaglie:online-partite'), vm.getItem('dnd-battaglie:backup'), vm.getItem('dnd-battaglie:impostazioni')], [null, null, '{}'], 'dati online e backup tolti, preferenze di visualizzazione restano');
+    eq([await dbl.get('stato'), vl.getItem('dnd-battaglie:online-partite')], ['{"di":"luca"}', '[]'], 'l\'altro profilo non si tocca');
+    env.storage.setItem('dnd-battaglie:sezione', 'vecchia');
+    env.storage.setItem('altra-app', 'resta');
+    await env.apriDb('dnd-battaglie');
+    await G.cancellaTutti();
+    eq([[...env.dbs.keys()], AL().chiaviDi(env.storage)], [[], ['altra-app']], 'tutti i profili, registro e dati di prima');
+  });
+
+  test('Fumo: il portale all\'avvio, le carte, Alt+H con conferma e la rotta sconosciuta', async () => {
+    if (location.protocol === 'file:' || typeof document === 'undefined') return;
+    await conApp(async ({ W, A, main, attesa }) => {
+      eq([W.document.body.dataset.modo, W.location.hash], ['home', '#/home'], 'si parte dal portale');
+      ok(main.querySelectorAll('.portale-carta').length === 3, 'tre carte');
+      ok(main.querySelector('.portale-riprendi'), 'riquadro Riprendi');
+      main.querySelector('[data-carta=master]').click();
+      await attesa(50);
+      eq([W.document.body.dataset.modo, W.location.hash.startsWith('#/master/')], ['master', true]);
+      ok(W.document.getElementById('home-btn'), 'pulsante Home nella barra');
+      combattimentoDiProva(A);
+      let chiesto = '';
+      W.confirm = (t) => { chiesto = t; return false; };
+      W.document.dispatchEvent(new W.KeyboardEvent('keydown', { code: 'KeyH', key: 'h', altKey: true, bubbles: true }));
+      await attesa(30);
+      ok(/combattimento in corso/.test(chiesto) && W.document.body.dataset.modo === 'master', 'Alt+H chiede conferma con un combattimento in corso');
+      W.confirm = () => true;
+      W.document.getElementById('home-btn').click();
+      await attesa(30);
+      eq(W.document.body.dataset.modo, 'home');
+      W.location.hash = '#/non-esiste';
+      await attesa(150);
+      eq([W.location.hash, W.document.body.dataset.modo], ['#/home', 'home'], 'rotta sconosciuta: portale');
+      W.history.back();
+      await attesa(150);
+      ok(['home', 'master'].includes(W.document.body.dataset.modo), 'Indietro resta coerente');
+    });
   });
 
   // solo: facoltativo, esegue solo i test il cui nome contiene questo testo.

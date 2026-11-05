@@ -26,8 +26,10 @@ regole          funzioni pure di gioco, nessun DOM, disco o rete               d
   ↑               mappa: tileset → tile/tilemap → collisioni → griglia → visione
   ↑               entità: creature, boss, percorso, scheda, leggendario, ia
   ↑               Mondo: fazioni → party/città/quest/npc → esplorazione, scene
-stato           modello, normalizzazione, esempi, migrazioni, archivio su disco
-  ↑               modello.js (base, caricato presto) … stato/normalizza → esempi → migrazioni → dati.js → stato/archivio
+stato           modello, normalizzazione, esempi, migrazioni, profili, archivio su disco, unione, backup
+  ↑               stato/archivio-locale.js (in <head>) · modello.js (base, caricato presto) … stato/normalizza → esempi →
+  ↑               migrazioni → dati.js → stato/profili → stato/archivio → sessioni → stato/srd → stato/unione → stato/backup
+  ↑               rotte.js (instradamento su hash, puro) sta in fondo a questo gruppo
 rete            protocollo, trasporto, codici, segnalazione, filtro, immagini, intenzioni, valutazione, sessione (js/rete/)
   ↑
 interfaccia     DOM e canvas (ui-*.js, note-editor.js)                          base: ui-comune.js
@@ -36,8 +38,36 @@ app.js          avvio, menù, scorciatoie, service worker
 ```
 
 `modello.js` è la base dello stato ed è caricato subito dopo `config.js`, perché anche le regole lo usano (sessione
-corrente, versione, punti d'accesso descritti sotto). `impostazioni.js` si carica per primo, prima del CSS, per
-applicare tema e dimensione del testo.
+corrente, versione, punti d'accesso descritti sotto). `stato/archivio-locale.js` e `impostazioni.js` si caricano per
+primi, prima del CSS: il primo sceglie il profilo attivo e la vista delle sue preferenze, il secondo applica tema e
+dimensione del testo di quel profilo.
+
+### Modulo di archivio e profili
+
+Il **modulo di archivio** è l'unico che tocca lo storage del browser (localStorage, sessionStorage, IndexedDB,
+`navigator.storage`, File System Access) ed è in due parti:
+
+- `stato/archivio-locale.js` (in `<head>`, nessuna dipendenza): registro dei profili `sessionforge:profili` e profilo
+  attivo, nomi degli archivi (`nomi(id)` → database `sessionforge-<id>`, prefisso `sessionforge-<id>:`; senza registro
+  i nomi di sempre `dnd-battaglie`), e **`DnD.archivioLocale.preferenze`**: una vista con l'interfaccia di localStorage
+  che salva le chiavi «dnd-battaglie:…» di tutti i moduli sotto il prefisso del profilo attivo. Ogni altro file usa
+  questa vista, mai `localStorage`.
+- `stato/archivio.js`: store dello stato sul database del profilo, migrazione ai profili (`migraProfili`, con backup
+  prima e ripristino se fallisce), gestore dei profili (`gestoreProfili(env)`: crea, modifica, attiva, duplica,
+  elimina, cancella tutti), spazio e persistenza, cartella di backup. Le operazioni lavorano su un **ambiente**
+  (`ambienteReale()` o `ambienteMemoria()` per i test e per `index.html?prova`).
+
+La forma dei profili (`stato/profili.js`), l'unione degli archivi importati (`stato/unione.js`) e la logica dei backup
+(`stato/backup.js`, con la cartella come adattatore) sono funzioni pure. Cambiare profilo ricarica la pagina, così ogni
+modulo rilegge il proprio archivio.
+
+### Instradamento
+
+`rotte.js` (puro) legge e scrive le rotte su hash (`#/home`, `#/master/<sezione>`, `#/gioca`, `#/online/ospita`,
+`#/online/unisciti`), sceglie la rotta d'avvio e decide i permessi delle modalità (`consentita`: Giocatore e Spettatore
+non aprono mai le sezioni del Master). `app.js` applica le rotte (`DnD.app.vai`, `home`, `show`), ascolta `hashchange`
+/ `popstate` e mostra il portale (`ui-portale.js`) nella stessa pagina, senza ricaricare. Il `body` porta
+`data-modo` (home, master, gioca, ospita, unisciti) e il CSS nasconde barra, note e dadi fuori dal Master.
 
 ### Cosa NON deve fare ogni livello
 
@@ -45,7 +75,7 @@ applicare tema e dimensione del testo.
 |---|---|
 | dati | contenere logica (eccezione: piccole funzioni di conversione in `dati/misure.js`, `dati/suoni.js`) |
 | regole | toccare DOM, `localStorage`, IndexedDB o rete; leggere `DnD.store` (lo stato corrente si chiede a `modello.statoCorrente()`) |
-| stato | toccare il DOM; scrivere su disco fuori da `stato/archivio.js` |
+| stato | toccare il DOM; leggere o scrivere lo storage fuori dal modulo di archivio (`stato/archivio-locale.js`, `stato/archivio.js`) |
 | rete | mandare ai giocatori dati che non passano da `rete/filtro.js` (vista, eventi, testo degli esiti) |
 | interfaccia | contenere regole di gioco nuove (vanno nelle regole e si chiamano da qui) |
 
@@ -64,7 +94,7 @@ modulo alto si registra al caricamento. Così il basso non conosce l'alto e non 
 | `ui-riposi.js` | `registraRiposoEsplorazione` | `ui-esplorazione.js` | riposo del gruppo durante un'esplorazione |
 | `ui-combattimento.js` | `registraAgganci` | `ui-esplorazione.js`, `ui-online.js` | striscione e fine dello scontro, pulsante «Online», ping |
 | `ui-impostazioni.js` | `registraOnline` | `ui-online.js` | pulsanti online del pannello Impostazioni |
-| `ui-comune.js` | `DnD.app` (dichiarata) | `app.js` | navigazione, aggiornamento, sessioni per tutte le sezioni |
+| `ui-comune.js` | `DnD.app` (dichiarata) | `app.js` | navigazione (anche `vai`, `home`, `modo`), aggiornamento, sessioni, sessioni recenti |
 | `dati.js` | facciata `DnD.dati` | `stato/archivio.js` | aggiunge `openStore` e `saveErrorMessage` |
 
 ## Componenti grandi divisi in parti
@@ -100,6 +130,9 @@ condiviso è un unico oggetto **`S`**, così le parti lo leggono e lo modificano
 | sanificazione dell'HTML | `note.sanitizeHtml` |
 | file da scaricare, nomi di file, data | `DnD.ui.download`, `slug`, `today` (`ui-comune.js`) |
 | sessione corrente, visibilità nelle sessioni | `modello.current`, `isVisible`, `visible` |
+| profilo attivo, nomi degli archivi, preferenze | `archivioLocale.attivo`, `nomi`, `preferenze` |
+| rotte e permessi delle modalità | `rotte.analizza`, `formatta`, `iniziale`, `consentita` |
+| gettoni di rientro (per partita) e ripresa (per sessione) | `ui-online.js` (`partite`, `ripresaDi`), nelle preferenze del profilo |
 | testi inviati ai giocatori | `rete/filtro.js` (`istantanea`, `differenze`, `testoEsito`) |
 
 ## Come aggiungere una funzione senza rompere i livelli
@@ -133,8 +166,12 @@ condiviso è un unico oggetto **`S`**, così le parti lo leggono e lo modificano
   dall'app (`strumenti/estrai-srd.js`, Node + `pdftotext`, non in cache). L'analisi del testo (`js/srd-analisi.js`,
   livello regole) è la stessa usata dallo strumento e provata dai test; l'importazione nella libreria è in
   `js/stato/srd.js` (livello stato), che salva tramite lo store ricevuto e annulla tutto se la scrittura non riesce.
-- Le preferenze di visualizzazione (`localStorage`, chiavi `dnd-battaglie:…`) non hanno versione: si leggono con
-  valori di ripiego.
+- Le preferenze di visualizzazione (chiavi `dnd-battaglie:…` nella vista del profilo) non hanno versione: si leggono
+  con valori di ripiego.
+- Il **registro dei profili** ha una versione propria (`profili.VERSIONE`, oggi **1**), indipendente da quella dello
+  stato: `archivio.migraProfili` porta i dati di prima dei profili (versione 0: database `dnd-battaglie`) nel profilo
+  «Master». Una nuova forma del registro: nuovo passo in `migraProfili`, `VERSIONE` + 1, test con
+  `test/fixture/profili-prima.json`.
 
 ## Rilascio
 

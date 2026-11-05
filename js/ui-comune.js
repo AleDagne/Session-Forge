@@ -155,13 +155,13 @@
   // apply(collapsed) aggiorna la UI; restituisce { toggle(forza?), collapsed() }.
   function persistentToggle(key, apply) {
     let collapsed = false;
-    try { collapsed = localStorage.getItem(key) === 'chiuso'; } catch (e) { /* preferenza non essenziale */ }
+    try { collapsed = DnD.archivioLocale.preferenze.getItem(key) === 'chiuso'; } catch (e) { /* preferenza non essenziale */ }
     if (window.matchMedia('(max-width: 760px)').matches) collapsed = true;
     apply(collapsed);
     return {
       toggle(force) {
         collapsed = typeof force === 'boolean' ? force : !collapsed;
-        try { localStorage.setItem(key, collapsed ? 'chiuso' : 'aperto'); } catch (e) { /* ignora */ }
+        try { DnD.archivioLocale.preferenze.setItem(key, collapsed ? 'chiuso' : 'aperto'); } catch (e) { /* ignora */ }
         apply(collapsed);
       },
       collapsed: () => collapsed,
@@ -241,6 +241,6 @@
   // Interfaccia dell'app per le sezioni (navigazione, aggiornamento, sessioni, barra, note): dichiarata qui, alla base
   // dell'interfaccia, e riempita da app.js all'avvio. Prima dell'avvio ogni funzione segnala l'errore.
   const nonPronta = (nome) => () => { throw new Error('app non ancora avviata: DnD.app.' + nome); };
-  DnD.app = Object.fromEntries(['show', 'refreshAll', 'switchSession', 'canLeaveSection', 'navigate', 'toggleSidebar', 'notes']
+  DnD.app = Object.fromEntries(['show', 'refreshAll', 'switchSession', 'canLeaveSection', 'navigate', 'toggleSidebar', 'notes', 'vai', 'home', 'recenti', 'inCorso', 'modo', 'sezione', 'ultimaRotta']
     .map((nome) => [nome, nonPronta(nome)]));
 })(globalThis.DnD = globalThis.DnD || {});

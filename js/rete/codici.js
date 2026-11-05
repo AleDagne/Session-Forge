@@ -61,7 +61,10 @@
 
   // Contenuti dei codici. ora: Date.now() (iniettabile nei test).
   const crea = (tipo, campi, ora) => Object.assign({ tipo, versione: P().VERSIONE, id: DnD.dadi.uid(), scade: ora + DURATA }, campi);
-  const invito = (sdp, nomeMaster, ora) => crea('invito', { sdp, master: P().pulisciTesto(nomeMaster, 30) }, ora);
+  // partita: identificativo della partita ospitata (il giocatore vi lega il gettone di rientro, non al nome del master).
+  const PARTITA = /^[A-Za-z0-9_-]{1,40}$/;
+  const invito = (sdp, nomeMaster, ora, partita) => crea('invito', Object.assign({ sdp, master: P().pulisciTesto(nomeMaster, 30) }, PARTITA.test(partita || '') ? { partita } : {}), ora);
+  const partitaDi = (inv) => (inv && PARTITA.test(inv.partita || '') ? inv.partita : null);
   const risposta = (sdp, invitoId, ora) => crea('risposta', { sdp, invito: invitoId }, ora);
 
   // Controlli comuni: tipo atteso, versione, scadenza. Lancia un errore in italiano.
@@ -84,5 +87,5 @@
   }
 
   DnD.rete = DnD.rete || {};
-  DnD.rete.codici = { PREFISSO, DURATA, comprimibile, codifica, decodifica, invito, risposta, verifica, registro };
+  DnD.rete.codici = { PREFISSO, DURATA, comprimibile, codifica, decodifica, invito, partitaDi, risposta, verifica, registro };
 })(globalThis.DnD = globalThis.DnD || {});

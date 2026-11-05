@@ -1,0 +1,16 @@
+{
+  "descrizione": "Dati di un browser prima dei profili (versione 19 dell'app): database IndexedDB «dnd-battaglie» (lo stato è test/fixture/archivio-v18.json) e chiavi «dnd-battaglie:…» di localStorage. Usato dal test «Profili: migrazione…».",
+  "database": {
+    "img:prova": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "snd:prova": "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
+  },
+  "localStorage": {
+    "dnd-battaglie:impostazioni": "{\"theme\":\"scuro\",\"textSize\":\"grande\"}",
+    "dnd-battaglie:sezione": "nemici",
+    "dnd-battaglie:barra-laterale": "chiuso",
+    "dnd-battaglie:online-gettone": "{\"gettone\":\"g-vecchio-1234567890\",\"master\":\"Dario\"}",
+    "dnd-battaglie:online-note:pg1": "\"Ricordarsi la chiave\"",
+    "dnd-battaglie:suoni": "{\"on\":false}",
+    "altra-app:chiave": "non toccare"
+  }
+}

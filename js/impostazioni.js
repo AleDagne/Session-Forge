@@ -93,7 +93,7 @@
   // Stato corrente nel browser: legge, applica e segue il sistema quando il tema è "auto".
   let current = null;
   function init() {
-    current = load(localStorage);
+    current = load(DnD.archivioLocale.preferenze);
     apply(document.documentElement, current, prefersDark());
     if (typeof matchMedia === 'function') {
       matchMedia(DARK_QUERY).addEventListener('change', () => apply(document.documentElement, current, prefersDark()));
@@ -103,7 +103,7 @@
 
   function set(patch) {
     current = normalize(Object.assign({}, current, patch));
-    save(localStorage, current);
+    save(DnD.archivioLocale.preferenze, current);
     apply(document.documentElement, current, prefersDark());
     return current;
   }

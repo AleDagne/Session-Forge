@@ -53,7 +53,8 @@
     ciao: (d) => {
       const n = nome(d.nome);
       richiedi(n, 'nome mancante');
-      return { nome: n, colore: COLORE.test(d.colore || '') ? d.colore.toLowerCase() : '#4f8cc9', gettone: GETTONE.test(d.gettone || '') ? d.gettone : '' };
+      // spettatore: il giocatore preferisce entrare in sola vista (il master decide comunque).
+      return { nome: n, colore: COLORE.test(d.colore || '') ? d.colore.toLowerCase() : '#4f8cc9', gettone: GETTONE.test(d.gettone || '') ? d.gettone : '', spettatore: Boolean(d.spettatore) };
     },
     // Intenzione: la forma qui, i dati con lo schema del tipo (intenzioni.pulisci, solo i campi previsti).
     intenzione: (d) => {

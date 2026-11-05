@@ -17,17 +17,33 @@
   // Le immagini importate stanno fuori dallo stato: si aggiungono al file quelle effettivamente usate.
   const imagesOf = (part) => DnD.immagini.getMany(DnD.immaginiLib.referencedIds(part));
 
-  // L'archivio porta anche le impostazioni dei suoni e i file che sostituiscono i suoni predefiniti.
-  async function exportArchive() {
+  // L'archivio porta anche le impostazioni dei suoni, i file che sostituiscono i suoni predefiniti e il profilo (nome,
+  // colore, avatar, ruolo: per importarlo in un profilo nuovo). mancanti: riceve i nomi dei file audio non trovati.
+  async function testoArchivio(mancanti) {
     const images = await imagesOf(DnD.store.state);
+    const p = DnD.archivio.profili ? DnD.archivio.profili.attivo() : null;
+    const profilo = p ? { nome: p.nome, colore: p.colore, avatar: p.avatar, ruolo: p.ruolo } : undefined;
+    return DnD.dati.exportJSON(DnD.store.state, images, { suoni: await DnD.audio.esporta(mancanti), profilo });
+  }
+  // La modalità Giocatore non esporta: la sessione ospitata è del master (al giocatore arriva solo la vista filtrata).
+  const bloccataDaGiocatore = () => {
+    if (!DnD.uiOnline || !DnD.uiOnline.vistaGiocatore()) return false;
+    toast('Durante una partita online da giocatore non si esporta: esci dalla partita.', 'error');
+    return true;
+  };
+  async function exportArchive() {
+    if (bloccataDaGiocatore()) return;
     const mancanti = [];
-    download(DnD.dati.exportJSON(DnD.store.state, images, { suoni: await DnD.audio.esporta(mancanti) }), slug(DnD.config.APP_NAME) + '-archivio-' + today() + '.json');
-    if (mancanti.length) toast('Archivio esportato, ma senza ' + mancanti.length + ' file audio non trovati (' + mancanti.join(', ') + '): quei suoni torneranno a quelli predefiniti.', 'error');
-    else toast('Archivio esportato.', 'success');
+    const p = DnD.archivio.profili ? DnD.archivio.profili.attivo() : null;
+    download(await testoArchivio(mancanti), slug(DnD.config.APP_NAME) + (p ? '-' + slug(p.nome) : '') + '-archivio-' + today() + '.json');
+    if (DnD.uiBackup) DnD.uiBackup.segnaEsportazione();
+    if (mancanti.length) toast('Archivio scaricato, ma senza ' + mancanti.length + ' file audio non trovati (' + mancanti.join(', ') + '): quei suoni torneranno a quelli predefiniti.', 'error');
+    else toast('Archivio scaricato: controlla la cartella dei download.', 'success');
   }
 
-  async function exportSession() {
-    const session = DnD.sessioni.current(DnD.store.state);
+  async function exportSession(sessionId) {
+    if (bloccataDaGiocatore()) return;
+    const session = (typeof sessionId === 'string' && DnD.store.state.sessions.find((s) => s.id === sessionId)) || DnD.sessioni.current(DnD.store.state);
     const data = DnD.sessioni.exportSession(DnD.store.state, session.id, {});
     data.images = await imagesOf(data);
     download(JSON.stringify(data, null, 2), slug(DnD.config.APP_NAME) + '-sessione-' + slug(session.name) + '-' + today() + '.json');
@@ -97,11 +113,12 @@
     }
   }
 
+  let apriPannello = () => {};
   function mount(footer) {
     const fileInput = el('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: () => {
       const f = fileInput.files[0];
       fileInput.value = '';
-      if (f) importFile(f);
+      if (f) DnD.uiBackup.importaFile(f);
     } });
     const radios = (name, legend, options, key) => el('fieldset', { class: 'settings-group' },
       el('legend', { text: legend }),
@@ -158,6 +175,7 @@
           el('button', { type: 'button', class: 'btn small', text: '⬇ Esporta archivio', onclick: exportArchive }),
           el('button', { type: 'button', class: 'btn small', text: '⬇ Esporta sessione corrente', onclick: exportSession }),
           el('button', { type: 'button', class: 'btn small', text: '⬆ Importa archivio o sessione', onclick: () => fileInput.click() }),
+          el('button', { type: 'button', class: 'btn small', text: '💾 Dati e backup…', onclick: () => { close(); DnD.uiBackup.apri(); } }),
           el('button', { type: 'button', class: 'btn small danger', text: 'Cancella tutti i dati', onclick: clearAll }),
           fileInput)),
       // Testo di attribuzione dell'SRD 5.1 (obbligatorio per la licenza CC BY 4.0).
@@ -197,22 +215,34 @@
       if (panel.hidden) return;
       panel.hidden = true;
       gear.setAttribute('aria-expanded', 'false');
+      if (ancora) ancora.setAttribute('aria-expanded', 'false');
     };
-    gear.addEventListener('click', () => {
-      if (!panel.hidden) { close(); return; }
+    // Apre il pannello vicino al pulsante che lo chiama (ingranaggio della barra o del portale).
+    let ancora = gear;
+    apriPannello = (da) => {
+      if (!panel.hidden && (!da || da === ancora)) { close(); return; }
+      ancora = da || gear;
       sync();
+      const r = ancora.getBoundingClientRect();
+      const inBarra = ancora === gear;
+      panel.style.left = inBarra ? '' : Math.max(8, Math.min(r.right - panel.offsetWidth, window.innerWidth - 348)) + 'px';
+      panel.style.top = inBarra ? '' : (r.bottom + 6) + 'px';
+      panel.style.bottom = inBarra ? '' : 'auto';
       panel.hidden = false;
-      gear.setAttribute('aria-expanded', 'true');
+      ancora.setAttribute('aria-expanded', 'true');
       panel.querySelector('input:checked').focus();
-    });
+    };
+    gear.addEventListener('click', () => apriPannello(gear));
     themeBtn.addEventListener('click', () => { I.set({ theme: I.isDark() ? 'chiaro' : 'scuro' }); sync(); });
-    document.addEventListener('pointerdown', (e) => { if (!panel.contains(e.target) && !gear.contains(e.target)) close(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { close(); gear.focus(); } });
+    document.addEventListener('pointerdown', (e) => { if (!panel.contains(e.target) && !gear.contains(e.target) && !(ancora && ancora.contains(e.target))) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { close(); (ancora && ancora.isConnected ? ancora : gear).focus(); } });
     window.addEventListener('themechange', sync);
 
-    footer.append(gear, themeBtn, DnD.uiSuoni.quickButton(), panel);
+    // Il pannello sta nel body: si apre anche dal portale, dove la barra laterale è nascosta.
+    footer.append(gear, themeBtn, DnD.uiSuoni.quickButton());
+    document.body.append(panel);
     sync();
   }
 
-  DnD.uiImpostazioni = { registraOnline, mount, exportArchive, exportSession, importFile };
+  DnD.uiImpostazioni = { registraOnline, mount, exportArchive, exportSession, importFile, testoArchivio, apri: (da) => apriPannello(da) };
 })(globalThis.DnD = globalThis.DnD || {});

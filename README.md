@@ -28,6 +28,85 @@ offline; dopo ogni aggiornamento dei file conviene riavviare il server una volta
 > Attenzione: i dati sono salvati **per indirizzo**. `file://…/index.html` e
 > `http://localhost:8080` hanno archivi separati. Per spostarli usa *Esporta* / *Importa*.
 
+### Sito pubblicato e file locale
+
+Il browser tiene un archivio separato per ogni **origine**: il sito pubblicato (es. `https://…/session-forge/`),
+`http://localhost:8080` e il file aperto con doppio clic (`file://…`) sono tre archivi diversi, con profili, sessioni
+e impostazioni propri, anche sullo stesso computer e nello stesso browser. Nessuno vede i dati degli altri e cancellare
+i dati di un sito non tocca gli altri. Per passare da uno all'altro: **Dati e backup → Esporta l'archivio completo del
+profilo** su quello vecchio, poi **Importa** su quello nuovo (in un profilo nuovo o unendolo a uno esistente). Lo stesso
+vale per cambiare browser o computer.
+
+## Portale e profili
+
+All'avvio compare il **Portale** (rotta `#/home`): titolo dell'app, selettore del profilo, tema e impostazioni, e tre
+grandi carte con icona, descrizione e stato:
+
+1. **Crea e gestisci** (Master): l'app completa con menù laterale e sessioni, come prima.
+2. **Unisciti a una partita** (Giocatore): la schermata *Unisciti* del gioco online, con il nome e il colore del
+   profilo, la preferenza «spettatore» e l'elenco delle partite salvate con **Rientra**.
+3. **Ospita una partita**: scelta della sessione (con la ripresa, se ci sono gettoni salvati per quella sessione), poi
+   il pannello Online del master di sempre e il primo invito.
+
+Sotto, il riquadro **Riprendi**: l'ultima sessione con la data e **Continua**, le sessioni aperte di recente, le partite
+online a cui hai partecipato con **Rientra** (con il gettone già salvato) e **Dimentica**. Se la pagina si è ricaricata
+durante una partita online, il portale propone **Riconnetti** (il master riprende la partita con i gettoni, il giocatore
+rientra con il suo) invece di perdere il contesto. Al primo avvio senza dati compare una guida di tre passi con
+**Crea la tua prima sessione**. Il portale mostra anche gli avvisi della migrazione e dei backup (vedi
+[Salvataggio e backup](#salvataggio-e-backup)).
+
+- **Home** nella barra laterale e nella schermata del giocatore, oppure **Alt+H** ovunque, riporta al portale; se c'è un
+  combattimento in corso o una connessione online attiva chiede conferma (il giocatore che torna al portale esce dalla
+  partita: con il gettone può rientrare).
+- **Salta il portale** (in fondo al portale) apre direttamente il Master all'avvio; l'ultima modalità e l'ultima
+  sezione aperta vengono ricordate.
+- Le carte sono pulsanti veri (Tab, Invio, Spazio) con focus visibile ed etichette `aria-label` in italiano; su schermi
+  stretti si impilano. Le animazioni rispettano *Riduci animazioni* e `prefers-reduced-motion`.
+
+### Instradamento
+
+Il router usa l'**hash** dell'indirizzo, perché l'app funziona anche da file locale: `#/home`, `#/master/<sezione>`
+(es. `#/master/nemici`), `#/gioca`, `#/online/ospita`, `#/online/unisciti`. Le sezioni sono linkabili, Indietro e Avanti
+del browser passano tra le schermate senza ricaricare, una rotta sconosciuta porta al portale e al ricaricamento si
+riapre la stessa schermata (la schermata di gioco no: la connessione cade, e il portale propone *Riconnetti*).
+La logica è pura in `js/rotte.js`; `app.js` la applica.
+
+### Profili locali
+
+Un **profilo** ha nome visualizzato, colore, avatar (un'icona della libreria o un'immagine, ridotta a 96 px) e ruolo
+preferito (Master, Giocatore o Spettatore: è solo un suggerimento, ogni profilo può usare tutte e tre le modalità). Non
+ci sono password né account: il selettore in alto nel portale cambia profilo e offre **Nuovo**, **Modifica**,
+**Duplica** (copia completa, senza PIN) ed **Elimina** (doppia conferma, con l'elenco di cosa viene cancellato).
+
+- Ogni profilo ha il suo **archivio**: database IndexedDB `sessionforge-<id>` (stato, immagini, suoni personalizzati,
+  collegamento alla cartella di backup) e chiavi di localStorage con il prefisso `sessionforge-<id>:` (impostazioni,
+  preferenze, gettoni, partite, note online, stato del backup). Cambiare profilo cambia tutto questo; l'app si ricarica
+  per leggere il nuovo archivio. Il **registro dei profili** e il profilo attivo stanno in un archivio a parte,
+  condiviso (`sessionforge:profili`). Solo il modulo di archivio (`js/stato/archivio-locale.js` e
+  `js/stato/archivio.js`) tocca lo storage: gli altri file leggono le preferenze da `DnD.archivioLocale.preferenze`.
+- Il profilo dà **nome e colore** alla chat e ai codici di invito. Il **gettone di rientro** si salva nel profilo del
+  giocatore per ogni partita (legato all'id della partita che il master mette nel codice di invito, mai al nome) e nei
+  dati del master per ogni sessione ospitata.
+- **PIN locale** facoltativo (4-8 cifre, nell'editor del profilo): si salva solo un'impronta salata (PBKDF2), ma **non è
+  sicuro contro chi usa lo stesso PC**, perché i dati restano leggibili nel browser; serve a non aprire per sbaglio il
+  profilo di un altro. Il PIN non si recupera: se lo dimentichi l'unico ripiego è **Elimina profilo** da un altro profilo.
+- Mentre ospiti una partita online non puoi cambiare profilo senza chiudere la sessione online.
+
+**Migrazione** (registro dei profili versione 1): al primo avvio dopo l'aggiornamento tutti i dati esistenti (database
+`dnd-battaglie` e chiavi `dnd-battaglie:…`) diventano il profilo **«Master»**. Prima di toccarli l'app prepara un
+**backup esportabile** (un archivio completo, reimportabile) e il portale propone di scaricarlo; poi copia il database
+nel profilo, rilegge ogni chiave per verificarla e sposta le preferenze. Se un passo fallisce (per esempio spazio
+esaurito) tutto torna com'era, l'app usa l'archivio di prima con un messaggio chiaro e riprova al prossimo avvio. Il
+database di prima resta per sicurezza: si elimina da *Dati e backup → Elimina la copia dei dati di prima*.
+
+### Modalità
+
+- **Master**: tutte le sezioni (`#/master/…`).
+- **Giocatore**: solo la schermata di gioco (`#/gioca`), con la propria scheda, le note personali e la chat. Le sezioni
+  del Master sono bloccate (anche digitando l'indirizzo), i dati arrivano solo dal filtro a whitelist del master
+  (`rete/filtro.js`) e la sessione ospitata non si può esportare.
+- **Spettatore**: sola vista. Chi si unisce può chiedere di entrare come spettatore; decide il master.
+
 ## Sessioni
 
 In cima alla barra laterale c'è il selettore **Sessione corrente**, con i pulsanti **+**
@@ -75,7 +154,8 @@ I dati delle versioni precedenti finiscono automaticamente nella **Sessione pred
   nome compare passandoci sopra). Lo stato viene ricordato e sugli schermi stretti parte chiusa.
   Lo stesso vale per il pannello laterale della griglia (◧ o **Ctrl+Alt+B**).
 - **Alt+M** accende o spegne tutti i suoni (vedi [Effetti sonori](#effetti-sonori)).
-- All'avvio si riapre l'ultima sezione usata.
+- **Alt+H** (o **Home** in cima alla barra) torna al [Portale](#portale-e-profili). All'avvio si apre il portale, oppure
+  l'ultima sezione usata con *Salta il portale*; ogni sezione ha il suo indirizzo (`#/master/<sezione>`).
 
 ## Impostazioni e tema
 
@@ -1604,7 +1684,8 @@ tra master e giocatore; i **problemi tipici** con il ripiego consigliato:
 
 ### Dati e compatibilità
 
-Nessun cambio al modello dati (resta la versione 18): permessi, economia del turno, gettoni, coda delle richieste
+Nessun cambio al modello dati (resta la versione 18; con i profili i gettoni sono per partita, vedi
+[Dati fuori dallo stato](#dati-fuori-dallo-stato-profili-e-backup)): permessi, economia del turno, gettoni, coda delle richieste
 e registro di sicurezza restano nella memoria del master per la durata della sessione. Il giocatore non salva nulla
 della sessione del master tranne la cache delle immagini e non può esportarla (non è mai nel suo archivio). Restano
 nel browser solo le preferenze `dnd-battaglie:online-profilo` (nome, colore, compressione), `dnd-battaglie:online-stun`,
@@ -1725,33 +1806,74 @@ sinistra del pannello aperto.
 
 ## Salvataggio e backup
 
-Ogni modifica viene salvata subito nel database locale del browser (**IndexedDB**, con spazio per
-le immagini; se non è disponibile si usa `localStorage`). Le immagini dei TileSet e degli sfondi stanno in chiavi
-separate dallo stato, una sola copia per contenuto, con una cache in memoria delle immagini già
-decodificate. Se il salvataggio non riesce (es. **spazio esaurito**) compare un messaggio chiaro e
-la griglia resta segnata come *non salvata*. Tutto resta sul tuo computer, ma va perso se cancelli
-i dati di navigazione del sito: fai backup regolari dal pannello **Impostazioni**:
+Ogni modifica viene salvata subito nell'archivio del **profilo attivo** (database **IndexedDB** `sessionforge-<id>`, con
+spazio per le immagini; se non è disponibile si usa `localStorage`, e l'app lo dice). Le immagini dei TileSet e degli
+sfondi stanno in chiavi separate dallo stato, una sola copia per contenuto, con una cache in memoria. Se il salvataggio
+non riesce (es. **spazio esaurito** o **archiviazione negata** dal browser) compare un messaggio chiaro e la griglia resta
+*non salvata*: l'app non dichiara mai salvato ciò che non lo è. Tutto resta sul tuo computer, ma va perso se cancelli i
+dati di navigazione del sito: per questo c'è la pagina **Dati e backup** (Impostazioni → *Dati e backup…*, o il
+pulsante 💾 nel portale):
 
-- **Esporta archivio** scarica tutto (sessioni con combattimenti, esplorazioni e Mondo, personaggi e creature,
-  griglie con TileMap, sfondi, biomi, eventi, luce, sorgenti, stanze e nebbia, librerie compresi biomi ed eventi, attrezzatura, oggetti
-  di mappa, TileSet, dadi, impostazioni e file dei suoni e le immagini usate, incorporate in
-  Base64: il file è autosufficiente).
-  Importandolo, i dati attuali vengono sostituiti dopo una conferma.
-- **Esporta sessione corrente** scarica una sola sessione con i suoi personaggi e le sue griglie e
-  gli elementi delle librerie che usano (razze, incantesimi anche innati, strutture, attrezzatura di
-  armi, armature, inventari e contenuti, oggetti di mappa, i TileSet usati e le immagini, sfondi compresi). Importandola, la sessione si **aggiunge** alle
-  altre: gli elementi delle librerie già presenti non vengono duplicati.
-- **Cancella tutti i dati** (doppia conferma) svuota anche IndexedDB, immagini, sfondi e suoni personalizzati compresi, e i dati del gioco online (profilo,
-  gettoni, note, server STUN).
+- **Spazio**: spazio usato e disponibile (`navigator.storage.estimate`) e **Chiedi archiviazione persistente**
+  (`navigator.storage.persist`) con l'esito: concessa, oppure rifiutata con il consiglio di esportare spesso.
+- **Esporta l'archivio completo del profilo** scarica tutto (sessioni con combattimenti, esplorazioni e Mondo,
+  personaggi e creature, griglie con TileMap, sfondi, luce e nebbia, librerie, attrezzatura, oggetti di mappa, TileSet,
+  dadi, impostazioni e file dei suoni, le immagini usate in Base64 e il profilo: nome, colore, avatar, ruolo). Il file
+  è autosufficiente. **Esporta la sessione** scarica una sola sessione con ciò che usa.
+- **Importa**: una sessione si aggiunge alle altre; un archivio si importa **in un profilo nuovo** (creato con il nome e
+  il colore del file, l'archivio entra alla prima apertura), **unito a questo profilo** (anteprima di cosa si aggiunge,
+  cosa è uguale e cosa è in conflitto, con la scelta per ogni conflitto: *Tieni il mio*, *Sostituisci*, *Duplica*;
+  una sessione duplicata porta con sé i suoi elementi con id nuovi) oppure **al posto di tutto**. Un archivio di una
+  versione più recente dell'app viene rifiutato con un messaggio chiaro; uno più vecchio viene migrato.
+- **Cartella di backup** (Chrome, Edge, Opera, con la File System Access API): scegli una cartella e l'app vi salva una
+  copia dell'archivio **ogni N minuti se ci sono modifiche** (N modificabile, di base 10) e all'uscita, con il nome
+  `session-forge-<profilo>-AAAA-MM-GG-HHMMSS.json`. Ogni copia viene **riletta e confrontata** prima di dirla salvata; si
+  tengono le **ultime 10** di quel profilo (gli altri file della cartella non si toccano). Il collegamento alla cartella
+  si conserva in IndexedDB; se il permesso del browser scade, i backup si sospendono e il portale mostra **Riautorizza**.
+- Dove la cartella non c'è (Firefox, Safari, o nessuna cartella scelta), un **promemoria** ogni 7 giorni propone
+  *Esporta un backup* (*Più tardi* o *Non ricordarmelo*). Il portale mostra sempre la **data dell'ultimo backup**.
+- **Cancella tutti i dati** (doppia conferma) agisce sul **profilo corrente** o su **tutti i profili**, a scelta: svuota
+  IndexedDB (stato, immagini, suoni), i dati del gioco online e dei backup, e scollega la cartella di backup (i file
+  già salvati restano). Le preferenze di visualizzazione del profilo restano; con «tutti» si cancellano anche il
+  registro dei profili e i dati di prima della migrazione.
 - Se i dati salvati non si possono leggere, o sono danneggiati e non se ne può conservare una copia, l'app li carica
-  vuoti ma **non salva** (avviso all'avvio) per non sovrascriverli; se IndexedDB non si apre, salva in localStorage e
-  lo dice. Esportando l'archivio, i file audio mancanti vengono segnalati.
-- Ogni creatura (Standard o del Manuale) si esporta e si importa anche da sola, come file JSON, dalla
-  sezione Nemici.
+  vuoti ma **non salva** (avviso all'avvio) per non sovrascriverli. Esportando l'archivio, i file audio mancanti
+  vengono segnalati.
+- Ogni creatura (Standard o del Manuale) si esporta e si importa anche da sola, come file JSON, dalla sezione Nemici.
 
-I file non validi vengono rifiutati e i valori fuori intervallo corretti. Le chiavi interne di
-salvataggio si chiamano ancora `dnd-battaglie`: così i dati delle versioni precedenti restano
-leggibili dopo il cambio di nome.
+**Ripristinare da un backup:** apri *Dati e backup → Importa un archivio o una sessione…* e scegli il file (scaricato,
+dalla cartella di backup o il backup della migrazione). Per rimettere tutto com'era scegli *Sostituisci tutto il
+profilo*; per non toccare il profilo attuale scegli *In un profilo nuovo*; per recuperare solo alcune cose scegli
+*Unisci* e, nei conflitti, *Sostituisci* solo dove serve. Il backup della migrazione si scarica anche dal portale e da
+*Dati e backup → Migrazione ai profili*.
+
+I file non validi vengono rifiutati e i valori fuori intervallo corretti. Le chiavi delle preferenze si chiamano ancora
+`dnd-battaglie:…` dentro il codice: la vista del profilo (`DnD.archivioLocale.preferenze`) le salva con il prefisso del
+profilo, così i moduli non sono cambiati.
+
+### Dati fuori dallo stato (profili e backup)
+
+Il modello dello stato resta alla **versione 19**; i nuovi dati stanno fuori dallo stato e hanno una versione propria:
+
+```
+localStorage «sessionforge:profili» (condiviso):
+  { versione: 1, attivo: idProfilo,
+    profili: [{ id, nome, colore, avatar: { tipo: 'icona', id } | { tipo: 'immagine', dati: dataUrl }, ruolo: 'master'|'giocatore'|'spettatore',
+                pin: null | { alg: 'pbkdf2'|'fnv', sale, hash }, creato, usato, nuovo }],
+    portale: { salta },
+    migrazione: { versione, ora, dbVecchio: 'dnd-battaglie' | null, vuoto, backupSalvato, backupScaricato } }
+IndexedDB «sessionforge-<id>» (chiavi): stato, img:<id>, snd:<id>, cartella-backup (handle della cartella),
+  backup-migrazione (archivio di prima, solo nel profilo «Master»), importazione-in-sospeso
+localStorage «sessionforge-<id>:…» (preferenze del profilo, chiavi di sempre senza «dnd-battaglie:»):
+  backup → { intervallo, promemoria, ultimo, ultimoTipo, ultimoFile, ultimoErrore, nomeCartella, rimandato }
+  ultima-rotta, sezione, sessioni-recenti → [{ id, ora }]
+  online-partite → [{ partita, master, gettone, ora }] (giocatore), online-ripresa → { [sessionId]: { partita, gettoni, ora } } (master),
+  online-attiva → { ruolo, sessionId | master, partita, gettone, ora } (connessione in corso, per «Riconnetti»)
+```
+
+L'archivio esportato ha in più il campo `profilo` (nome, colore, avatar, ruolo). Il codice di invito ha in più `partita`
+(id della partita ospitata) e il saluto del giocatore `spettatore` (preferenza): campi facoltativi, compatibili con le
+versioni precedenti (il protocollo resta alla versione 3).
 
 ## Test
 
@@ -1967,7 +2089,15 @@ css/style.css         temi chiaro/scuro con variabili CSS e layout responsive
 css/boss.css          area dei boss, cornice con spade, barra, vignettatura ed effetti (variabili del tema)
 css/leggendario.css   grafica divina dei leggendari: temi e motivi, ali, sigilli, lance, percorso, animazioni
 css/dadi.css          dadi animati: area di lancio, overlay, d6 in 3D, effetti dei 20 e degli 1
+js/stato/archivio-locale.js registro dei profili, profilo attivo, nomi degli archivi e preferenze del profilo (caricato in <head>)
 js/impostazioni.js    tema, dimensione del testo e animazioni (caricato in <head>)
+css/portale.css       portale, profili e «Dati e backup»
+js/rotte.js           instradamento su hash (logica pura): rotte, rotta d'avvio, permessi delle modalità
+js/stato/profili.js   profili locali (logica pura): registro, profilo, avatar, id, PIN con impronta salata
+js/stato/unione.js    importazione unita: anteprima, conflitti, tieni / sostituisci / duplica
+js/stato/backup.js    backup automatici (logica pura): nomi, rotazione delle ultime 10, verifica, permesso, promemoria
+js/ui-backup.js       pagina «Dati e backup»: spazio, persistenza, esporta e importa, cartella automatica, promemoria, cancella
+js/ui-portale.js      portale: carte, Riprendi, selettore ed editor dei profili, PIN, schermate Ospita e Unisciti
 js/config.js          nome dell'app, voci e icone del menù
 js/dadi.js            generatore casuale, espressioni di dadi, registratore dei tiri, piano dell'animazione e coda
 js/dati/difficolta.js difficoltà (dati): soglie per livello, moltiplicatori, fasce, avvisi
@@ -2042,7 +2172,7 @@ js/stato/normalizza.js normalizzazione delle entità salvate e importate (creatu
 js/stato/esempi.js    dati d'esempio dello stato nuovo e party predefiniti
 js/stato/migrazioni.js migrazioni dei dati grezzi dalla versione 8 alla 19
 js/dati.js            facciata dello stato (DnD.dati): stato vuoto, caricamento (migrazioni + normalizzazione), import/export
-js/stato/archivio.js  unico punto che scrive su disco: IndexedDB con ripiego su localStorage, coda di scrittura, dati danneggiati
+js/stato/archivio.js  unico punto che scrive su disco: database per profilo con ripiego su localStorage, coda di scrittura, dati danneggiati, migrazione ai profili, gestione dei profili, spazio, cartella di backup
 js/sessioni.js        logica pura delle sessioni (visibilità, duplicazione, export/import)
 js/ui-difficolta.js   difficoltà: indicatore a fasce, Bilancia, Budget, tabelle personalizzate
 js/ui-riposi.js       riposi: elenco «Risorse», finestra del riposo, riposo delle schede e del party
@@ -2090,7 +2220,8 @@ js/rete/sessione.js   sessione online sopra il trasporto: master (approvazione, 
 js/ui-online.js       finestra Gioco online, scambio dei codici, approvazione, pannello del master (permessi, richieste, rivelazioni, registro, visibilità, Vedi come, Mondo, dialoghi, scene, ripresa), schermata del giocatore (azioni, scheda, ping, esplorazione, Mondo e mercanti, dialoghi, Rientra), Test connessione con diagnostica
 
 js/ui-*.js            interfaccia delle altre sezioni
-js/app.js             avvio, menù e navigazione
+js/app.js             avvio, router su hash (portale, Master, gioco), menù e navigazione
+test/fixture/profili-prima.json dati di un browser prima dei profili (test della migrazione)
 js/test.js            test della logica
 ```
 

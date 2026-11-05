@@ -16,8 +16,8 @@
   let tab = 'fazioni';
   let relView = 'matrice';
   try {
-    tab = TABS.some((t) => t.id === localStorage.getItem(TAB_KEY)) ? localStorage.getItem(TAB_KEY) : 'fazioni';
-    relView = localStorage.getItem(VIEW_KEY) === 'elenco' ? 'elenco' : 'matrice';
+    tab = TABS.some((t) => t.id === DnD.archivioLocale.preferenze.getItem(TAB_KEY)) ? DnD.archivioLocale.preferenze.getItem(TAB_KEY) : 'fazioni';
+    relView = DnD.archivioLocale.preferenze.getItem(VIEW_KEY) === 'elenco' ? 'elenco' : 'matrice';
   } catch (e) { /* preferenza non essenziale */ }
   let root = null;
   let editing = null; // { kind: 'fazione' | 'citta', id | 'new', preset }
@@ -29,7 +29,7 @@
   function select(id, focus) {
     tab = id;
     editing = null;
-    try { localStorage.setItem(TAB_KEY, id); } catch (e) { /* ignora */ }
+    try { DnD.archivioLocale.preferenze.setItem(TAB_KEY, id); } catch (e) { /* ignora */ }
     if (DnD.uiNpc) DnD.uiNpc.reset();
     if (DnD.uiQuest) DnD.uiQuest.reset();
     render();
@@ -112,7 +112,7 @@
         el('div', { class: 'head-actions' },
           DnD.uiAsset.tabBar([{ id: 'matrice', label: 'Matrice' }, { id: 'elenco', label: 'Elenco' }], relView, 'Vista', 'vista-relazioni-', (id) => {
             relView = id;
-            try { localStorage.setItem(VIEW_KEY, id); } catch (e) { /* ignora */ }
+            try { DnD.archivioLocale.preferenze.setItem(VIEW_KEY, id); } catch (e) { /* ignora */ }
             render();
           }, true),
           el('label', { class: 'check small', title: 'Cambiando A verso B cambia anche B verso A' },

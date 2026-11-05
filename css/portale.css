@@ -1,0 +1,93 @@
+/* Portale (schermata iniziale), profili, «Dati e backup». Solo variabili del tema (style.css), chiaro e scuro. */
+
+/* Fuori dal Master la barra laterale, le note e i dadi non servono: il portale occupa la pagina. */
+body[data-modo="home"] .app, body[data-modo="ospita"] .app, body[data-modo="unisciti"] .app { grid-template-columns: 1fr; }
+body[data-modo="home"] .sidebar, body[data-modo="ospita"] .sidebar, body[data-modo="unisciti"] .sidebar,
+body[data-modo="home"] .dice-fab, body[data-modo="ospita"] .dice-fab, body[data-modo="unisciti"] .dice-fab,
+body[data-modo="home"] .notes-fab, body[data-modo="ospita"] .notes-fab, body[data-modo="unisciti"] .notes-fab,
+body[data-modo="home"] .notes-panel, body[data-modo="ospita"] .notes-panel, body[data-modo="unisciti"] .notes-panel { display: none; }
+
+.nav-home { display: flex; align-items: center; gap: 0.1rem; width: 100%; background: none; border: 1px solid var(--border); color: var(--text);
+  padding: 0.45rem 0.75rem; border-radius: 8px; font: inherit; cursor: pointer; }
+.nav-home:hover { background: var(--panel); }
+.nav-home:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-home .nav-label { margin-left: 0.35rem; }
+.app.sidebar-collapsed .nav-home { justify-content: center; padding: 0.45rem 0; }
+
+.portale { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+.portale-testa { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.portale-titolo { margin: 0; color: var(--accent); font-size: 1.9rem; letter-spacing: 0.01em; }
+.portale-strumenti { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.portale-profilo { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.7rem 0.3rem 0.35rem; }
+.portale-profilo-nome { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.portale-avatar { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; border: 2px solid var(--border);
+  background: var(--panel-2); font-size: 1.05rem; line-height: 1; object-fit: cover; flex: none; }
+.portale-avatar.grande { width: 3.5rem; height: 3.5rem; font-size: 1.9rem; border-width: 3px; }
+
+.portale-avvisi { display: flex; flex-direction: column; gap: 0.5rem; }
+.portale-avviso { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.7rem 1rem;
+  border: 1px solid var(--accent); border-left-width: 4px; border-radius: var(--radius); background: var(--panel); }
+.portale-avviso.errore { border-color: var(--danger); }
+.portale-avviso p { margin: 0; flex: 1 1 22rem; }
+
+.portale-carte { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.portale-carta { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; text-align: left; min-height: 13rem; padding: 1.4rem;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+  font: inherit; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+.portale-carta:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+.portale-carta:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.portale-carta:disabled { opacity: 0.6; cursor: not-allowed; }
+.portale-carta-icona { color: var(--accent); }
+.portale-carta-titolo { font-size: 1.25rem; font-weight: 700; }
+.portale-carta-testo { color: var(--muted); }
+.portale-carta-stato { margin-top: auto; font-size: 0.85rem; padding: 0.15rem 0.55rem; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+
+.portale-riprendi, .portale-guida, .portale-sotto { display: flex; flex-direction: column; gap: 0.6rem; }
+.portale-riprendi h3 { margin: 0.5rem 0 0; font-size: 0.95rem; }
+.portale-ultima { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 0.75rem; border-radius: 8px; background: var(--panel-2); }
+.portale-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.portale-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.35rem 0; border-top: 1px solid var(--border); }
+.portale-lista li:first-child { border-top: none; }
+.portale-passi { margin: 0; padding-left: 1.4rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.portale-piede { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: center; }
+.portale-scelte { display: flex; flex-direction: column; gap: 0.35rem; }
+.portale-scelta { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.portale-scelta:has(input:checked) { border-color: var(--accent); background: var(--panel-2); }
+.portale-scelta:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.portale-chi { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.portale-blocco h2 { display: flex; align-items: center; gap: 0.75rem; }
+
+/* Editor del profilo */
+.portale-editor-testa { display: flex; gap: 1rem; align-items: flex-start; }
+.portale-editor-campi { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.portale-icone { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.portale-icona { width: 2.4rem; height: 2.4rem; font-size: 1.3rem; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; }
+.portale-icona[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.portale-icona:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Dati e backup */
+.backup-pagina { display: flex; flex-direction: column; gap: 1rem; min-width: min(640px, 80vw); }
+.backup-pagina section { display: flex; flex-direction: column; gap: 0.45rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.backup-pagina section:first-child { border-top: none; padding-top: 0; }
+.backup-pagina h3 { margin: 0; }
+.backup-barra { height: 0.6rem; border-radius: 999px; background: var(--hp-track); overflow: hidden; }
+.backup-barra > span { display: block; height: 100%; background: var(--accent); }
+.backup-esito { font-weight: 600; }
+.backup-esito.ok { color: var(--ok-text); }
+.backup-esito.no { color: var(--danger-text); }
+.backup-conflitti { max-height: 45vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+.backup-conflitti table { width: 100%; border-collapse: collapse; }
+.backup-conflitti th, .backup-conflitti td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.backup-conflitti th { position: sticky; top: 0; background: var(--panel-2); }
+.backup-riepilogo { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+@media (max-width: 860px) {
+  .portale-carte { grid-template-columns: 1fr; }
+  .portale-carta { min-height: 0; }
+  .portale-titolo { font-size: 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portale-carta { transition: none; }
+  .portale-carta:hover:not(:disabled) { transform: none; }
+}
+html[data-reduce-motion] .portale-carta:hover:not(:disabled) { transform: none; }

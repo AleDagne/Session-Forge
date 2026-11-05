@@ -400,8 +400,9 @@
 
   DnD.audioLib = { KEY, MAX_VOICES, MIN_GAP, QUEUE_MAX, MAX_FILE, ACCEPTED_TYPES, isAudioDataUrl, isAcceptedFile, fileId, validFiles, crea };
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    let storage = null;
-    try { storage = window.localStorage; } catch (err) { storage = null; }
+    // Preferenze del profilo attivo (archivio locale), lette al momento: la migrazione dei profili può cambiarle.
+    const P = () => DnD.archivioLocale.preferenze;
+    const storage = { getItem: (k) => P().getItem(k), setItem: (k, v) => P().setItem(k, v) };
     DnD.audio = crea({
       AudioContext: window.AudioContext || window.webkitAudioContext, doc: document, storage, leggiFile: readDataUrl,
       effettiBoss: () => !DnD.impostazioni || DnD.impostazioni.bossEffects(),

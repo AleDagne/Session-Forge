@@ -17,7 +17,9 @@
   const PROFILO = 'dnd-battaglie:online-profilo';
   const GETTONE = 'dnd-battaglie:online-gettone';
   const NOTE = 'dnd-battaglie:online-note';
-  const RIPRESA = 'dnd-battaglie:online-ripresa'; // gettoni del master per riprendere la sessione dopo una chiusura
+  const RIPRESA = 'dnd-battaglie:online-ripresa'; // per sessione: partita e gettoni del master, per riprenderla dopo una chiusura
+  const PARTITE = 'dnd-battaglie:online-partite'; // giocatore: partite a cui ha partecipato, ognuna col suo gettone di rientro
+  const ATTIVA = 'dnd-battaglie:online-attiva';   // connessione in corso: se la pagina si ricarica, il portale propone «Riconnetti»
   const BATTITO_MS = 3000;
   const PING_MS = 3500;
   const COLORE = /^#[0-9a-f]{6}$/i;
@@ -31,12 +33,49 @@
   const pings = [];  // { x, y, nome, colore, t0 }
 
   // ---------- Preferenze locali (non dati della sessione) ----------
-  function leggi(chiave, def) { try { const v = JSON.parse(localStorage.getItem(chiave) || 'null'); return v === null ? def : v; } catch (e) { return def; } }
-  function scrivi(chiave, v) { try { localStorage.setItem(chiave, JSON.stringify(v)); } catch (e) { /* non essenziale */ } }
+  function leggi(chiave, def) { try { const v = JSON.parse(DnD.archivioLocale.preferenze.getItem(chiave) || 'null'); return v === null ? def : v; } catch (e) { return def; } }
+  function scrivi(chiave, v) { try { DnD.archivioLocale.preferenze.setItem(chiave, JSON.stringify(v)); } catch (e) { /* non essenziale */ } }
+  // Nome e colore vengono dal profilo locale attivo (chat, codici di invito); qui resta solo la scelta dei codici.
   function profilo() {
     const p = leggi(PROFILO, {}) || {};
-    return { nome: typeof p.nome === 'string' ? p.nome.slice(0, 30) : '', colore: COLORE.test(p.colore || '') ? p.colore : '#4f8cc9', comprimi: p.comprimi !== false };
+    const pr = DnD.archivio && DnD.archivio.profili ? DnD.archivio.profili.attivo() : null;
+    return {
+      nome: pr ? pr.nome : typeof p.nome === 'string' ? p.nome.slice(0, 30) : '',
+      colore: pr ? pr.colore : COLORE.test(p.colore || '') ? p.colore : '#4f8cc9',
+      comprimi: p.comprimi !== false,
+    };
   }
+
+  // ---------- Partite (giocatore) e ripresa (master): gettoni legati all'id della partita, non ai nomi ----------
+  const ID_PARTITA = /^[A-Za-z0-9_-]{1,40}$/;
+  function partite() {
+    const l = leggi(PARTITE, null);
+    if (Array.isArray(l)) return l.filter((x) => x && typeof x.gettone === 'string' && x.gettone);
+    // Gettone unico delle versioni precedenti: diventa una partita senza id (si riprende solo scegliendola).
+    const vecchio = leggi(GETTONE, null);
+    const out = vecchio && typeof vecchio.gettone === 'string' && vecchio.gettone ? [{ partita: null, master: String(vecchio.master || ''), gettone: vecchio.gettone, ora: 0 }] : [];
+    scrivi(PARTITE, out);
+    try { DnD.archivioLocale.preferenze.removeItem(GETTONE); } catch (e) { /* non essenziale */ }
+    return out;
+  }
+  function salvaPartita(v) {
+    const uguale = (x) => (v.partita ? x.partita === v.partita : x.gettone === v.gettone);
+    scrivi(PARTITE, [Object.assign({ ora: Date.now() }, v)].concat(partite().filter((x) => !uguale(x))).slice(0, 20));
+  }
+  const dimenticaPartita = (gettone) => scrivi(PARTITE, partite().filter((x) => x.gettone !== gettone));
+  // Ripresa del master per sessione dell'archivio: { [sessionId]: { partita, gettoni, ora } }.
+  function riprese() {
+    const r = leggi(RIPRESA, null);
+    if (r && typeof r.sessionId === 'string') return { [r.sessionId]: { partita: null, gettoni: r.gettoni || [], ora: r.ora || 0 } };
+    return r && typeof r === 'object' ? r : {};
+  }
+  const ripresaDi = (sessionId) => { const r = riprese()[sessionId]; return r && Array.isArray(r.gettoni) ? r : null; };
+  function scriviRipresa(sessionId, v) {
+    const r = riprese();
+    if (v) r[sessionId] = v; else delete r[sessionId];
+    scrivi(RIPRESA, Object.keys(r).length ? r : null);
+  }
+  const interrotta = () => (master || gioc ? null : leggi(ATTIVA, null));
 
   // ---------- Elementi comuni ----------
   // Codice da copiare: campo selezionabile e «Copia» (appunti, o ripiego con la selezione).
@@ -173,12 +212,12 @@
     const S = NET().segnalazione;
     const env = S.ambiente();
     // Ripresa: il master aveva chiuso l'app con una sessione aperta su questa sessione dell'archivio.
-    const rip = leggi(RIPRESA, null);
     const sessId = DnD.sessioni.current(DnD.store.state).id;
-    const riprendi = rip && rip.sessionId === sessId && Array.isArray(rip.gettoni) && rip.gettoni.length
+    const rip = ripresaDi(sessId);
+    const riprendi = rip && rip.gettoni.length
       ? el('button', { type: 'button', class: 'btn', text: '↻ Riprendi la sessione online (' + rip.gettoni.length + (rip.gettoni.length === 1 ? ' giocatore' : ' giocatori') + ')',
         title: 'I personaggi restano legati ai gettoni: rinvita i giocatori con codici nuovi',
-        disabled: !env.RTCPeerConnection, onclick: () => { const q = leggiQ(); d.dismiss(); avviaMaster(q, rip.gettoni); nuovoInvito(); } }) : null;
+        disabled: !env.RTCPeerConnection, onclick: () => { const q = leggiQ(); d.dismiss(); avviaMaster(q, rip.gettoni, rip.partita); nuovoInvito(); } }) : null;
     const d = openDialog('Gioco online', el('div', { class: 'form online-start' },
       el('p', { class: 'muted small', text: 'Collegamento diretto tra browser (WebRTC), senza server e senza account: master e giocatore si scambiano due codici (per esempio nella chat che usate già). Il giocatore chiede le azioni, il master le verifica e tira i dadi.' }),
       env.RTCPeerConnection ? null : el('p', { class: 'error-text', text: 'Questo browser non supporta WebRTC: il gioco online non è disponibile. Ripiego: condividi lo schermo.' }),
@@ -194,8 +233,9 @@
 
   // ---------- Master ----------
   // gettoni: ripresa di una sessione chiusa (i personaggi restano legati ai gettoni, i codici sono nuovi).
-  function avviaMaster(q, gettoni) {
+  function avviaMaster(q, gettoni, partita) {
     if (master) return;
+    const sessionId = DnD.sessioni.current(DnD.store.state).id;
     const s = NET().sessione.master({
       nome: q.nome, stato: () => DnD.store.state, gettoni: gettoni || [],
       // Esplorazione: il gruppo si muove con le regole dell'esplorazione (costo, ore, eventi).
@@ -230,7 +270,8 @@
       suViolazione: () => aggiornaPannello(true),
       immagine: (id) => DnD.immagini.get(id),
     });
-    master = { s, q, attesa: null, domande: [], dialogo: null, registro: NET().codici.registro(), timer: setInterval(() => { s.battito(); salvaRipresa(); aggiornaPannello(); }, BATTITO_MS) };
+    master = { s, q, sessionId, partita: ID_PARTITA.test(partita || '') ? partita : DnD.dadi.uid(), attesa: null, domande: [], dialogo: null, registro: NET().codici.registro(), timer: setInterval(() => { s.battito(); salvaRipresa(); aggiornaPannello(); }, BATTITO_MS) };
+    scrivi(ATTIVA, { ruolo: 'master', sessionId, partita: master.partita, ora: Date.now() });
     if (gettoni && gettoni.length) toast('Sessione ripresa: invita di nuovo i giocatori (codici nuovi); con il gettone ritrovano il loro personaggio.', 'success');
     // Ogni modifica dello stato (combattimento, griglia, PF…) diventa un evento per i giocatori.
     DnD.store.onChange = () => {
@@ -249,7 +290,7 @@
     const d = openDialog('Invita un giocatore', body);
     d.addEventListener('close', () => { if (invito && !collegato) invito.annulla(); });
     try {
-      invito = await NET().segnalazione.manuale.ospita({ nome: master.q.nome, comprimi: master.q.comprimi, registro: master.registro, maxRicevuto: NET().protocollo.LIMITI.daGiocatore });
+      invito = await NET().segnalazione.manuale.ospita({ nome: master.q.nome, partita: master.partita, comprimi: master.q.comprimi, registro: master.registro, maxRicevuto: NET().protocollo.LIMITI.daGiocatore });
     } catch (e) {
       fill(body, el('p', { class: 'error-text', text: 'Impossibile creare l\'invito: ' + e.message }));
       return;
@@ -287,7 +328,7 @@
   function salvaRipresa() {
     if (!master) return;
     const gettoni = master.s.esportaGettoni();
-    scrivi(RIPRESA, gettoni.length ? { sessionId: DnD.sessioni.current(DnD.store.state).id, gettoni, ora: Date.now() } : null);
+    scriviRipresa(master.sessionId, gettoni.length ? { partita: master.partita, gettoni, ora: Date.now() } : null);
   }
   // Scelte dell'ingresso: personaggio, oppure spettatore («tavolo» o come un personaggio).
   function sceltaPersonaggio(pgs, usati, pre, attuale) {
@@ -643,7 +684,8 @@
   function terminaMaster() {
     if (!master || !confirm('Terminare la sessione online? I giocatori verranno scollegati.')) return;
     master.s.termina();
-    scrivi(RIPRESA, null);
+    scriviRipresa(master.sessionId, null);
+    scrivi(ATTIVA, null);
 
     clearInterval(master.timer);
     clearTimeout(master.attesa);
@@ -657,7 +699,8 @@
 
   // ---------- Giocatore ----------
   // suTrasporto: per il rientro (stesso giocatore, nuovo scambio di codici); di base si entra come giocatore nuovo.
-  function unisciti(q, suTrasporto) {
+  // gettone: rientro scelto dal portale (partita salvata); altrimenti si usa quello della partita dell'invito, se c'è.
+  function unisciti(q, suTrasporto, gettone) {
     const invito = el('textarea', { class: 'code-box', rows: 4, spellcheck: false, placeholder: 'Incolla qui il codice di invito del master', 'aria-label': 'Codice di invito' });
     const out = el('div');
     const stato = el('p', { class: 'small', 'aria-live': 'polite' });
@@ -679,7 +722,7 @@
       fill(out, el('p', {}, el('b', { text: '2. ' }), 'Manda questo codice di risposta a ' + (tentativo.master || 'il master') + '. Quando lo incolla, il collegamento parte da solo.'),
         campoCodice(tentativo.codice));
       stato.textContent = '⏳ In attesa del master…';
-      tentativo.connessione.then((t) => { fatto = true; d.dismiss(); if (suTrasporto) suTrasporto(t); else entraComeGiocatore(q, t, tentativo.master); })
+      tentativo.connessione.then((t) => { fatto = true; d.dismiss(); if (suTrasporto) suTrasporto(t); else entraComeGiocatore(q, t, tentativo.master, tentativo.partita, gettone); })
         .catch((e) => { stato.className = 'small error-text'; stato.textContent = e.message; });
     } });
     const d = openDialog(suTrasporto ? 'Rientra nella sessione' : 'Unisciti a una sessione', el('div', { class: 'form online-codes' },
@@ -690,11 +733,11 @@
     invito.focus();
   }
 
-  function entraComeGiocatore(q, t, nomeMaster) {
-    // Gettone di rientro salvato nel browser (solo per lo stesso master).
-    const salvato = leggi(GETTONE, null);
-    const gettone = salvato && salvato.master === nomeMaster && typeof salvato.gettone === 'string' ? salvato.gettone : '';
-    gioc = { q, dom: null, grid: null, doc: null, tsIndex: {}, icone: new Map(), finita: false, richieste: new Map(), esiti: [], anim: new Map(), ultimePos: new Map(), turnoPrima: null };
+  function entraComeGiocatore(q, t, nomeMaster, partita, scelto) {
+    // Gettone di rientro: quello scelto, oppure quello salvato per la stessa partita (per id, mai per nome).
+    const salvata = partita ? partite().find((x) => x.partita === partita) : null;
+    const gettone = typeof scelto === 'string' && scelto ? scelto : salvata ? salvata.gettone : '';
+    gioc = { q, partita: partita || null, dom: null, grid: null, doc: null, tsIndex: {}, icone: new Map(), finita: false, richieste: new Map(), esiti: [], anim: new Map(), ultimePos: new Map(), turnoPrima: null };
     gioc.chat = chatBox({
       destinatari: () => [['', 'A tutti'], ['master', 'Solo al master']],
       invia: (testo, a) => (gioc && !gioc.finita ? gioc.s.chat(testo, a === 'master') : null),
@@ -710,14 +753,18 @@
       },
     });
     gioc.s = NET().sessione.giocatore({
-      nome: q.nome, colore: q.colore, trasporto: t, gettone,
+      nome: q.nome, colore: q.colore, trasporto: t, gettone, spettatore: Boolean(q.spettatore),
       suCambio: () => renderGiocatore(),
       suChat: (m) => { aggiungiFeed(m); suona('online-chat'); },
       suDado: (m) => dadoRicevuto(m, false),
       suFine: (motivo, stato) => fineGiocatore(motivo, stato),
       suErrore: (testo) => toast(testo, 'error'),
       suAvanzamento: avanzamento,
-      suGettone: (g, master) => scrivi(GETTONE, { gettone: g, master }),
+      suGettone: (g, nm) => {
+        if (gettone && gettone !== g) dimenticaPartita(gettone);
+        salvaPartita({ partita: gioc.partita, master: nm, gettone: g });
+        scrivi(ATTIVA, { ruolo: 'giocatore', partita: gioc.partita, master: nm, gettone: g, ora: Date.now() });
+      },
       suEsito: suEsito,
       suRichiestaTiro: richiestaTiro,
       suPing: aggiungiPing,
@@ -738,6 +785,7 @@
     document.body.classList.add('online-giocatore');
     document.querySelectorAll('dialog[open]').forEach((x) => x.close());
     renderGiocatore();
+    DnD.app.vai('#/gioca');
   }
   // Battito e dadi del menù (con «Tiri convalidati» li tira il master; altrimenti il tiro del giocatore, non verificato).
   function aggancia() {
@@ -1047,6 +1095,7 @@
       el('div', { class: 'section-head' },
         el('h1', { text: 'Sessione online' }),
         el('div', { class: 'head-actions' },
+          btn('🏠 Home', () => DnD.app.home(), { title: 'Torna al portale (Alt+H)', 'aria-label': 'Torna al portale', 'aria-keyshortcuts': 'Alt+H' }),
           el('span', { class: 'online-status' }, d.dot, ' ', d.linea), d.presenza,
           btn('❓ Chiedi al master…', domandaDialog),
           btn('📡 Eco', () => { gioc.s.eco(); setTimeout(aggiornaLinea, 1500); }, { title: 'Prova di eco con il master' }),
@@ -1397,7 +1446,9 @@
     DnD.uiDadi.suTiro = null;
     DnD.uiDadi.remoto = null;
     suona('online-disconnessione');
-    if (stato === 'espulso') scrivi(GETTONE, null);
+    scrivi(ATTIVA, null);
+    if (stato === 'espulso' && gioc.s.stato().gettone) dimenticaPartita(gioc.s.stato().gettone);
+    if (gioc.chiudendo) return;
     const titolo = stato === 'rifiutato' ? 'Ingresso rifiutato' : stato === 'espulso' ? 'Sei stato espulso' : 'La sessione è terminata';
     const puoRientrare = stato === 'finito' && Boolean(gioc.s.stato().gettone);
     fill(document.getElementById('main'), el('div', { class: 'panel online-wait' },
@@ -1406,7 +1457,36 @@
       el('div', { class: 'form-actions' },
         el('button', { type: 'button', class: 'btn', text: '⬇ Riepilogo della partita', onclick: esportaRiepilogo }),
         puoRientrare ? el('button', { type: 'button', class: 'btn', text: '🔑 Rientra', onclick: rientra }) : null,
-        el('button', { type: 'button', class: 'btn primary', text: 'Torna all\'app', onclick: () => location.reload() }))));
+        el('button', { type: 'button', class: 'btn primary', text: '🏠 Torna al portale', onclick: () => { chiudiGiocatore(); DnD.app.vai('#/home'); } }))));
+  }
+  // Chiude la schermata del giocatore (uscendo dalla partita se è ancora aperta) e torna all'app, senza ricaricare.
+  function chiudiGiocatore(motivo) {
+    if (!gioc) return;
+    gioc.chiudendo = true;
+    if (!gioc.finita) gioc.s.esci();
+    clearInterval(gioc.timer);
+    DnD.uiDadi.suTiro = null;
+    DnD.uiDadi.remoto = null;
+    if (gioc.chat) chatBoxes.delete(gioc.chat);
+    scrivi(ATTIVA, null);
+    gioc = null;
+    feed.length = 0;
+    document.body.classList.remove('online-giocatore');
+    if (motivo) toast(motivo);
+  }
+  // Rientro dal portale in una partita salvata: stesso gettone, nuovo scambio di codici.
+  function rientraPartita(v) {
+    if (gioc || master) return;
+    unisciti(Object.assign(profilo(), { spettatore: false }), null, v && v.gettone);
+  }
+  // Ospita dal portale la sessione corrente (riprendendo i gettoni salvati per quella sessione, se ci sono).
+  function ospita(riprendi) {
+    if (gioc) return;
+    if (master) { pannello(true); return; }
+    if (!NET().segnalazione.ambiente().RTCPeerConnection) { toast('Questo browser non supporta WebRTC: il gioco online non è disponibile.', 'error'); return; }
+    const rip = riprendi ? ripresaDi(DnD.sessioni.current(DnD.store.state).id) : null;
+    avviaMaster(profilo(), rip ? rip.gettoni : null, rip ? rip.partita : null);
+    nuovoInvito();
   }
 
   // ---------- Test connessione ----------
@@ -1509,6 +1589,12 @@
     apri, testConnessione, disegnaPing,
     vistaGiocatore: () => Boolean(gioc),
     attivo: () => Boolean(master || gioc),
+    ospitando: () => (master ? { sessionId: master.sessionId, giocatori: master.s.giocatori().filter((g) => g.stato === 'attivo').length } : null),
+    ospita, chiudiGiocatore, rientraPartita, partite, dimenticaPartita, ripresaDi, interrotta,
+    dimenticaInterrotta: () => scrivi(ATTIVA, null),
+    unisciti: (opts) => { if (!gioc && !master) unisciti(Object.assign(profilo(), { spettatore: Boolean(opts && opts.spettatore) })); },
+    termina: () => terminaMaster(),
+    profilo,
   };
   // Pulsanti «Online» e «Test connessione» del pannello Impostazioni.
   DnD.uiImpostazioni.registraOnline({ apri: () => DnD.uiOnline.apri(), testConnessione: () => DnD.uiOnline.testConnessione() });

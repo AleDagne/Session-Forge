@@ -320,7 +320,7 @@
         const prima = gt ? giocatori.get(gt.id) || Object.assign({ stato: 'disconnesso' }, gt)
           : [...giocatori.values()].find((x) => x !== g && x.stato === 'disconnesso' && stessoNome(x.nome, g.nome)) || null;
         g.richiesta = {
-          id: g.id, nome: g.nome, colore: g.colore, pieno: giocanti().length >= o.maxGiocatori,
+          id: g.id, nome: g.nome, colore: g.colore, pieno: giocanti().length >= o.maxGiocatori, spettatore: Boolean(dati.spettatore),
           rientro: prima ? { id: prima.id, personaggioId: prima.personaggioId, gettone: Boolean(gt), spettatore: Boolean(prima.spettatore), come: prima.come || null } : null,
           accetta: (scelte) => accetta(g, scelte || {}, prima, gt ? dati.gettone : ''),
           rifiuta: (motivo) => rifiutaIngresso(g, motivo),
@@ -652,7 +652,7 @@
   }
 
   // ---------- Giocatore ----------
-  // opts: { nome, colore, trasporto, gettone, ora(), suCambio(), suChat(msg), suDado(msg), suFine(motivo, stato),
+  // opts: { nome, colore, trasporto, gettone, spettatore (preferenza: sola vista), ora(), suCambio(), suChat(msg), suDado(msg), suFine(motivo, stato),
   //   suErrore(testo), suAvanzamento({ ricevuti, totali }), suGettone(gettone), suEsito(esito, intenzione),
   //   suRichiestaTiro(r), suPing(p), suRivela(r), suPermessi(p), suOfferta(f), suRichiamo(testo), suScrive(nome),
   //   suPersa(motivo) (collegamento caduto: si può rientrare con riconnetti), suDialogo(d), suLavoro(testo),
@@ -808,7 +808,7 @@
     function collegaTrasporto(t) {
       t.suMessaggio((testo, err) => { if (t === o.trasporto) ricevi(testo, err); });
       t.suStato((st) => { if (st === 'chiuso' && t === o.trasporto) perso('Connessione persa con il master.'); });
-      invia('ciao', { nome: o.nome, colore: o.colore, gettone: s.gettone });
+      invia('ciao', { nome: o.nome, colore: o.colore, gettone: s.gettone, spettatore: Boolean(o.spettatore) });
     }
     collegaTrasporto(o.trasporto);
 

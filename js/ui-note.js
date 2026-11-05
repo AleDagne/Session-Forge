@@ -21,7 +21,7 @@
   function create(opts) {
     const o = opts || {};
     const host = o.host || document.body;
-    const storage = o.storage || window.localStorage;
+    const storage = o.storage || DnD.archivioLocale.preferenze;
     const store = o.store || (() => DnD.store);
     const pref = (k, v) => { try { if (v === undefined) return storage.getItem(k); storage.setItem(k, v); } catch (e) { /* preferenza non essenziale */ } return null; };
     const session = () => DnD.sessioni.current(store().state);

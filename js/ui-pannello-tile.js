@@ -369,9 +369,9 @@
       resizer,
       el('div', { class: 'tile-panel-head' }, el('div', { class: 'tabs small-tabs', role: 'tablist' }, el('button', { type: 'button', role: 'tab', class: 'tab active', 'aria-selected': 'true', text: '🧩 Tile' })), toggleBtn),
       body);
-    try { S.height = Number(localStorage.getItem(HEIGHT_KEY)) || S.height; } catch (e) { /* preferenza non essenziale */ }
+    try { S.height = Number(DnD.archivioLocale.preferenze.getItem(HEIGHT_KEY)) || S.height; } catch (e) { /* preferenza non essenziale */ }
     const setHeight = (h) => { S.height = Math.round(Math.max(160, Math.min(900, h))); body.style.height = S.height + 'px'; };
-    const storeHeight = () => { try { localStorage.setItem(HEIGHT_KEY, String(S.height)); } catch (e) { /* ignora */ } };
+    const storeHeight = () => { try { DnD.archivioLocale.preferenze.setItem(HEIGHT_KEY, String(S.height)); } catch (e) { /* ignora */ } };
     setHeight(S.height);
     resizer.addEventListener('pointerdown', (e) => {
       resizer.setPointerCapture(e.pointerId);

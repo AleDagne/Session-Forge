@@ -11,8 +11,8 @@
   let active = 'strutture';
   let sub = 'attrezzatura';
   try {
-    active = TABS.some((t) => t.id === localStorage.getItem(TAB_KEY)) ? localStorage.getItem(TAB_KEY) : 'strutture';
-    sub = localStorage.getItem(SUB_KEY) === 'oggettiMappa' ? 'oggettiMappa' : 'attrezzatura';
+    active = TABS.some((t) => t.id === DnD.archivioLocale.preferenze.getItem(TAB_KEY)) ? DnD.archivioLocale.preferenze.getItem(TAB_KEY) : 'strutture';
+    sub = DnD.archivioLocale.preferenze.getItem(SUB_KEY) === 'oggettiMappa' ? 'oggettiMappa' : 'attrezzatura';
   } catch (e) { /* preferenza non essenziale */ }
   let root = null;
 
@@ -33,14 +33,14 @@
 
   function select(id, focus) {
     active = id;
-    try { localStorage.setItem(TAB_KEY, id); } catch (e) { /* ignora */ }
+    try { DnD.archivioLocale.preferenze.setItem(TAB_KEY, id); } catch (e) { /* ignora */ }
     resetAll();
     render();
     if (focus) root.querySelector('.tabs [aria-selected="true"]').focus();
   }
   function selectSub(id, focus) {
     sub = id;
-    try { localStorage.setItem(SUB_KEY, id); } catch (e) { /* ignora */ }
+    try { DnD.archivioLocale.preferenze.setItem(SUB_KEY, id); } catch (e) { /* ignora */ }
     resetAll();
     render();
     if (focus) root.querySelector('.small-tabs [aria-selected="true"]').focus();
